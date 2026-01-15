@@ -2,11 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Установка системных зависимостей для yt-dlp и ffmpeg
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
+# Установка системных зависимостей включая ffmpeg для yt-dlp
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# Установка статического ffmpeg
+RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz \
+    && tar -xf /tmp/ffmpeg.tar.xz -C /tmp \
+    && mv /tmp/ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ \
+    && mv /tmp/ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ \
+    && rm -rf /tmp/ffmpeg*
 
 # Копируем requirements
 COPY requirements.txt .

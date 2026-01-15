@@ -14,13 +14,13 @@ from pydantic import BaseModel, Field
 import httpx
 import redis.asyncio as redis
 import yt_dlp
-import whisper
 
 # ============== Конфигурация ==============
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/youtube-questions")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:8001")  # Отдельный Whisper сервис
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")  # Бесплатный быстрый LLM
 USE_GROQ = os.getenv("USE_GROQ", "true").lower() == "true"  # По умолчанию используем Groq
 TEMP_DIR = Path("/app/temp")
@@ -28,7 +28,6 @@ TEMP_DIR.mkdir(exist_ok=True)
 
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
-whisper_model = None
 connected_clients: Dict[str, WebSocket] = {}
 
 # ============== Pydantic модели ==============
@@ -38,9 +37,9 @@ class YouTubeRequest(BaseModel):
     level: Optional[str] = "middle"
 
 class ProgressUpdate(BaseModel):
-    task_id: str
-    progress: int
-    step: str
+    task_id: str = ""
+    progress: int = 0
+    step: str = ""
 
 class DownloadRequest(BaseModel):
     youtube_url: str
@@ -72,19 +71,25 @@ class TaskStatus(BaseModel):
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_model
+    global redis_client
     
     # Startup
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
     
-    # Загружаем Whisper модель (base - баланс скорости и качества)
-    print("📦 Loading Whisper model (base)...")
+    # Whisper теперь в отдельном сервисе
+    print(f"📡 Whisper service URL: {WHISPER_SERVICE_URL}")
+    
+    # Проверяем доступность Whisper сервиса
     try:
-        whisper_model = whisper.load_model("base")
-        print("✅ Whisper model loaded!")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{WHISPER_SERVICE_URL}/health")
+            if response.status_code == 200:
+                print("✅ Whisper service is available!")
+            else:
+                print("⚠️ Whisper service not ready yet (will retry on use)")
     except Exception as e:
-        print(f"⚠️ Whisper will be loaded on first use: {e}")
+        print(f"⚠️ Whisper service not available yet: {e}")
     
     yield
     
@@ -183,7 +188,20 @@ async def root():
 @app.get("/health", tags=["Status"])
 async def health():
     """Проверка здоровья сервиса"""
-    return {"status": "healthy", "whisper_loaded": whisper_model is not None}
+    # Проверяем доступность Whisper сервиса
+    whisper_healthy = False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(f"{WHISPER_SERVICE_URL}/health")
+            whisper_healthy = response.status_code == 200
+    except:
+        pass
+    
+    return {
+        "status": "healthy",
+        "whisper_service": whisper_healthy,
+        "whisper_url": WHISPER_SERVICE_URL
+    }
 
 @app.post("/api/process-video", tags=["Processing"])
 async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
@@ -572,31 +590,28 @@ async def download_audio(request: DownloadRequest):
 
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
-    """Транскрибация аудио через Whisper + слияние с YouTube субтитрами"""
-    global whisper_model
+    """Транскрибация аудио через Whisper Service + слияние с YouTube субтитрами"""
     
     try:
-        if whisper_model is None:
-            print("📦 Loading Whisper model...")
-            whisper_model = whisper.load_model("base")
+        # 1. Вызываем Whisper Service для транскрибации
+        print(f"🎤 Calling Whisper service at {WHISPER_SERVICE_URL}...")
         
-        # 1. Транскрибация Whisper (даёт пунктуацию)
-        print("🎤 Whisper transcription...")
-        result = whisper_model.transcribe(
-            request.audio_path,
-            language="ru",
-            fp16=False,
-            word_timestamps=True
-        )
+        async with httpx.AsyncClient(timeout=600.0) as client:  # 10 мин таймаут для длинных аудио
+            # Отправляем файл на whisper-service
+            with open(request.audio_path, "rb") as audio_file:
+                files = {"file": (Path(request.audio_path).name, audio_file, "audio/mpeg")}
+                response = await client.post(
+                    f"{WHISPER_SERVICE_URL}/transcribe",
+                    files=files,
+                    params={"language": "ru"}
+                )
         
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Whisper service error: {response.text}")
+        
+        result = response.json()
         whisper_transcript = result["text"]
-        whisper_segments = []
-        for seg in result.get("segments", []):
-            whisper_segments.append({
-                "start": round(seg.get("start", 0), 1),
-                "end": round(seg.get("end", 0), 1),
-                "text": seg.get("text", "").strip()
-            })
+        whisper_segments = result.get("segments", [])
         
         # 2. Получаем субтитры YouTube из Redis (если есть)
         subtitles_data = await redis_client.get(f"subtitles:{request.task_id}")

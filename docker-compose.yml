@@ -37,9 +37,38 @@ services:
       - diploma-network
 
   # ============== n8n (автоматизация workflow) ==============
+  # Workflow автоматически импортируется и активируется при первом запуске
   n8n:
     image: n8nio/n8n:latest
     container_name: diploma-n8n
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        # Ждём БД
+        sleep 5
+        
+        # Проверяем есть ли workflow (по файлу-маркеру)
+        if [ ! -f /home/node/.n8n/workflow_imported ]; then
+          echo "📦 First time setup - importing workflow..."
+          n8n import:workflow --input=/home/node/workflows/youtube-questions.json 2>/dev/null || true
+          
+          # Получаем ID и публикуем
+          WORKFLOW_ID=$$(n8n list:workflow 2>/dev/null | head -1 | cut -d'|' -f1)
+          if [ -n "$$WORKFLOW_ID" ]; then
+            echo "🔄 Publishing workflow $$WORKFLOW_ID..."
+            n8n publish:workflow --id=$$WORKFLOW_ID 2>/dev/null || true
+          fi
+          
+          touch /home/node/.n8n/workflow_imported
+          echo "✅ Workflow imported and published!"
+        else
+          echo "📦 Workflow already imported"
+        fi
+        
+        # Запускаем n8n (он активирует workflow из БД)
+        echo "🚀 Starting n8n..."
+        exec n8n start
     environment:
       - N8N_BASIC_AUTH_ACTIVE=false
       - N8N_HOST=0.0.0.0
@@ -51,6 +80,12 @@ services:
       - GENERIC_TIMEZONE=Europe/Moscow
       - N8N_SECURE_COOKIE=false
       - N8N_USER_MANAGEMENT_DISABLED=true
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=interview_prep
+      - DB_POSTGRESDB_USER=diploma
+      - DB_POSTGRESDB_PASSWORD=diploma123
     ports:
       - "5678:5678"
     volumes:
@@ -64,7 +99,31 @@ services:
     networks:
       - diploma-network
 
-  # ============== Backend (FastAPI + Whisper + Groq) ==============
+  # ============== Whisper Service (отдельный сервис для транскрибации) ==============
+  # Модель загружается один раз и остаётся в памяти
+  whisper:
+    build:
+      context: ./whisper-service
+      dockerfile: Dockerfile
+    container_name: diploma-whisper
+    environment:
+      - WHISPER_MODEL=medium
+    ports:
+      - "8001:8001"
+    volumes:
+      - whisper_cache:/root/.cache/whisper
+      - shared_temp:/app/temp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s  # Даём время на загрузку модели
+    networks:
+      - diploma-network
+
+  # ============== Backend (FastAPI + Groq) ==============
+  # Теперь без Whisper - использует whisper-service
   backend:
     build:
       context: ./backend
@@ -74,17 +133,21 @@ services:
       - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
       - REDIS_URL=redis://redis:6379
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
+      - WHISPER_SERVICE_URL=http://whisper:8001
       - GROQ_API_KEY=${GROQ_API_KEY:-}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - shared_temp:/app/temp
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       n8n:
+        condition: service_started
+      whisper:
         condition: service_started
     networks:
       - diploma-network
@@ -112,6 +175,8 @@ volumes:
   postgres_data:
   redis_data:
   n8n_data:
+  whisper_cache:  # Кэш модели Whisper - сохраняется между перезапусками
+  shared_temp:    # Общая папка для временных файлов
 
 networks:
   diploma-network:

@@ -105,7 +105,7 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 | Компонент | Технология | Назначение |
 |-----------|------------|------------|
 | API Server | **FastAPI** | REST API, WebSocket, Swagger |
-| Транскрибация | **OpenAI Whisper** | Speech-to-Text (base model) |
+| Транскрибация | **OpenAI Whisper** | Speech-to-Text (medium model) |
 | **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
 | **Гибридная транскрипция** | Whisper + Subtitles | ~100% точность |
 | LLM | **Groq API** (LLaMA 3.3 70B) | Извлечение вопросов |
@@ -564,7 +564,7 @@ docker-compose restart backend
 - Поддерживает стандартный и YouTube VTT форматы
 
 ### Проблема: Whisper медленно работает
-**Решение:** Используется модель `base`. Для ускорения можно использовать `tiny`, но качество будет хуже. Для лучшего качества — `medium` или `large`.
+**Решение:** Используется модель `medium`. Для ускорения можно использовать `base` или `small`, но качество будет хуже. Для максимального качества — `large` (требует много памяти).
 
 ### Проблема: Groq API rate limit
 **Решение:** Бесплатный план Groq — 30 запросов/минуту. Подождите минуту между запросами.
