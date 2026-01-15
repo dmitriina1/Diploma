@@ -1,31 +1,150 @@
-# 🎯 Interview Prep System
+# 🎓 Interview Prep — Извлечение вопросов для собеседований из YouTube
 
-Система для подготовки к IT-собеседованиям на основе YouTube видео.
+> **Дипломный проект** — Магистратура, направление 09.04.02 «Информационные системы и технологии»
 
-## 📋 Стек технологий (100% БЕСПЛАТНО)
+100% бесплатное решение для автоматического извлечения вопросов с IT-собеседований из YouTube видео с использованием AI.
 
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat&logo=react&logoColor=black)
+![n8n](https://img.shields.io/badge/n8n-EA4B71?style=flat&logo=n8n&logoColor=white)
+
+---
+
+## 📋 Содержание
+
+- [Описание проекта](#-описание-проекта)
+- [Архитектура](#-архитектура)
+- [Технологический стек](#-технологический-стек)
+- [Быстрый старт](#-быстрый-старт)
+- [API документация](#-api-документация)
+- [Структура проекта](#-структура-проекта)
+- [Конфигурация](#-конфигурация)
+- [Примеры использования](#-примеры-использования)
+- [Формат данных](#-формат-данных)
+- [Troubleshooting](#-troubleshooting)
+
+---
+
+## 🎯 Описание проекта
+
+### Цель
+Автоматизация подготовки к IT-собеседованиям путём извлечения вопросов из YouTube видео с записями реальных интервью.
+
+### Что делает система:
+1. **Скачивает аудио** из YouTube видео через yt-dlp
+2. **Транскрибирует** аудио в текст с таймкодами (OpenAI Whisper)
+3. **Извлекает вопросы** с помощью LLM (Groq API / LLaMA 70B)
+4. **Проверяет грамматику** и исправляет ошибки распознавания
+5. **Сохраняет результат** в JSON с таймкодами
+
+### Ключевые особенности:
+- ✅ **100% бесплатно** — Groq API предоставляет бесплатный доступ к LLaMA 70B
+- ✅ **Локальное развёртывание** — все данные остаются на вашем сервере
+- ✅ **Таймкоды** — каждый вопрос привязан к моменту в видео
+- ✅ **Автокоррекция** — LLM исправляет ошибки распознавания речи
+- ✅ **Real-time прогресс** — WebSocket + Polling для отслеживания
+- ✅ **Swagger UI** — интерактивная документация API
+
+---
+
+## 🏗 Архитектура
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│                      http://localhost:3000                       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTP/WebSocket
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Backend (FastAPI)                           │
+│                      http://localhost:8000                       │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   yt-dlp    │  │   Whisper   │  │      Groq API           │  │
+│  │  (download) │  │ (transcribe)│  │  (extract questions)    │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+┌──────────────────┐ ┌──────────────┐ ┌──────────────────┐
+│       n8n        │ │    Redis     │ │   PostgreSQL     │
+│ (orchestration)  │ │   (cache)    │ │   (storage)      │
+│ localhost:5678   │ │ localhost:6379│ │ localhost:5432  │
+└──────────────────┘ └──────────────┘ └──────────────────┘
+```
+
+### Процесс обработки:
+
+```
+YouTube URL → yt-dlp → Audio (MP3)
+                          ↓
+                      Whisper
+                          ↓
+              Transcript + Timecodes
+                          ↓
+                    Groq API (LLM)
+                          ↓
+        Questions (JSON) + Answers + Timecodes
+```
+
+---
+
+## 🛠 Технологический стек
+
+### Backend
 | Компонент | Технология | Назначение |
 |-----------|------------|------------|
-| LLM | Ollama (llama3.2) | Извлечение вопросов |
-| Speech-to-Text | Whisper (локальный) | Транскрибация аудио |
-| Автоматизация | n8n | Оркестрация пайплайна |
-| Backend | FastAPI + Python | API + WebSocket |
-| Frontend | React | Интерфейс |
-| База данных | PostgreSQL | Хранение данных |
-| Очереди | Redis | Параллельная обработка |
-| Контейнеризация | Docker Compose | Развёртывание |
+| API Server | **FastAPI** | REST API, WebSocket, Swagger |
+| Транскрибация | **OpenAI Whisper** | Speech-to-Text (base model) |
+| LLM | **Groq API** (LLaMA 3.3 70B) | Извлечение вопросов |
+| YouTube | **yt-dlp** | Скачивание аудио |
+| Оркестрация | **n8n** | Workflow automation |
+| Кэш | **Redis** | Хранение задач и результатов |
+| БД | **PostgreSQL** | Персистентное хранение |
+
+### Frontend
+| Компонент | Технология |
+|-----------|------------|
+| UI | **React 18** |
+| HTTP | **Fetch API** |
+| Real-time | **WebSocket + Polling** |
+
+### Инфраструктура
+| Компонент | Технология |
+|-----------|------------|
+| Контейнеризация | **Docker + Docker Compose** |
+| Reverse Proxy | Docker network |
+
+---
 
 ## 🚀 Быстрый старт
 
 ### Требования
-- Docker Desktop (Windows/Mac) или Docker + Docker Compose (Linux)
-- 8GB RAM (минимум 4GB)
-- 10GB свободного места на диске
+- Docker Desktop (Windows/Mac) или Docker Engine (Linux)
+- 8 GB RAM минимум
+- 10 GB свободного места
+- Интернет-соединение
 
-### Запуск
-
-**Windows:**
+### 1. Клонирование репозитория
 ```bash
+git clone <repository-url>
+cd Diploma
+```
+
+### 2. Настройка Groq API (бесплатно)
+1. Зарегистрируйтесь на [console.groq.com](https://console.groq.com)
+2. Создайте API ключ
+3. Создайте файл `.env`:
+```env
+GROQ_API_KEY=gsk_ваш_ключ_здесь
+```
+
+### 3. Запуск
+**Windows:**
+```cmd
 start.bat
 ```
 
@@ -40,200 +159,434 @@ chmod +x start.sh
 docker-compose up -d
 ```
 
-### Доступ
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:8000
-- **n8n Dashboard:** http://localhost:5678
-- **Ollama API:** http://localhost:11434
+### 4. Проверка
+| Сервис | URL |
+|--------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| **Swagger UI** | http://localhost:8000/docs |
+| ReDoc | http://localhost:8000/redoc |
+| n8n | http://localhost:5678 |
+
+### 5. Остановка
+```bash
+docker-compose down
+```
+
+---
+
+## 📚 API документация
+
+### 🔗 Интерактивная документация
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+---
+
+### Processing — Обработка видео
+
+#### `POST /api/process-video`
+Запуск обработки YouTube видео.
+
+**Request:**
+```json
+{
+  "youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "topic": "Backend",
+  "level": "middle"
+}
+```
+
+**Response:**
+```json
+{
+  "task_id": "4e126365-6c13-4c44-a1c4-2ebc2b273ef6",
+  "status": "started"
+}
+```
+
+---
+
+### Status — Статус и мониторинг
+
+#### `GET /health`
+Проверка здоровья сервиса.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "whisper_loaded": true
+}
+```
+
+#### `GET /api/task/{task_id}`
+Получение статуса задачи.
+
+**Response:**
+```json
+{
+  "task_id": "uuid",
+  "status": "completed",
+  "progress": 100,
+  "step": "Готово!",
+  "result": {
+    "questions": [...],
+    "video_title": "Название видео",
+    "questions_count": 15
+  }
+}
+```
+
+---
+
+### Export — Экспорт данных
+
+#### `GET /api/transcript/{task_id}`
+Скачать транскрипцию с таймкодами.
+
+**Response:**
+```json
+{
+  "transcript": "Полный текст...",
+  "segments": [
+    {"start": 0.0, "end": 5.2, "text": "Добрый день..."},
+    {"start": 5.2, "end": 10.1, "text": "..."}
+  ],
+  "length": 5432
+}
+```
+
+#### `GET /api/export/{task_id}`
+Скачать только вопросы.
+
+#### `GET /api/full-export/{task_id}` ⭐
+Скачать всё: транскрипцию + вопросы + метаданные.
+
+**Response:**
+```json
+{
+  "task_id": "uuid",
+  "transcript": "Полный текст...",
+  "segments": [
+    {"start": 0.0, "end": 2.5, "text": "Добрый день"},
+    {"start": 2.5, "end": 5.0, "text": "меня зовут Павел"}
+  ],
+  "video_title": "Название",
+  "questions": [
+    {
+      "question": "Что такое REST API?",
+      "answer": "REST — архитектурный стиль...",
+      "timecode": "01:23",
+      "topic": "Backend",
+      "difficulty": "middle"
+    }
+  ],
+  "questions_count": 15,
+  "status": "completed"
+}
+```
+
+#### `GET /api/export-all`
+Скачать ВСЕ вопросы из базы.
+
+#### `GET /api/questions?topic=Backend&level=middle`
+Получить вопросы с фильтрацией.
+
+---
+
+### WebSocket
+
+#### `WS /ws/{client_id}`
+Real-time обновления прогресса.
+
+**Сообщения:**
+```json
+{"type": "progress", "task_id": "uuid", "progress": 50, "step": "Транскрибация..."}
+{"type": "result", "task_id": "uuid", "questions": [...], "video_title": "..."}
+```
+
+---
 
 ## 📁 Структура проекта
 
 ```
 Diploma/
-├── docker-compose.yml      # Конфигурация всех сервисов
-├── start.bat              # Скрипт запуска (Windows)
-├── stop.bat               # Скрипт остановки
-├── README.md              # Документация
+├── backend/
+│   ├── main.py              # FastAPI приложение (основной файл)
+│   ├── requirements.txt     # Python зависимости
+│   ├── Dockerfile          # Docker образ backend
+│   └── temp/               # Временные файлы (аудио)
 │
-├── backend/               # FastAPI бэкенд
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── main.py           # Основной код API
-│
-├── frontend/              # React фронтенд
-│   ├── Dockerfile
-│   ├── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── App.js          # React компонент
+│   │   └── index.js        # Entry point
 │   ├── public/
 │   │   └── index.html
-│   └── src/
-│       ├── index.js
-│       └── App.js        # Основной компонент
+│   ├── package.json
+│   └── Dockerfile
 │
 ├── n8n/
 │   └── workflows/
-│       └── youtube-questions.json  # Workflow для обработки
+│       └── youtube-questions.json  # n8n workflow (авто-импорт)
 │
-└── scripts/
-    └── init-db.sql       # Инициализация БД
+├── scripts/
+│   └── init-db.sql         # Инициализация PostgreSQL
+│
+├── docker-compose.yml      # Конфигурация контейнеров
+├── .env                    # Переменные окружения (создать!)
+├── start.bat              # Запуск (Windows)
+├── start.sh               # Запуск (Linux/Mac)
+├── stop.bat               # Остановка (Windows)
+└── README.md              # Документация
 ```
 
-## 🔄 Как работает система
+---
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   Backend   │────▶│    n8n      │
-│   (React)   │◀────│  (FastAPI)  │◀────│  Workflow   │
-└─────────────┘     └─────────────┘     └─────────────┘
-      │                    │                   │
-      │              WebSocket            ┌────┴────┐
-      │              (прогресс)           │         │
-      └──────────────────────────────────▶│  Redis  │
-                                          │         │
-                                          └────┬────┘
-                                               │
-                    ┌──────────────────────────┼──────────────────────────┐
-                    │                          │                          │
-              ┌─────▼─────┐             ┌──────▼──────┐            ┌──────▼──────┐
-              │  yt-dlp   │             │   Whisper   │            │   Ollama    │
-              │ (download)│             │ (transcribe)│            │   (LLM)     │
-              └───────────┘             └─────────────┘            └─────────────┘
-```
+## ⚙️ Конфигурация
 
-### Последовательность обработки:
+### Переменные окружения (.env)
 
-1. **Пользователь** вводит YouTube URL и нажимает кнопку
-2. **Frontend** отправляет запрос на Backend через REST API
-3. **Backend** создаёт задачу в Redis и запускает n8n Webhook
-4. **n8n Workflow** выполняет пайплайн:
-   - Скачивает аудио (yt-dlp)
-   - Транскрибирует (Whisper)
-   - Извлекает вопросы (Ollama LLM)
-   - Сохраняет результаты
-5. **Backend** отправляет прогресс через **WebSocket**
-6. **Frontend** отображает прогресс-бар и результаты
-
-## ⚙️ API Endpoints
-
-### REST API
-
-| Метод | Endpoint | Описание |
-|-------|----------|----------|
-| GET | `/` | Проверка статуса |
-| GET | `/health` | Health check |
-| POST | `/api/process-video` | Запуск обработки |
-| POST | `/api/process-video/{client_id}` | Запуск с WebSocket |
-| GET | `/api/task/{task_id}` | Статус задачи |
-| GET | `/api/questions` | Список вопросов |
-
-### WebSocket
-
-```javascript
-ws://localhost:8000/ws/{client_id}
-```
-
-Сообщения:
-```json
-{"type": "progress", "task_id": "...", "progress": 50, "step": "Транскрибация..."}
-{"type": "result", "task_id": "...", "questions": [...], "video_title": "..."}
-{"type": "error", "task_id": "...", "error": "..."}
-```
-
-## 🔧 Настройка
-
-### Переменные окружения
-
-**Backend:**
 ```env
+# Обязательно
+GROQ_API_KEY=gsk_ваш_ключ
+
+# Опционально (есть значения по умолчанию)
+USE_GROQ=true
 DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
 REDIS_URL=redis://redis:6379
 N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
 OLLAMA_URL=http://ollama:11434
 ```
 
-**Frontend:**
-```env
-REACT_APP_API_URL=http://localhost:8000
-REACT_APP_WS_URL=ws://localhost:8000
-```
+### Порты
 
-### Смена модели Ollama
-
-Для более качественных результатов (требует больше RAM):
-
-```bash
-# Подключиться к контейнеру
-docker exec -it diploma-ollama bash
-
-# Скачать другую модель
-ollama pull llama3:8b
-ollama pull mistral
-```
-
-Затем изменить в `backend/main.py`:
-```python
-"model": "llama3:8b"  # вместо llama3.2:1b
-```
-
-## 📊 Параллельная обработка
-
-Система поддерживает параллельную обработку запросов от разных клиентов:
-
-1. Каждый клиент получает уникальный `client_id`
-2. Задачи хранятся в Redis с привязкой к клиенту
-3. WebSocket обеспечивает независимую доставку прогресса
-4. n8n обрабатывает запросы параллельно
-
-## 🐛 Troubleshooting
-
-### Проблема: Долго запускается
-```bash
-# Проверьте загрузку модели Ollama
-docker logs diploma-ollama-init
-```
-
-### Проблема: n8n workflow не работает
-```bash
-# Проверьте импорт
-docker logs diploma-n8n-init
-
-# Импортируйте вручную через UI: http://localhost:5678
-```
-
-### Проблема: Ошибки памяти
-```bash
-# Используйте меньшую модель
-# В docker-compose.yml измените ollama-init:
-curl -X POST http://ollama:11434/api/pull -d '{"name": "phi3:mini"}'
-```
-
-### Полный сброс
-```bash
-docker-compose down -v
-docker-compose up -d
-```
-
-## 📚 Для диссертации
-
-### Ключевые особенности системы:
-1. **Open-source стек** — независимость от платных API
-2. **Локальный деплой** — работа без интернета
-3. **Масштабируемость** — параллельная обработка
-4. **Real-time обновления** — WebSocket для прогресса
-5. **Модульная архитектура** — легко заменить компоненты
-
-### Сравнение с аналогами:
-| Характеристика | Наша система | ChatGPT API | Другие |
-|----------------|--------------|-------------|--------|
-| Стоимость | Бесплатно | $0.002/1K токенов | Varies |
-| Приватность | Локально | Облако | Облако |
-| Кастомизация | Полная | Ограничена | Varies |
-
-## 📝 Лицензия
-
-MIT License — для учебных и исследовательских целей.
+| Сервис | Порт | Описание |
+|--------|------|----------|
+| Frontend | 3000 | React приложение |
+| Backend | 8000 | FastAPI + Swagger |
+| n8n | 5678 | Workflow UI |
+| PostgreSQL | 5432 | База данных |
+| Redis | 6379 | Кэш |
+| Ollama | 11434 | Локальный LLM (опционально) |
 
 ---
 
-**Магистерская диссертация**  
-09.04.02 Информационные системы и технологии  
-2026
+## 💡 Примеры использования
+
+### cURL
+
+```bash
+# Запуск обработки
+curl -X POST "http://localhost:8000/api/process-video" \
+  -H "Content-Type: application/json" \
+  -d '{"youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID", "topic": "Backend", "level": "middle"}'
+
+# Проверка статуса
+curl "http://localhost:8000/api/task/{task_id}"
+
+# Экспорт результата
+curl "http://localhost:8000/api/full-export/{task_id}" -o result.json
+```
+
+### Python
+
+```python
+import requests
+import time
+
+# Запуск обработки
+response = requests.post(
+    "http://localhost:8000/api/process-video",
+    json={
+        "youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+        "topic": "Backend",
+        "level": "middle"
+    }
+)
+task_id = response.json()["task_id"]
+print(f"Task started: {task_id}")
+
+# Ожидание завершения
+while True:
+    status = requests.get(f"http://localhost:8000/api/task/{task_id}").json()
+    print(f"Progress: {status['progress']}% - {status['step']}")
+    if status["status"] == "completed":
+        break
+    time.sleep(2)
+
+# Получение результата
+result = requests.get(f"http://localhost:8000/api/full-export/{task_id}").json()
+
+print(f"\n📹 {result['video_title']}")
+print(f"📝 Найдено вопросов: {result['questions_count']}\n")
+
+for q in result["questions"]:
+    print(f"[{q.get('timecode', 'N/A')}] {q['question']}")
+    print(f"   ➡️ {q['answer']}\n")
+```
+
+### JavaScript / Fetch
+
+```javascript
+// Запуск обработки
+const response = await fetch('http://localhost:8000/api/process-video', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    youtube_url: 'https://www.youtube.com/watch?v=VIDEO_ID',
+    topic: 'Backend',
+    level: 'middle'
+  })
+});
+const { task_id } = await response.json();
+
+// WebSocket для real-time прогресса
+const ws = new WebSocket(`ws://localhost:8000/ws/${clientId}`);
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === 'progress') {
+    console.log(`Progress: ${data.progress}% - ${data.step}`);
+  } else if (data.type === 'result') {
+    console.log('Questions:', data.questions);
+  }
+};
+```
+
+---
+
+## 📊 Формат данных
+
+### Вопрос (Question)
+
+```json
+{
+  "question": "Что такое SOLID принципы?",
+  "answer": "SOLID — это пять принципов ООП: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion.",
+  "timecode": "03:45",
+  "topic": "Backend",
+  "difficulty": "middle"
+}
+```
+
+### Сегмент транскрипции (Segment)
+
+```json
+{
+  "start": 12.5,
+  "end": 15.8,
+  "text": "Расскажите о вашем опыте работы"
+}
+```
+
+### Полный экспорт (Full Export)
+
+```json
+{
+  "task_id": "4e126365-6c13-4c44-a1c4-2ebc2b273ef6",
+  "transcript": "Добрый день, меня зовут Павел...",
+  "segments": [
+    {"start": 0.0, "end": 2.5, "text": "Добрый день"},
+    {"start": 2.5, "end": 5.0, "text": "меня зовут Павел"}
+  ],
+  "transcript_length": 5432,
+  "video_title": "Собеседование Java Developer",
+  "questions": [
+    {
+      "question": "На каких языках вы писали код?",
+      "answer": "Основной язык — Java, также работал с Python и SQL.",
+      "timecode": "01:23",
+      "topic": "Backend",
+      "difficulty": "middle"
+    }
+  ],
+  "questions_count": 15,
+  "status": "completed"
+}
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Проблема: "NetworkError when attempting to fetch resource"
+**Решение:** Перезапустите backend
+```bash
+docker-compose restart backend
+```
+
+### Проблема: YouTube 403 Forbidden
+**Решение:** Уже исправлено в коде. Если повторяется — обновите yt-dlp:
+```bash
+docker-compose exec backend pip install -U yt-dlp
+```
+
+### Проблема: Whisper медленно работает
+**Решение:** Используется модель `base`. Для ускорения можно использовать `tiny`, но качество будет хуже. Для лучшего качества — `medium` или `large`.
+
+### Проблема: Groq API rate limit
+**Решение:** Бесплатный план Groq — 30 запросов/минуту. Подождите минуту между запросами.
+
+### Проблема: Контейнеры не запускаются
+**Решение:**
+```bash
+docker-compose down -v
+docker-compose up -d --build
+```
+
+### Проблема: n8n workflow не работает
+**Решение:** Убедитесь, что workflow активирован (зелёный тоггл) в http://localhost:5678
+
+### Просмотр логов
+```bash
+# Все сервисы
+docker-compose logs -f
+
+# Конкретный сервис
+docker-compose logs -f backend
+docker-compose logs -f n8n
+docker-compose logs -f frontend
+```
+
+### Очистка всех данных
+```bash
+docker-compose down -v
+docker system prune -a
+```
+
+---
+
+## 📈 Возможные улучшения
+
+- [ ] Поддержка других видео-платформ (VK Video, Rutube)
+- [ ] Генерация тестовых вопросов с вариантами ответов
+- [ ] Экспорт в Anki / Quizlet
+- [ ] Поддержка английского языка
+- [ ] Кластеризация похожих вопросов
+- [ ] Интеграция с ChatGPT для расширенных ответов
+
+---
+
+## 📝 Лицензия
+
+MIT License — свободное использование в образовательных и коммерческих целях.
+
+---
+
+## 👤 Автор
+
+**Дипломный проект магистратуры**  
+Направление: 09.04.02 «Информационные системы и технологии»  
+Год: 2026
+
+---
+
+## 🙏 Благодарности
+
+- [OpenAI Whisper](https://github.com/openai/whisper) — Speech-to-Text модель
+- [Groq](https://groq.com) — Бесплатный доступ к LLaMA 70B
+- [n8n](https://n8n.io) — Open-source workflow automation
+- [FastAPI](https://fastapi.tiangolo.com) — Modern Python web framework
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — YouTube downloader
+- [React](https://react.dev) — UI library

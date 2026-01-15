@@ -94,9 +94,29 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Interview Prep API",
-    description="API для подготовки к IT собеседованиям",
+    description="""
+## API для подготовки к IT собеседованиям
+
+Извлечение вопросов из YouTube видео с помощью:
+- **Whisper** для транскрибации аудио
+- **Groq API (LLaMA 70B)** для извлечения вопросов
+- **n8n** для оркестрации процессов
+
+### Основные эндпоинты:
+- `POST /api/process-video` - Запуск обработки видео
+- `GET /api/status/{task_id}` - Статус задачи
+- `GET /api/full-export/{task_id}` - Полный экспорт (транскрипция + вопросы)
+""",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Processing", "description": "Обработка видео"},
+        {"name": "Export", "description": "Экспорт данных"},
+        {"name": "Status", "description": "Статус и мониторинг"},
+        {"name": "Internal", "description": "Внутренние эндпоинты для n8n"}
+    ]
 )
 
 # ============== CORS ==============
@@ -154,17 +174,25 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         manager.disconnect(client_id)
 
 # ============== API Endpoints ==============
-@app.get("/")
+@app.get("/", tags=["Status"])
 async def root():
+    """Корневой эндпоинт"""
     return {"message": "Interview Prep API", "status": "running"}
 
-@app.get("/health")
+@app.get("/health", tags=["Status"])
 async def health():
+    """Проверка здоровья сервиса"""
     return {"status": "healthy", "whisper_loaded": whisper_model is not None}
 
-@app.post("/api/process-video")
+@app.post("/api/process-video", tags=["Processing"])
 async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
-    """Запуск обработки YouTube видео"""
+    """
+    Запуск обработки YouTube видео
+    
+    - **youtube_url**: Ссылка на YouTube видео
+    - **topic**: Тема (например: Backend, Frontend, DevOps)
+    - **level**: Уровень сложности (junior, middle, senior)
+    """
     task_id = str(uuid.uuid4())
     
     # Валидация URL
@@ -188,9 +216,9 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     
     return {"task_id": task_id, "status": "started"}
 
-@app.post("/api/process-video/{client_id}")
+@app.post("/api/process-video/{client_id}", tags=["Processing"])
 async def process_video_with_client(client_id: str, request: YouTubeRequest, background_tasks: BackgroundTasks):
-    """Запуск обработки с привязкой к клиенту для WebSocket"""
+    """Запуск обработки с привязкой к WebSocket клиенту"""
     task_id = str(uuid.uuid4())
     
     if not is_valid_youtube_url(request.youtube_url):
@@ -223,17 +251,17 @@ async def process_video_with_client(client_id: str, request: YouTubeRequest, bac
     
     return {"task_id": task_id, "status": "started"}
 
-@app.get("/api/task/{task_id}")
+@app.get("/api/task/{task_id}", tags=["Status"])
 async def get_task_status(task_id: str):
-    """Получение статуса задачи"""
+    """Получение статуса задачи по task_id"""
     task_data = await redis_client.get(f"task:{task_id}")
     if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
     return json.loads(task_data)
 
-@app.get("/api/last-result/{client_id}")
+@app.get("/api/last-result/{client_id}", tags=["Status"])
 async def get_last_result(client_id: str):
-    """Получение последнего результата для клиента"""
+    """Получение последнего результата для WebSocket клиента"""
     task_id = await redis_client.get(f"client:{client_id}:last_task")
     if not task_id:
         return {"status": "no_task"}
@@ -245,9 +273,14 @@ async def get_last_result(client_id: str):
     task = json.loads(task_data)
     return task
 
-@app.get("/api/questions")
+@app.get("/api/questions", tags=["Export"])
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
-    """Получение списка вопросов из Redis/кэша"""
+    """
+    Получение всех вопросов с фильтрацией
+    
+    - **topic**: Фильтр по теме (опционально)
+    - **level**: Фильтр по уровню (опционально)
+    """
     questions_data = await redis_client.get("all_questions")
     if questions_data:
         questions = json.loads(questions_data)
@@ -258,6 +291,101 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
             questions = [q for q in questions if q.get("difficulty", "").lower() == level.lower()]
         return {"questions": questions}
     return {"questions": []}
+
+@app.get("/api/export/{task_id}", tags=["Export"])
+async def export_questions_json(task_id: str):
+    """Скачать вопросы задачи в формате JSON"""
+    from fastapi.responses import JSONResponse
+    
+    task_data = await redis_client.get(f"task:{task_id}")
+    if not task_data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task = json.loads(task_data)
+    result = task.get("result", {})
+    
+    export_data = {
+        "task_id": task_id,
+        "video_title": result.get("video_title", "Unknown"),
+        "questions_count": result.get("questions_count", 0),
+        "questions": result.get("questions", []),
+        "exported_at": str(asyncio.get_event_loop().time())
+    }
+    
+    return JSONResponse(
+        content=export_data,
+        headers={
+            "Content-Disposition": f'attachment; filename="questions_{task_id}.json"'
+        }
+    )
+
+@app.get("/api/export-all", tags=["Export"])
+async def export_all_questions():
+    """Скачать ВСЕ вопросы из базы в формате JSON"""
+    from fastapi.responses import JSONResponse
+    
+    questions_data = await redis_client.get("all_questions")
+    questions = json.loads(questions_data) if questions_data else []
+    
+    return JSONResponse(
+        content={"questions": questions, "total": len(questions)},
+        headers={
+            "Content-Disposition": 'attachment; filename="all_questions.json"'
+        }
+    )
+
+@app.get("/api/transcript/{task_id}", tags=["Export"])
+async def get_transcript(task_id: str):
+    """Скачать транскрипцию с таймкодами по task_id"""
+    from fastapi.responses import JSONResponse
+    
+    transcript_data = await redis_client.get(f"transcript:{task_id}")
+    if not transcript_data:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    
+    data = json.loads(transcript_data)
+    return JSONResponse(
+        content=data,
+        headers={
+            "Content-Disposition": f'attachment; filename="transcript_{task_id}.json"'
+        }
+    )
+
+@app.get("/api/full-export/{task_id}", tags=["Export"])
+async def full_export(task_id: str):
+    """
+    Полный экспорт данных задачи:
+    - Транскрипция с таймкодами
+    - Все извлечённые вопросы
+    - Метаданные видео
+    """
+    from fastapi.responses import JSONResponse
+    
+    # Получаем транскрипцию
+    transcript_data = await redis_client.get(f"transcript:{task_id}")
+    transcript = json.loads(transcript_data) if transcript_data else {}
+    
+    # Получаем задачу с вопросами
+    task_data = await redis_client.get(f"task:{task_id}")
+    task = json.loads(task_data) if task_data else {}
+    
+    export = {
+        "task_id": task_id,
+        "transcript": transcript.get("transcript", ""),
+        "segments": transcript.get("segments", []),
+        "transcript_length": transcript.get("length", 0),
+        "video_title": task.get("result", {}).get("video_title", "Unknown"),
+        "questions": task.get("result", {}).get("questions", []),
+        "questions_count": task.get("result", {}).get("questions_count", 0),
+        "status": task.get("status", "unknown")
+    }
+    
+    return JSONResponse(
+        content=export,
+        headers={
+            "Content-Disposition": f'attachment; filename="full_export_{task_id}.json"'
+        }
+    )
 
 # ============== Internal Endpoints (для n8n) ==============
 @app.post("/internal/update-progress")
@@ -319,9 +447,9 @@ async def download_audio(request: DownloadRequest):
         print(f"Download error: {e}")
         raise HTTPException(status_code=500, detail=f"Download error: {str(e)}")
 
-@app.post("/internal/transcribe")
+@app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
-    """Транскрибация аудио через Whisper"""
+    """Транскрибация аудио через Whisper с таймкодами"""
     global whisper_model
     
     try:
@@ -329,14 +457,36 @@ async def transcribe_audio(request: TranscribeRequest):
             print("📦 Loading Whisper model...")
             whisper_model = whisper.load_model("base")
         
-        # Транскрибация
+        # Транскрибация с таймкодами
         result = whisper_model.transcribe(
             request.audio_path,
-            language="ru",  # Или автоопределение
-            fp16=False
+            language="ru",
+            fp16=False,
+            word_timestamps=True  # Включаем таймкоды
         )
         
         transcript = result["text"]
+        
+        # Собираем сегменты с таймкодами
+        segments = []
+        for seg in result.get("segments", []):
+            segments.append({
+                "start": seg.get("start", 0),
+                "end": seg.get("end", 0),
+                "text": seg.get("text", "").strip()
+            })
+        
+        # Сохраняем транскрипцию с таймкодами в Redis
+        await redis_client.set(
+            f"transcript:{request.task_id}", 
+            json.dumps({
+                "transcript": transcript,
+                "segments": segments,
+                "audio_path": request.audio_path,
+                "length": len(transcript)
+            }),
+            ex=7200  # 2 часа
+        )
         
         # Удаляем временный файл
         try:
@@ -344,45 +494,65 @@ async def transcribe_audio(request: TranscribeRequest):
         except:
             pass
         
-        return {"transcript": transcript}
+        return {"transcript": transcript, "segments": segments}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
 
-@app.post("/internal/extract-questions")
+@app.post("/internal/extract-questions", tags=["Internal"])
 async def extract_questions(request: ExtractQuestionsRequest):
-    """Извлечение вопросов через Groq API (быстро) или Ollama (локально)"""
+    """Извлечение вопросов через Groq API с таймкодами и проверкой русского языка"""
     try:
-        # Промпт для извлечения ВСЕХ вопросов из видео с максимальной точностью
-        prompt = f"""Ты эксперт по анализу собеседований. Твоя задача — извлечь АБСОЛЮТНО ВСЕ вопросы из транскрипции.
+        # Получаем сегменты с таймкодами из Redis
+        transcript_data = await redis_client.get(f"transcript:{request.task_id}")
+        segments = []
+        if transcript_data:
+            data = json.loads(transcript_data)
+            segments = data.get("segments", [])
+        
+        # Формируем текст с таймкодами для LLM
+        transcript_with_times = ""
+        for seg in segments:
+            start_time = int(seg.get("start", 0))
+            mins, secs = divmod(start_time, 60)
+            transcript_with_times += f"[{mins:02d}:{secs:02d}] {seg.get('text', '')}\n"
+        
+        if not transcript_with_times:
+            transcript_with_times = request.transcript[:20000]
+        
+        # Улучшенный промпт с таймкодами и проверкой русского языка
+        prompt = f"""Ты эксперт по анализу собеседований и русскому языку. Твоя задача:
+1. Извлечь АБСОЛЮТНО ВСЕ вопросы из транскрипции
+2. Проверить и исправить орфографию/грамматику каждого вопроса
+3. Указать таймкод, где задаётся вопрос
 
 КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
 1. Извлеки КАЖДЫЙ вопрос БЕЗ ИСКЛЮЧЕНИЯ — даже уточняющие и дополнительные
-2. Если спрашивают "А на Python писали?" и "А на Java?" — это ДВА РАЗНЫХ вопроса, не объединяй!
-3. Если задают вопрос, а потом уточняют — это тоже отдельные вопросы
-4. НЕ ОБЪЕДИНЯЙ похожие вопросы — каждый вопрос отдельно
-5. НЕ ПРОПУСКАЙ вопросы, даже если они кажутся глупыми или нерелевантными
-6. Убирай имена людей из вопросов (Иван, Павел и т.д.)
-7. НЕ ПРИДУМЫВАЙ вопросы — только те, что реально есть в тексте
-8. Добавь краткий ответ к каждому вопросу
+2. "А на Python писали?" и "А на Java?" — это ДВА РАЗНЫХ вопроса, НЕ объединяй!
+3. Уточняющие вопросы — тоже отдельные вопросы
+4. НЕ ОБЪЕДИНЯЙ похожие вопросы
+5. НЕ ПРОПУСКАЙ вопросы, даже глупые или нерелевантные
+6. Убирай имена людей (Иван, Павел и т.д.)
+7. НЕ ПРИДУМЫВАЙ вопросы — только те, что есть в тексте
+8. ИСПРАВЬ орфографические и грамматические ошибки в вопросах
+9. Если Whisper неправильно распознал слово — исправь по контексту
+10. Укажи таймкод в формате MM:SS
 
-ПРИМЕР правильного извлечения:
-Текст: "На каких языках писали? На Java? А на Python? А что насчёт C++?"
-Вопросы:
-- "На каких языках программирования вы писали?"
-- "Писали ли вы на Java?"
-- "Писали ли вы на Python?"
-- "Писали ли вы на C++?"
+ФОРМАТ ОТВЕТА — JSON массив:
+[
+  {{
+    "question": "Грамматически правильный вопрос?",
+    "answer": "Краткий ответ",
+    "timecode": "01:23",
+    "topic": "{request.topic}",
+    "difficulty": "{request.level}"
+  }}
+]
 
 Тема: {request.topic}
 Уровень: {request.level}
 
-Верни JSON массив (извлеки ВСЕ вопросы, сколько бы их ни было):
-[
-  {{"question": "Вопрос?", "answer": "Ответ", "topic": "{request.topic}", "difficulty": "{request.level}"}}
-]
-
-Транскрипция:
-{request.transcript[:20000]}
+Транскрипция с таймкодами:
+{transcript_with_times[:25000]}
 """
         
         if USE_GROQ and GROQ_API_KEY:
