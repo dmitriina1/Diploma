@@ -449,7 +449,7 @@ async def download_audio(request: DownloadRequest):
 
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
-    """Транскрибация аудио через Whisper с таймкодами"""
+    """Транскрибация аудио через Whisper с детальными таймкодами"""
     global whisper_model
     
     try:
@@ -457,24 +457,53 @@ async def transcribe_audio(request: TranscribeRequest):
             print("📦 Loading Whisper model...")
             whisper_model = whisper.load_model("base")
         
-        # Транскрибация с таймкодами
+        # Транскрибация с таймкодами на уровне слов
         result = whisper_model.transcribe(
             request.audio_path,
             language="ru",
             fp16=False,
-            word_timestamps=True  # Включаем таймкоды
+            word_timestamps=True
         )
         
         transcript = result["text"]
         
-        # Собираем сегменты с таймкодами
+        # Собираем более детальные сегменты (разбиваем по предложениям/вопросам)
         segments = []
         for seg in result.get("segments", []):
-            segments.append({
-                "start": seg.get("start", 0),
-                "end": seg.get("end", 0),
-                "text": seg.get("text", "").strip()
-            })
+            text = seg.get("text", "").strip()
+            start = seg.get("start", 0)
+            
+            # Если сегмент содержит вопросительный знак, разбиваем на части
+            if "?" in text:
+                parts = text.split("?")
+                words = seg.get("words", [])
+                
+                current_start = start
+                for i, part in enumerate(parts):
+                    part = part.strip()
+                    if part:
+                        # Находим примерное время для этой части
+                        part_with_q = part + "?" if i < len(parts) - 1 else part
+                        
+                        # Ищем слова этой части для точного времени
+                        part_end = current_start + 3  # По умолчанию +3 секунды
+                        for word in words:
+                            word_text = word.get("word", "").strip()
+                            if word_text and word_text in part:
+                                part_end = word.get("end", part_end)
+                        
+                        segments.append({
+                            "start": round(current_start, 1),
+                            "end": round(part_end, 1),
+                            "text": part_with_q
+                        })
+                        current_start = part_end
+            else:
+                segments.append({
+                    "start": round(start, 1),
+                    "end": round(seg.get("end", 0), 1),
+                    "text": text
+                })
         
         # Сохраняем транскрипцию с таймкодами в Redis
         await redis_client.set(
@@ -509,51 +538,49 @@ async def extract_questions(request: ExtractQuestionsRequest):
             data = json.loads(transcript_data)
             segments = data.get("segments", [])
         
-        # Формируем текст с таймкодами для LLM
+        # Формируем текст с таймкодами для LLM — каждый сегмент на отдельной строке
         transcript_with_times = ""
         for seg in segments:
-            start_time = int(seg.get("start", 0))
-            mins, secs = divmod(start_time, 60)
-            transcript_with_times += f"[{mins:02d}:{secs:02d}] {seg.get('text', '')}\n"
+            start_time = seg.get("start", 0)
+            mins = int(start_time // 60)
+            secs = int(start_time % 60)
+            text = seg.get('text', '').strip()
+            if text:
+                transcript_with_times += f"[{mins:02d}:{secs:02d}] {text}\n"
         
         if not transcript_with_times:
             transcript_with_times = request.transcript[:20000]
         
-        # Улучшенный промпт с таймкодами и проверкой русского языка
-        prompt = f"""Ты эксперт по анализу собеседований и русскому языку. Твоя задача:
-1. Извлечь АБСОЛЮТНО ВСЕ вопросы из транскрипции
-2. Проверить и исправить орфографию/грамматику каждого вопроса
-3. Указать таймкод, где задаётся вопрос
+        # Улучшенный промпт с точным сопоставлением таймкодов
+        prompt = f"""Ты эксперт по анализу собеседований. Твоя задача — извлечь ВСЕ вопросы из транскрипции с ТОЧНЫМИ таймкодами.
+
+ФОРМАТ ВХОДНЫХ ДАННЫХ:
+Каждая строка начинается с таймкода [MM:SS], после которого идёт текст.
+Найди ВСЕ вопросы (предложения, заканчивающиеся на "?") и укажи таймкод той строки, где этот вопрос появляется.
 
 КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
-1. Извлеки КАЖДЫЙ вопрос БЕЗ ИСКЛЮЧЕНИЯ — даже уточняющие и дополнительные
-2. "А на Python писали?" и "А на Java?" — это ДВА РАЗНЫХ вопроса, НЕ объединяй!
-3. Уточняющие вопросы — тоже отдельные вопросы
-4. НЕ ОБЪЕДИНЯЙ похожие вопросы
-5. НЕ ПРОПУСКАЙ вопросы, даже глупые или нерелевантные
-6. Убирай имена людей (Иван, Павел и т.д.)
-7. НЕ ПРИДУМЫВАЙ вопросы — только те, что есть в тексте
-8. ИСПРАВЬ орфографические и грамматические ошибки в вопросах
-9. Если Whisper неправильно распознал слово — исправь по контексту
-10. Укажи таймкод в формате MM:SS
+1. Извлеки КАЖДЫЙ вопрос (предложение с "?") — даже короткие типа "Что?", "Почему?"
+2. КАЖДЫЙ вопрос ОТДЕЛЬНО — если в строке несколько вопросов, раздели их
+3. Таймкод бери из начала строки [MM:SS], где находится вопрос
+4. "Вы писали на Java?", "Вы писали на Python?" — это РАЗНЫЕ вопросы с РАЗНЫМИ таймкодами
+5. Убирай имена (Иван, Павел, Николай) из вопросов
+6. ИСПРАВЬ ошибки Whisper: "наджава" → "на Java", "дивиллтер" → "developer"
+7. НЕ ПРИДУМЫВАЙ вопросы — только те, что реально есть в тексте
 
-ФОРМАТ ОТВЕТА — JSON массив:
+ПРИМЕР:
+Вход: "[00:24] Скажите, чем вы занимаетесь? Какой опыт работы?"
+Выход: два вопроса с таймкодом "00:24"
+
+ФОРМАТ JSON:
 [
-  {{
-    "question": "Грамматически правильный вопрос?",
-    "answer": "Краткий ответ",
-    "timecode": "01:23",
-    "topic": "{request.topic}",
-    "difficulty": "{request.level}"
-  }}
+  {{"question": "Чем вы занимаетесь на текущем месте работы?", "answer": "Краткий ответ", "timecode": "00:24", "topic": "{request.topic}", "difficulty": "{request.level}"}},
+  {{"question": "Какой у вас опыт работы?", "answer": "Краткий ответ", "timecode": "00:24", "topic": "{request.topic}", "difficulty": "{request.level}"}}
 ]
 
-Тема: {request.topic}
-Уровень: {request.level}
-
-Транскрипция с таймкодами:
+Транскрипция:
 {transcript_with_times[:25000]}
-"""
+
+Верни ТОЛЬКО JSON массив со ВСЕМИ вопросами:"""
         
         if USE_GROQ and GROQ_API_KEY:
             # Используем Groq API (быстро и качественно)
