@@ -9,6 +9,7 @@ from pydantic import BaseModel
 import whisper
 import tempfile
 import os
+import gc
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -66,14 +67,17 @@ async def transcribe(file: UploadFile = File(...), language: str = "ru"):
         tmp_path = tmp.name
     
     try:
-        logger.info(f"🎤 Transcribing {file.filename} ({len(content)} bytes)...")
+        file_size_mb = len(content) / (1024 * 1024)
+        logger.info(f"🎤 Transcribing {file.filename} ({file_size_mb:.1f} MB)...")
         
-        # Транскрибация
+        # Транскрибация с оптимизациями для длинных файлов
         result = whisper_model.transcribe(
             tmp_path,
             language=language,
             task="transcribe",
-            verbose=False
+            verbose=False,
+            fp16=False,  # CPU не поддерживает fp16
+            condition_on_previous_text=True  # Лучше для длинных файлов
         )
         
         # Формируем сегменты
@@ -85,7 +89,10 @@ async def transcribe(file: UploadFile = File(...), language: str = "ru"):
                 "text": seg["text"].strip()
             })
         
-        logger.info(f"✅ Transcription complete: {len(segments)} segments")
+        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(result['text'])} chars")
+        
+        # Очистка памяти после обработки длинных файлов
+        gc.collect()
         
         return TranscribeResponse(
             text=result["text"],
@@ -95,6 +102,7 @@ async def transcribe(file: UploadFile = File(...), language: str = "ru"):
     
     except Exception as e:
         logger.error(f"❌ Transcription error: {e}")
+        gc.collect()  # Очистка памяти даже при ошибке
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:

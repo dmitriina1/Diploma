@@ -596,7 +596,7 @@ async def transcribe_audio(request: TranscribeRequest):
         # 1. Вызываем Whisper Service для транскрибации
         print(f"🎤 Calling Whisper service at {WHISPER_SERVICE_URL}...")
         
-        async with httpx.AsyncClient(timeout=600.0) as client:  # 10 мин таймаут для длинных аудио
+        async with httpx.AsyncClient(timeout=1800.0) as client:  # 30 мин таймаут для видео до 2 часов
             # Отправляем файл на whisper-service
             with open(request.audio_path, "rb") as audio_file:
                 files = {"file": (Path(request.audio_path).name, audio_file, "audio/mpeg")}
@@ -1020,7 +1020,7 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
 async def trigger_n8n_workflow(task_id: str, request: YouTubeRequest):
     """Запуск n8n workflow"""
     try:
-        async with httpx.AsyncClient(timeout=600.0) as client:
+        async with httpx.AsyncClient(timeout=1800.0) as client:  # 30 мин для длинных видео
             response = await client.post(
                 N8N_WEBHOOK_URL,
                 json={
