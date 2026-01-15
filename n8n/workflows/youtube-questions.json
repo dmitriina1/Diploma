@@ -1,0 +1,224 @@
+{
+  "name": "YouTube Questions Extractor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "youtube-questions",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "youtube-questions"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/update-progress",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task_id: $json.body.task_id, progress: 10, step: 'Получение информации о видео...' }) }}"
+      },
+      "id": "progress-1",
+      "name": "Progress 10%",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/download-audio",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ youtube_url: $('Webhook').item.json.body.youtube_url, task_id: $('Webhook').item.json.body.task_id }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "download-audio",
+      "name": "Download Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/update-progress",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task_id: $('Webhook').item.json.body.task_id, progress: 40, step: 'Транскрибация аудио (Whisper)...' }) }}"
+      },
+      "id": "progress-2",
+      "name": "Progress 40%",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/transcribe",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ audio_path: $('Download Audio').item.json.audio_path, task_id: $('Webhook').item.json.body.task_id }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "transcribe",
+      "name": "Transcribe Audio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/update-progress",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task_id: $('Webhook').item.json.body.task_id, progress: 70, step: 'Извлечение вопросов (Ollama LLM)...' }) }}"
+      },
+      "id": "progress-3",
+      "name": "Progress 70%",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/extract-questions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ transcript: $('Transcribe Audio').item.json.transcript, task_id: $('Webhook').item.json.body.task_id, topic: $('Webhook').item.json.body.topic || 'General', level: $('Webhook').item.json.body.level || 'middle' }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "extract-questions",
+      "name": "Extract Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/update-progress",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task_id: $('Webhook').item.json.body.task_id, progress: 90, step: 'Сохранение результатов...' }) }}"
+      },
+      "id": "progress-4",
+      "name": "Progress 90%",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/save-questions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ questions: $('Extract Questions').item.json.questions, youtube_url: $('Webhook').item.json.body.youtube_url, video_title: $('Download Audio').item.json.title, task_id: $('Webhook').item.json.body.task_id }) }}"
+      },
+      "id": "save-questions",
+      "name": "Save Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/internal/update-progress",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ task_id: $('Webhook').item.json.body.task_id, progress: 100, step: 'Готово!' }) }}"
+      },
+      "id": "progress-5",
+      "name": "Progress 100%",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, task_id: $('Webhook').item.json.body.task_id, questions: $('Extract Questions').item.json.questions, video_title: $('Download Audio').item.json.title }) }}"
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2250, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Progress 10%", "type": "main", "index": 0 }]
+      ]
+    },
+    "Progress 10%": {
+      "main": [
+        [{ "node": "Download Audio", "type": "main", "index": 0 }]
+      ]
+    },
+    "Download Audio": {
+      "main": [
+        [{ "node": "Progress 40%", "type": "main", "index": 0 }]
+      ]
+    },
+    "Progress 40%": {
+      "main": [
+        [{ "node": "Transcribe Audio", "type": "main", "index": 0 }]
+      ]
+    },
+    "Transcribe Audio": {
+      "main": [
+        [{ "node": "Progress 70%", "type": "main", "index": 0 }]
+      ]
+    },
+    "Progress 70%": {
+      "main": [
+        [{ "node": "Extract Questions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Questions": {
+      "main": [
+        [{ "node": "Progress 90%", "type": "main", "index": 0 }]
+      ]
+    },
+    "Progress 90%": {
+      "main": [
+        [{ "node": "Save Questions", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Questions": {
+      "main": [
+        [{ "node": "Progress 100%", "type": "main", "index": 0 }]
+      ]
+    },
+    "Progress 100%": {
+      "main": [
+        [{ "node": "Respond", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "active": true
+}

@@ -1,0 +1,153 @@
+services:
+  # ============== PostgreSQL ==============
+  postgres:
+    image: postgres:15-alpine
+    container_name: diploma-postgres
+    environment:
+      POSTGRES_USER: diploma
+      POSTGRES_PASSWORD: diploma123
+      POSTGRES_DB: interview_prep
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diploma -d interview_prep"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diploma-network
+
+  # ============== Redis (для очередей и параллельной обработки) ==============
+  redis:
+    image: redis:7-alpine
+    container_name: diploma-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diploma-network
+
+  # ============== Ollama (бесплатный LLM) ==============
+  ollama:
+    image: ollama/ollama:latest
+    container_name: diploma-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+    networks:
+      - diploma-network
+
+  # ============== Ollama Init (загрузка модели) ==============
+  ollama-init:
+    image: curlimages/curl:latest
+    container_name: diploma-ollama-init
+    depends_on:
+      - ollama
+    restart: "no"
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for Ollama to start...' &&
+        sleep 15 &&
+        echo 'Pulling llama3.2 model...' &&
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"llama3.2:1b\"}' &&
+        echo 'Model pulled successfully!'
+      "
+    networks:
+      - diploma-network
+
+  # ============== n8n (автоматизация) ==============
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: diploma-n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://n8n:5678/
+      - N8N_RUNNERS_ENABLED=true
+      - EXECUTIONS_MODE=regular
+      - GENERIC_TIMEZONE=Europe/Moscow
+      - N8N_SECURE_COOKIE=false
+      # Автоматическая настройка owner аккаунта
+      - N8N_USER_MANAGEMENT_DISABLED=true
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diploma-network
+
+  # ============== Backend (FastAPI) ==============
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diploma-backend
+    environment:
+      - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
+      - REDIS_URL=redis://redis:6379
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
+      - OLLAMA_URL=http://ollama:11434
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - USE_GROQ=true
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diploma-network
+
+  # ============== Frontend (React) ==============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diploma-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - diploma-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:
+  n8n_data:
+
+networks:
+  diploma-network:
+    driver: bridge

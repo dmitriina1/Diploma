@@ -1,0 +1,26 @@
+# Игнорируем
+node_modules/
+__pycache__/
+*.pyc
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+
+# Временные файлы
+temp/
+*.mp3
+*.mp4
+*.wav
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docker volumes (не коммитим данные)
+postgres_data/
+redis_data/
+ollama_data/
+n8n_data/
