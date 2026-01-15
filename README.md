@@ -65,20 +65,25 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Backend (FastAPI)                           │
 │                      http://localhost:8000                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │   yt-dlp    │  │   Whisper   │  │      Groq API           │  │
-│  │  (download) │  │ (transcribe)│  │  (extract questions)    │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│  ┌─────────────┐  ┌─────────────────────────┐                   │
+│  │   yt-dlp    │  │      Groq API           │                   │
+│  │  (download) │  │  (extract questions)    │                   │
+│  └─────────────┘  └─────────────────────────┘                   │
 └────────────────────────────┬────────────────────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-┌──────────────────┐ ┌──────────────┐ ┌──────────────────┐
-│       n8n        │ │    Redis     │ │   PostgreSQL     │
-│ (orchestration)  │ │   (cache)    │ │   (storage)      │
-│ localhost:5678   │ │ localhost:6379│ │ localhost:5432  │
-└──────────────────┘ └──────────────┘ └──────────────────┘
+                             │ HTTP
+              ┌──────────────┼──────────────┬─────────────┐
+              ▼              ▼              ▼             ▼
+┌──────────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────────┐
+│       n8n        │ │    Redis     │ │  PostgreSQL  │ │ Whisper Service│
+│ (orchestration)  │ │   (cache)    │ │   (storage)  │ │  (transcribe)  │
+│ localhost:5678   │ │localhost:6379│ │localhost:5432│ │  (internal)    │
+└──────────────────┘ └──────────────┘ └──────────────┘ └────────────────┘
 ```
+
+### Особенности архитектуры:
+- **Whisper как отдельный сервис** — модель загружается один раз и остаётся в памяти
+- **Быстрый перезапуск backend** — не нужно ждать загрузку модели Whisper (~1.5 GB)
+- **n8n с автоимпортом** — workflow импортируется и активируется автоматически при первом запуске
 
 ### Процесс обработки:
 
@@ -105,12 +110,12 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 | Компонент | Технология | Назначение |
 |-----------|------------|------------|
 | API Server | **FastAPI** | REST API, WebSocket, Swagger |
-| Транскрибация | **OpenAI Whisper** | Speech-to-Text (medium model) |
+| Транскрибация | **OpenAI Whisper** (отдельный сервис) | Speech-to-Text (medium model, CPU) |
 | **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
 | **Гибридная транскрипция** | Whisper + Subtitles | ~100% точность |
 | LLM | **Groq API** (LLaMA 3.3 70B) | Извлечение вопросов |
 | YouTube | **yt-dlp** | Скачивание аудио |
-| Оркестрация | **n8n** | Workflow automation |
+| Оркестрация | **n8n** | Workflow automation (автоимпорт) |
 | Кэш | **Redis** | Хранение задач и результатов |
 | БД | **PostgreSQL** | Персистентное хранение |
 
@@ -225,7 +230,8 @@ docker-compose down
 ```json
 {
   "status": "healthy",
-  "whisper_loaded": true
+  "whisper_service": true,
+  "whisper_url": "http://whisper:8001"
 }
 ```
 
@@ -347,6 +353,11 @@ Diploma/
 │   ├── Dockerfile          # Docker образ backend
 │   └── temp/               # Временные файлы (аудио)
 │
+├── whisper-service/         # 🆕 Отдельный сервис транскрибации
+│   ├── main.py             # FastAPI + Whisper model
+│   ├── requirements.txt    # PyTorch CPU + Whisper
+│   └── Dockerfile          # Docker образ с ffmpeg
+│
 ├── frontend/
 │   ├── src/
 │   │   ├── App.js          # React компонент
@@ -363,7 +374,7 @@ Diploma/
 ├── scripts/
 │   └── init-db.sql         # Инициализация PostgreSQL
 │
-├── docker-compose.yml      # Конфигурация контейнеров
+├── docker-compose.yml      # Конфигурация контейнеров (6 сервисов)
 ├── .env                    # Переменные окружения (создать!)
 ├── start.bat              # Запуск (Windows)
 ├── start.sh               # Запуск (Linux/Mac)
@@ -395,10 +406,10 @@ OLLAMA_URL=http://ollama:11434
 |--------|------|----------|
 | Frontend | 3000 | React приложение |
 | Backend | 8000 | FastAPI + Swagger |
+| Whisper Service | 8001 (internal) | Транскрибация (не экспортирован) |
 | n8n | 5678 | Workflow UI |
 | PostgreSQL | 5432 | База данных |
 | Redis | 6379 | Кэш |
-| Ollama | 11434 | Локальный LLM (опционально) |
 
 ---
 
@@ -564,7 +575,12 @@ docker-compose restart backend
 - Поддерживает стандартный и YouTube VTT форматы
 
 ### Проблема: Whisper медленно работает
-**Решение:** Используется модель `medium`. Для ускорения можно использовать `base` или `small`, но качество будет хуже. Для максимального качества — `large` (требует много памяти).
+**Решение:** Используется модель `medium` (CPU). Для ускорения можно:
+- Использовать `base` или `small` (изменить в `whisper-service/main.py`)
+- Перезапустить только backend без потери модели Whisper в памяти
+
+### Проблема: Whisper сервис долго запускается
+**Решение:** При первом запуске скачивается модель (~1.5 GB). Последующие запуски быстрее благодаря кэшированию в Docker volume `whisper_cache`.
 
 ### Проблема: Groq API rate limit
 **Решение:** Бесплатный план Groq — 30 запросов/минуту. Подождите минуту между запросами.
@@ -576,8 +592,14 @@ docker-compose down -v
 docker-compose up -d --build
 ```
 
-### Проблема: n8n workflow не работает
-**Решение:** Убедитесь, что workflow активирован (зелёный тоггл) в http://localhost:5678
+### Проблема: n8n workflow не работает (404 на webhook)
+**Решение:** Workflow автоматически импортируется и активируется при первом запуске. Если не работает:
+```bash
+# Удалить данные n8n и перезапустить
+docker exec diploma-postgres psql -U diploma -d interview_prep -c "DELETE FROM workflow_entity;"
+docker-compose restart n8n
+```
+После перезапуска workflow будет заново импортирован и активирован.
 
 ### Просмотр логов
 ```bash
