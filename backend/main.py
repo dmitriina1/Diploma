@@ -3,6 +3,7 @@ import uuid
 import json
 import asyncio
 import re
+import random
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
@@ -448,30 +449,37 @@ async def download_audio(request: DownloadRequest):
         video_id = extract_video_id(request.youtube_url)
         audio_path = TEMP_DIR / f"{video_id}.mp3"
         
-        # Пробуем скачать субтитры (10 попыток, 5 сек между ними)
+        # Пробуем скачать субтитры (15 попыток, 10 сек между ними)
         subtitles = []
-        max_retries = 10
-        retry_delay = 5  # Увеличили задержку
-        
+        max_retries = 15
+        retry_delay = 10  # Большая задержка между попытками
+
+        # Ротация User-Agent для обхода блокировки
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15'
+        ]
+
         subs_opts = {
             'skip_download': True,
             'writesubtitles': True,
             'writeautomaticsub': True,
-            'subtitleslangs': ['ru'],
+            'subtitleslangs': ['ru'],  # ТОЛЬКО русские субтитры
             'subtitlesformat': 'vtt',
             'outtmpl': str(TEMP_DIR / f"{video_id}"),
             'quiet': True,
             'no_warnings': True,
             'ignoreerrors': True,
-            'extractor_retries': 10,  # Много попыток при 429
-            'retries': 10,  # HTTP retries
-            'fragment_retries': 10,
-            'sleep_interval': 2,  # Пауза между запросами
-            'sleep_interval_subtitles': 3,  # Пауза между субтитрами
-            'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
+            'extractor_retries': 5,  # Уменьшим для скорости
+            'retries': 5,
+            'sleep_interval': 2,
+            'sleep_interval_subtitles': 3,
+            'nooverwrites': True,  # НЕ перезаписывать существующие файлы
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
             },
         }
@@ -480,25 +488,41 @@ async def download_audio(request: DownloadRequest):
             """Проверяет наличие файлов субтитров в temp"""
             sub_file = TEMP_DIR / f"{video_id}.ru.vtt"
             if sub_file.exists():
+                print(f"📄 File exists: {sub_file}, size: {sub_file.stat().st_size} bytes")
                 subs = parse_vtt_subtitles(sub_file)
+                print(f"📝 Parsed {len(subs)} segments")
                 if subs:
                     print(f"✅ Found ru subtitles: {len(subs)} segments")
                     return subs
+                else:
+                    print("⚠️ File exists but no valid segments parsed")
+            else:
+                print(f"❌ File not found: {sub_file}")
             return []
         
         for attempt in range(max_retries):
+            # Проверяем файл ПЕРЕД скачиванием
+            subtitles = check_subtitle_files()
+            if subtitles:
+                print(f"✅ Subtitles already exist from previous attempt")
+                break
+
             try:
                 print(f"📥 Downloading subtitles (attempt {attempt + 1}/{max_retries})...")
                 with yt_dlp.YoutubeDL(subs_opts) as ydl:
                     ydl.download([request.youtube_url])
+                
+                # Небольшая задержка чтобы файл успел записаться
+                time.sleep(1)
+                
             except Exception as e:
                 print(f"⚠️ Subtitles attempt {attempt + 1} failed: {e}")
-            
+
             # Проверяем файлы ПОСЛЕ каждой попытки (даже если была ошибка)
             subtitles = check_subtitle_files()
             if subtitles:
                 break
-            
+
             # Ждём перед следующей попыткой
             if attempt < max_retries - 1:
                 print(f"⏳ Waiting {retry_delay}s before retry...")
@@ -880,8 +904,8 @@ def parse_vtt_subtitles(vtt_path: Path) -> List[Dict[str, Any]]:
         with open(vtt_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Паттерн для VTT таймкодов: 00:00:01.000 --> 00:00:04.000
-        pattern = r'(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})\s*\n(.*?)(?=\n\n|\n\d{2}:\d{2}|\Z)'
+        # Паттерн для VTT таймкодов: 00:00:01.000 --> 00:00:04.000 (игнорируем дополнительные атрибуты)
+        pattern = r'(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})(?:\s+[^\n]*)?\s*\n(.*?)(?=\n\n|\n\d{2}:\d{2}|\Z)'
         matches = re.findall(pattern, content, re.DOTALL)
         
         for start_str, end_str, text in matches:
@@ -893,7 +917,9 @@ def parse_vtt_subtitles(vtt_path: Path) -> List[Dict[str, Any]]:
             end_secs = int(end_parts[0]) * 3600 + int(end_parts[1]) * 60 + float(end_parts[2])
             
             # Очищаем текст от тегов и лишних пробелов
-            clean_text = re.sub(r'<[^>]+>', '', text)
+            # Удаляем HTML-теги, временные метки внутри текста и цветовые теги
+            clean_text = re.sub(r'<[^>]+>', '', text)  # HTML теги
+            clean_text = re.sub(r'\d{2}:\d{2}:\d{2}\.\d{3}', '', clean_text)  # Временные метки внутри текста
             clean_text = re.sub(r'\s+', ' ', clean_text).strip()
             
             if clean_text and clean_text not in ['', '[Music]', '[Музыка]']:
