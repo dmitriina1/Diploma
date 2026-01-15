@@ -126,13 +126,16 @@ async def transcribe_from_path(audio_path: str, language: str = "ru"):
         raise HTTPException(status_code=404, detail=f"File not found: {audio_path}")
     
     try:
-        logger.info(f"🎤 Transcribing {audio_path}...")
+        file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+        logger.info(f"🎤 Transcribing {audio_path} ({file_size_mb:.1f} MB)...")
         
         result = whisper_model.transcribe(
             audio_path,
             language=language,
             task="transcribe",
-            verbose=False
+            verbose=False,
+            fp16=False,
+            condition_on_previous_text=True
         )
         
         segments = []
@@ -143,7 +146,10 @@ async def transcribe_from_path(audio_path: str, language: str = "ru"):
                 "text": seg["text"].strip()
             })
         
-        logger.info(f"✅ Transcription complete: {len(segments)} segments")
+        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(result['text'])} chars")
+        
+        # Очистка памяти
+        gc.collect()
         
         return {
             "text": result["text"],
@@ -153,6 +159,7 @@ async def transcribe_from_path(audio_path: str, language: str = "ru"):
     
     except Exception as e:
         logger.error(f"❌ Transcription error: {e}")
+        gc.collect()
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -26,6 +26,9 @@ USE_GROQ = os.getenv("USE_GROQ", "true").lower() == "true"  # По умолча�
 TEMP_DIR = Path("/app/temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
+# TTL для Redis (24 часа для длинных видео)
+REDIS_TTL = 86400  # 24 часа
+
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
 connected_clients: Dict[str, WebSocket] = {}
@@ -197,11 +200,30 @@ async def health():
     except:
         pass
     
+    # Считаем temp файлы
+    temp_files = list(TEMP_DIR.glob("*"))
+    temp_size_mb = sum(f.stat().st_size for f in temp_files if f.is_file()) / (1024 * 1024)
+    
     return {
         "status": "healthy",
         "whisper_service": whisper_healthy,
-        "whisper_url": WHISPER_SERVICE_URL
+        "whisper_url": WHISPER_SERVICE_URL,
+        "temp_files_count": len(temp_files),
+        "temp_size_mb": round(temp_size_mb, 2)
     }
+
+@app.delete("/api/cleanup-temp", tags=["Status"])
+async def cleanup_all_temp():
+    """Очистка всех временных файлов (для администрирования)"""
+    cleaned = 0
+    for f in TEMP_DIR.glob("*"):
+        if f.is_file():
+            try:
+                f.unlink()
+                cleaned += 1
+            except:
+                pass
+    return {"cleaned_files": cleaned}
 
 @app.post("/api/process-video", tags=["Processing"])
 async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
@@ -228,7 +250,7 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
         "progress": 0,
         "step": "В очереди..."
     }
-    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=3600)
+    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
     
     # Запускаем обработку в фоне
     background_tasks.add_task(trigger_n8n_workflow, task_id, request)
@@ -244,8 +266,14 @@ async def process_video_with_client(client_id: str, request: YouTubeRequest, bac
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
     
     # Связываем task с client
-    await redis_client.set(f"task:{task_id}:client", client_id, ex=3600)
-    await redis_client.set(f"client:{client_id}:last_task", task_id, ex=3600)
+    await redis_client.set(f"task:{task_id}:client", client_id, ex=REDIS_TTL)
+    await redis_client.set(f"client:{client_id}:last_task", task_id, ex=REDIS_TTL)
+    
+    # Добавляем в список задач клиента (для истории)
+    tasks_key = f"client:{client_id}:tasks"
+    await redis_client.lpush(tasks_key, task_id)
+    await redis_client.ltrim(tasks_key, 0, 19)  # Храним только 20 последних
+    await redis_client.expire(tasks_key, REDIS_TTL)
     
     task_data = {
         "task_id": task_id,
@@ -256,7 +284,7 @@ async def process_video_with_client(client_id: str, request: YouTubeRequest, bac
         "progress": 0,
         "step": "В очереди..."
     }
-    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=3600)
+    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
     
     # Отправляем начальный статус через WebSocket
     await manager.send_progress(client_id, {
@@ -291,6 +319,32 @@ async def get_last_result(client_id: str):
     
     task = json.loads(task_data)
     return task
+
+@app.get("/api/tasks/{client_id}", tags=["Status"])
+async def get_client_tasks(client_id: str):
+    """
+    Получение всех задач клиента (для истории)
+    Хранит до 20 последних задач
+    """
+    tasks_key = f"client:{client_id}:tasks"
+    task_ids = await redis_client.lrange(tasks_key, 0, 19)  # Последние 20 задач
+    
+    tasks = []
+    for task_id in task_ids:
+        task_data = await redis_client.get(f"task:{task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            tasks.append({
+                "task_id": task.get("task_id"),
+                "status": task.get("status"),
+                "progress": task.get("progress", 0),
+                "step": task.get("step", ""),
+                "video_title": task.get("result", {}).get("video_title", "Unknown"),
+                "questions_count": task.get("result", {}).get("questions_count", 0),
+                "youtube_url": task.get("youtube_url", "")
+            })
+    
+    return {"tasks": tasks, "count": len(tasks)}
 
 @app.get("/api/questions", tags=["Export"])
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
@@ -446,7 +500,7 @@ async def update_progress(update: ProgressUpdate):
         task["progress"] = update.progress
         task["step"] = update.step
         task["status"] = "processing" if update.progress < 100 else "completed"
-        await redis_client.set(f"task:{update.task_id}", json.dumps(task), ex=3600)
+        await redis_client.set(f"task:{update.task_id}", json.dumps(task), ex=REDIS_TTL)
     
     # Отправляем через WebSocket
     await manager.broadcast_to_task(update.task_id, {
@@ -567,14 +621,14 @@ async def download_audio(request: DownloadRequest):
             title = info.get('title', 'Unknown')
         
         # Сохраняем video_id в Redis для повторной попытки после транскрибации
-        await redis_client.set(f"video_id:{request.task_id}", video_id, ex=7200)
+        await redis_client.set(f"video_id:{request.task_id}", video_id, ex=REDIS_TTL)
         
         # Сохраняем субтитры в Redis (если есть)
         if subtitles:
             await redis_client.set(
                 f"subtitles:{request.task_id}",
                 json.dumps(subtitles),
-                ex=7200
+                ex=REDIS_TTL
             )
         
         return {
@@ -632,7 +686,7 @@ async def transcribe_audio(request: TranscribeRequest):
                         await redis_client.set(
                             f"subtitles:{request.task_id}",
                             json.dumps(youtube_subtitles),
-                            ex=7200
+                            ex=REDIS_TTL
                         )
         
         # 3. Слияние: субтитры (точный текст) + Whisper (пунктуация)
@@ -657,14 +711,14 @@ async def transcribe_audio(request: TranscribeRequest):
                 "has_subtitles": len(youtube_subtitles) > 0,
                 "length": len(merged_transcript)
             }),
-            ex=7200
+            ex=REDIS_TTL
         )
         
-        # Удаляем временный файл
-        try:
-            Path(request.audio_path).unlink()
-        except:
-            pass
+        # Удаляем временные файлы (mp3 + vtt)
+        video_id = await redis_client.get(f"video_id:{request.task_id}")
+        if video_id:
+            video_id = video_id.decode() if isinstance(video_id, bytes) else video_id
+            cleanup_temp_files(video_id)
         
         return {
             "transcript": merged_transcript,
@@ -875,7 +929,7 @@ async def save_questions(request: SaveQuestionsRequest):
                 "questions_count": len(request.questions)
             }
             task["status"] = "completed"
-            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=3600)
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
         
         # Отправляем результат через WebSocket
         await manager.broadcast_to_task(request.task_id, {
@@ -971,6 +1025,21 @@ def parse_questions_from_llm(response: str) -> List[Dict[str, Any]]:
         # Если JSON невалидный, возвращаем пустой список
         return []
 
+def cleanup_temp_files(video_id: str):
+    """Очистка временных файлов после обработки"""
+    try:
+        patterns = [
+            TEMP_DIR / f"{video_id}.mp3",
+            TEMP_DIR / f"{video_id}.ru.vtt",
+            TEMP_DIR / f"{video_id}.en.vtt",
+        ]
+        for file_path in patterns:
+            if file_path.exists():
+                file_path.unlink()
+                print(f"🧹 Cleaned up: {file_path.name}")
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
 def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Удаление дубликатов вопросов"""
     if not questions:
@@ -1039,7 +1108,7 @@ async def trigger_n8n_workflow(task_id: str, request: YouTubeRequest):
             task = json.loads(task_data)
             task["status"] = "error"
             task["error"] = str(e)
-            await redis_client.set(f"task:{task_id}", json.dumps(task), ex=3600)
+            await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
         
         # Отправляем ошибку клиенту
         await manager.broadcast_to_task(task_id, {
