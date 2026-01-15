@@ -351,11 +351,32 @@ async def get_transcript(task_id: str):
         }
     )
 
+@app.get("/api/subtitles/{task_id}", tags=["Export"])
+async def get_subtitles(task_id: str):
+    """Скачать оригинальные YouTube субтитры по task_id"""
+    from fastapi.responses import JSONResponse
+    
+    subtitles_data = await redis_client.get(f"subtitles:{task_id}")
+    if not subtitles_data:
+        raise HTTPException(status_code=404, detail="Subtitles not found (video may not have subtitles)")
+    
+    subtitles = json.loads(subtitles_data)
+    return JSONResponse(
+        content={
+            "task_id": task_id,
+            "subtitles": subtitles,
+            "count": len(subtitles)
+        },
+        headers={
+            "Content-Disposition": f'attachment; filename="subtitles_{task_id}.json"'
+        }
+    )
+
 @app.get("/api/full-export/{task_id}", tags=["Export"])
 async def full_export(task_id: str):
     """
     Полный экспорт данных задачи:
-    - Транскрипция с таймкодами
+    - Транскрипция (merged, Whisper, YouTube subtitles)
     - Все извлечённые вопросы
     - Метаданные видео
     """
@@ -371,9 +392,17 @@ async def full_export(task_id: str):
     
     export = {
         "task_id": task_id,
+        # Финальная merged транскрипция
         "transcript": transcript.get("transcript", ""),
         "segments": transcript.get("segments", []),
         "transcript_length": transcript.get("length", 0),
+        # Whisper raw (для сравнения)
+        "whisper_raw": transcript.get("whisper_raw", ""),
+        "whisper_segments": transcript.get("whisper_segments", []),
+        # YouTube субтитры (для сравнения)
+        "youtube_subtitles": transcript.get("youtube_subtitles", []),
+        "has_subtitles": transcript.get("has_subtitles", False),
+        # Вопросы и метаданные
         "video_title": task.get("result", {}).get("video_title", "Unknown"),
         "questions": task.get("result", {}).get("questions", []),
         "questions_count": task.get("result", {}).get("questions_count", 0),
@@ -410,13 +439,75 @@ async def update_progress(update: ProgressUpdate):
     
     return {"status": "ok"}
 
-@app.post("/internal/download-audio")
+@app.post("/internal/download-audio", tags=["Internal"])
 async def download_audio(request: DownloadRequest):
-    """Скачивание аудио с YouTube"""
+    """Скачивание аудио и субтитров с YouTube"""
+    import time
+    
     try:
         video_id = extract_video_id(request.youtube_url)
         audio_path = TEMP_DIR / f"{video_id}.mp3"
         
+        # Пробуем скачать субтитры (10 попыток, 5 сек между ними)
+        subtitles = []
+        max_retries = 10
+        retry_delay = 5  # Увеличили задержку
+        
+        subs_opts = {
+            'skip_download': True,
+            'writesubtitles': True,
+            'writeautomaticsub': True,
+            'subtitleslangs': ['ru'],
+            'subtitlesformat': 'vtt',
+            'outtmpl': str(TEMP_DIR / f"{video_id}"),
+            'quiet': True,
+            'no_warnings': True,
+            'ignoreerrors': True,
+            'extractor_retries': 10,  # Много попыток при 429
+            'retries': 10,  # HTTP retries
+            'fragment_retries': 10,
+            'sleep_interval': 2,  # Пауза между запросами
+            'sleep_interval_subtitles': 3,  # Пауза между субтитрами
+            'extractor_args': {'youtube': {'player_client': ['web', 'android', 'ios']}},
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            },
+        }
+        
+        def check_subtitle_files():
+            """Проверяет наличие файлов субтитров в temp"""
+            sub_file = TEMP_DIR / f"{video_id}.ru.vtt"
+            if sub_file.exists():
+                subs = parse_vtt_subtitles(sub_file)
+                if subs:
+                    print(f"✅ Found ru subtitles: {len(subs)} segments")
+                    return subs
+            return []
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"📥 Downloading subtitles (attempt {attempt + 1}/{max_retries})...")
+                with yt_dlp.YoutubeDL(subs_opts) as ydl:
+                    ydl.download([request.youtube_url])
+            except Exception as e:
+                print(f"⚠️ Subtitles attempt {attempt + 1} failed: {e}")
+            
+            # Проверяем файлы ПОСЛЕ каждой попытки (даже если была ошибка)
+            subtitles = check_subtitle_files()
+            if subtitles:
+                break
+            
+            # Ждём перед следующей попыткой
+            if attempt < max_retries - 1:
+                print(f"⏳ Waiting {retry_delay}s before retry...")
+                time.sleep(retry_delay)
+        
+        if not subtitles:
+            print("⚠️ No subtitles after all retries, will check again after transcription")
+        
+        # Скачиваем аудио
         ydl_opts = {
             'format': 'bestaudio/best',
             'postprocessors': [{
@@ -427,21 +518,29 @@ async def download_audio(request: DownloadRequest):
             'outtmpl': str(TEMP_DIR / f"{video_id}.%(ext)s"),
             'quiet': True,
             'no_warnings': True,
-            # Обход блокировок YouTube
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(request.youtube_url, download=True)
             title = info.get('title', 'Unknown')
         
+        # Сохраняем video_id в Redis для повторной попытки после транскрибации
+        await redis_client.set(f"video_id:{request.task_id}", video_id, ex=7200)
+        
+        # Сохраняем субтитры в Redis (если есть)
+        if subtitles:
+            await redis_client.set(
+                f"subtitles:{request.task_id}",
+                json.dumps(subtitles),
+                ex=7200
+            )
+        
         return {
             "audio_path": str(audio_path),
             "title": title,
-            "video_id": video_id
+            "video_id": video_id,
+            "has_subtitles": len(subtitles) > 0,
+            "subtitles_count": len(subtitles)
         }
     except Exception as e:
         print(f"Download error: {e}")
@@ -449,7 +548,7 @@ async def download_audio(request: DownloadRequest):
 
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
-    """Транскрибация аудио через Whisper с детальными таймкодами"""
+    """Транскрибация аудио через Whisper + слияние с YouTube субтитрами"""
     global whisper_model
     
     try:
@@ -457,7 +556,8 @@ async def transcribe_audio(request: TranscribeRequest):
             print("📦 Loading Whisper model...")
             whisper_model = whisper.load_model("base")
         
-        # Транскрибация с таймкодами на уровне слов
+        # 1. Транскрибация Whisper (даёт пунктуацию)
+        print("🎤 Whisper transcription...")
         result = whisper_model.transcribe(
             request.audio_path,
             language="ru",
@@ -465,56 +565,60 @@ async def transcribe_audio(request: TranscribeRequest):
             word_timestamps=True
         )
         
-        transcript = result["text"]
-        
-        # Собираем более детальные сегменты (разбиваем по предложениям/вопросам)
-        segments = []
+        whisper_transcript = result["text"]
+        whisper_segments = []
         for seg in result.get("segments", []):
-            text = seg.get("text", "").strip()
-            start = seg.get("start", 0)
-            
-            # Если сегмент содержит вопросительный знак, разбиваем на части
-            if "?" in text:
-                parts = text.split("?")
-                words = seg.get("words", [])
-                
-                current_start = start
-                for i, part in enumerate(parts):
-                    part = part.strip()
-                    if part:
-                        # Находим примерное время для этой части
-                        part_with_q = part + "?" if i < len(parts) - 1 else part
-                        
-                        # Ищем слова этой части для точного времени
-                        part_end = current_start + 3  # По умолчанию +3 секунды
-                        for word in words:
-                            word_text = word.get("word", "").strip()
-                            if word_text and word_text in part:
-                                part_end = word.get("end", part_end)
-                        
-                        segments.append({
-                            "start": round(current_start, 1),
-                            "end": round(part_end, 1),
-                            "text": part_with_q
-                        })
-                        current_start = part_end
-            else:
-                segments.append({
-                    "start": round(start, 1),
-                    "end": round(seg.get("end", 0), 1),
-                    "text": text
-                })
+            whisper_segments.append({
+                "start": round(seg.get("start", 0), 1),
+                "end": round(seg.get("end", 0), 1),
+                "text": seg.get("text", "").strip()
+            })
         
-        # Сохраняем транскрипцию с таймкодами в Redis
+        # 2. Получаем субтитры YouTube из Redis (если есть)
+        subtitles_data = await redis_client.get(f"subtitles:{request.task_id}")
+        youtube_subtitles = json.loads(subtitles_data) if subtitles_data else []
+        
+        # 2.1 Если субтитров нет — пробуем прочитать из файла (могли загрузиться позже)
+        if not youtube_subtitles:
+            video_id = await redis_client.get(f"video_id:{request.task_id}")
+            if video_id:
+                video_id = video_id.decode() if isinstance(video_id, bytes) else video_id
+                print(f"🔍 Checking for late-loaded subtitles for {video_id}...")
+                sub_file = TEMP_DIR / f"{video_id}.ru.vtt"
+                if sub_file.exists():
+                    youtube_subtitles = parse_vtt_subtitles(sub_file)
+                    if youtube_subtitles:
+                        print(f"✅ Found late-loaded ru subtitles: {len(youtube_subtitles)} segments")
+                        # Сохраняем в Redis
+                        await redis_client.set(
+                            f"subtitles:{request.task_id}",
+                            json.dumps(youtube_subtitles),
+                            ex=7200
+                        )
+        
+        # 3. Слияние: субтитры (точный текст) + Whisper (пунктуация)
+        if youtube_subtitles:
+            print(f"🔀 Merging {len(youtube_subtitles)} subtitles with Whisper...")
+            merged_segments = merge_subtitles_with_whisper(youtube_subtitles, whisper_segments)
+            merged_transcript = " ".join([s["text"] for s in merged_segments])
+        else:
+            print("⚠️ No subtitles available, using Whisper only")
+            merged_segments = whisper_segments
+            merged_transcript = whisper_transcript
+        
+        # 4. Сохраняем все версии в Redis
         await redis_client.set(
             f"transcript:{request.task_id}", 
             json.dumps({
-                "transcript": transcript,
-                "segments": segments,
-                "audio_path": request.audio_path,
-                "length": len(transcript)
+                "transcript": merged_transcript,  # Финальная версия
+                "segments": merged_segments,
+                "whisper_raw": whisper_transcript,
+                "whisper_segments": whisper_segments,
+                "youtube_subtitles": youtube_subtitles,
+                "has_subtitles": len(youtube_subtitles) > 0,
+                "length": len(merged_transcript)
             }),
-            ex=7200  # 2 часа
+            ex=7200
         )
         
         # Удаляем временный файл
@@ -523,9 +627,71 @@ async def transcribe_audio(request: TranscribeRequest):
         except:
             pass
         
-        return {"transcript": transcript, "segments": segments}
+        return {
+            "transcript": merged_transcript,
+            "segments": merged_segments,
+            "has_subtitles": len(youtube_subtitles) > 0
+        }
     except Exception as e:
+        print(f"Transcription error: {e}")
         raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+
+def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[Dict]) -> List[Dict]:
+    """
+    Слияние YouTube субтитров с Whisper:
+    - Субтитры дают точный текст (без ошибок распознавания)
+    - Whisper даёт пунктуацию (вопросительные знаки)
+    """
+    merged = []
+    
+    for sub in subtitles:
+        sub_start = sub["start"]
+        sub_end = sub["end"]
+        sub_text = sub["text"]
+        
+        # Ищем соответствующий сегмент Whisper для получения пунктуации
+        best_whisper = None
+        best_overlap = 0
+        
+        for wseg in whisper_segments:
+            w_start = wseg["start"]
+            w_end = wseg["end"]
+            
+            # Вычисляем перекрытие по времени
+            overlap_start = max(sub_start, w_start)
+            overlap_end = min(sub_end, w_end)
+            overlap = max(0, overlap_end - overlap_start)
+            
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_whisper = wseg
+        
+        # Определяем пунктуацию из Whisper
+        final_text = sub_text
+        if best_whisper:
+            whisper_text = best_whisper["text"]
+            # Если Whisper заканчивает на "?", добавляем к субтитрам
+            if whisper_text.strip().endswith("?"):
+                if not final_text.strip().endswith("?"):
+                    final_text = final_text.rstrip() + "?"
+            # Проверяем вопросительные слова и добавляем "?"
+            question_words = ["как", "что", "почему", "зачем", "где", "когда", "кто", "какой", "какая", "какие", "сколько"]
+            lower_text = final_text.lower()
+            if any(lower_text.startswith(qw) for qw in question_words) and not final_text.endswith("?"):
+                # Проверяем, есть ли "?" в Whisper для этого времени
+                for wseg in whisper_segments:
+                    if abs(wseg["start"] - sub_start) < 3 and "?" in wseg["text"]:
+                        final_text = final_text.rstrip() + "?"
+                        break
+        
+        merged.append({
+            "start": sub_start,
+            "end": sub_end,
+            "text": final_text,
+            "source": "merged"
+        })
+    
+    return merged
 
 @app.post("/internal/extract-questions", tags=["Internal"])
 async def extract_questions(request: ExtractQuestionsRequest):
@@ -706,6 +872,49 @@ def extract_video_id(url: str) -> str:
         if match:
             return match.group(1)
     return str(uuid.uuid4())[:11]
+
+def parse_vtt_subtitles(vtt_path: Path) -> List[Dict[str, Any]]:
+    """Парсинг VTT субтитров в список сегментов с таймкодами"""
+    subtitles = []
+    try:
+        with open(vtt_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Паттерн для VTT таймкодов: 00:00:01.000 --> 00:00:04.000
+        pattern = r'(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})\s*\n(.*?)(?=\n\n|\n\d{2}:\d{2}|\Z)'
+        matches = re.findall(pattern, content, re.DOTALL)
+        
+        for start_str, end_str, text in matches:
+            # Конвертируем время в секунды
+            start_parts = start_str.split(':')
+            start_secs = int(start_parts[0]) * 3600 + int(start_parts[1]) * 60 + float(start_parts[2])
+            
+            end_parts = end_str.split(':')
+            end_secs = int(end_parts[0]) * 3600 + int(end_parts[1]) * 60 + float(end_parts[2])
+            
+            # Очищаем текст от тегов и лишних пробелов
+            clean_text = re.sub(r'<[^>]+>', '', text)
+            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+            
+            if clean_text and clean_text not in ['', '[Music]', '[Музыка]']:
+                subtitles.append({
+                    "start": round(start_secs, 1),
+                    "end": round(end_secs, 1),
+                    "text": clean_text
+                })
+        
+        # Объединяем соседние сегменты с одинаковым текстом
+        merged = []
+        for sub in subtitles:
+            if merged and merged[-1]["text"] == sub["text"]:
+                merged[-1]["end"] = sub["end"]
+            else:
+                merged.append(sub)
+        
+        return merged
+    except Exception as e:
+        print(f"VTT parse error: {e}")
+        return []
 
 def parse_questions_from_llm(response: str) -> List[Dict[str, Any]]:
     """Парсинг JSON из ответа LLM с дедупликацией"""

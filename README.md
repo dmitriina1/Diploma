@@ -33,14 +33,17 @@
 Автоматизация подготовки к IT-собеседованиям путём извлечения вопросов из YouTube видео с записями реальных интервью.
 
 ### Что делает система:
-1. **Скачивает аудио** из YouTube видео через yt-dlp
+1. **Скачивает аудио + субтитры** из YouTube видео через yt-dlp
 2. **Транскрибирует** аудио в текст с таймкодами (OpenAI Whisper)
-3. **Извлекает вопросы** с помощью LLM (Groq API / LLaMA 70B)
-4. **Проверяет грамматику** и исправляет ошибки распознавания
-5. **Сохраняет результат** в JSON с таймкодами
+3. **Сливает субтитры с Whisper** — субтитры дают точный текст, Whisper — пунктуацию
+4. **Извлекает вопросы** с помощью LLM (Groq API / LLaMA 70B)
+5. **Проверяет грамматику** и исправляет ошибки распознавания
+6. **Сохраняет результат** в JSON с таймкодами
 
 ### Ключевые особенности:
 - ✅ **100% бесплатно** — Groq API предоставляет бесплатный доступ к LLaMA 70B
+- ✅ **~100% точность** — гибридная транскрипция (субтитры + Whisper)
+- ✅ **Retry субтитров** — 10 попыток с интервалом 3 сек + проверка после транскрибации
 - ✅ **Локальное развёртывание** — все данные остаются на вашем сервере
 - ✅ **Таймкоды** — каждый вопрос привязан к моменту в видео
 - ✅ **Автокоррекция** — LLM исправляет ошибки распознавания речи
@@ -79,15 +82,18 @@
 ### Процесс обработки:
 
 ```
-YouTube URL → yt-dlp → Audio (MP3)
-                          ↓
-                      Whisper
-                          ↓
-              Transcript + Timecodes
-                          ↓
-                    Groq API (LLM)
-                          ↓
-        Questions (JSON) + Answers + Timecodes
+YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
+                          ↓              ↓
+                      Whisper      Parse VTT
+                (пунктуация)    (точный текст)
+                          ↓              ↓
+                         ─────MERGE─────
+                               ↓
+              Transcript + Timecodes (~100% accuracy)
+                               ↓
+                         Groq API (LLM)
+                               ↓
+           Questions (JSON) + Answers + Timecodes
 ```
 
 ---
@@ -99,6 +105,8 @@ YouTube URL → yt-dlp → Audio (MP3)
 |-----------|------------|------------|
 | API Server | **FastAPI** | REST API, WebSocket, Swagger |
 | Транскрибация | **OpenAI Whisper** | Speech-to-Text (base model) |
+| **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
+| **Гибридная транскрипция** | Whisper + Subtitles | ~100% точность |
 | LLM | **Groq API** (LLaMA 3.3 70B) | Извлечение вопросов |
 | YouTube | **yt-dlp** | Скачивание аудио |
 | Оркестрация | **n8n** | Workflow automation |
@@ -261,17 +269,22 @@ docker-compose down
 Скачать только вопросы.
 
 #### `GET /api/full-export/{task_id}` ⭐
-Скачать всё: транскрипцию + вопросы + метаданные.
+Скачать всё: транскрипцию (merged + Whisper + субтитры) + вопросы + метаданные.
 
 **Response:**
 ```json
 {
   "task_id": "uuid",
-  "transcript": "Полный текст...",
+  "transcript": "Merged текст (субтитры + Whisper пунктуация)...",
   "segments": [
-    {"start": 0.0, "end": 2.5, "text": "Добрый день"},
-    {"start": 2.5, "end": 5.0, "text": "меня зовут Павел"}
+    {"start": 0.0, "end": 2.5, "text": "Добрый день?", "source": "merged"}
   ],
+  "whisper_raw": "Оригинальный текст Whisper...",
+  "whisper_segments": [...],
+  "youtube_subtitles": [
+    {"start": 0.0, "end": 2.5, "text": "добрый день"}
+  ],
+  "has_subtitles": true,
   "video_title": "Название",
   "questions": [
     {
@@ -284,6 +297,21 @@ docker-compose down
   ],
   "questions_count": 15,
   "status": "completed"
+}
+```
+
+#### `GET /api/subtitles/{task_id}` 🆕
+Скачать оригинальные YouTube субтитры.
+
+**Response:**
+```json
+{
+  "task_id": "uuid",
+  "subtitles": [
+    {"start": 0.0, "end": 2.5, "text": "добрый день"},
+    {"start": 2.5, "end": 5.0, "text": "меня зовут павел"}
+  ],
+  "count": 150
 }
 ```
 
