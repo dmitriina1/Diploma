@@ -912,39 +912,37 @@ async def extract_questions(request: ExtractQuestionsRequest):
         for i, chunk in enumerate(chunks):
             print(f"🔍 Processing chunk {i+1}/{len(chunks)} ({len(chunk)} chars)...")
             
-            # Подсчитаем примерное количество вопросов в чанке
-            question_marks = chunk.count('?')
-            print(f"   ❓ Found ~{question_marks} question marks in chunk")
-            
-            prompt = f"""Ты эксперт по анализу IT-собеседований. Твоя ЕДИНСТВЕННАЯ задача — найти ВСЕ вопросы.
+            prompt = f"""Ты эксперт по анализу IT-собеседований. Извлеки ВСЕ вопросы интервьюера из транскрипции.
 
 ВХОДНЫЕ ДАННЫЕ:
 Транскрипция собеседования с таймкодами [MM:SS].
-В этом тексте примерно {question_marks} вопросительных знаков — найди ВСЕ вопросы!
 
-ПРАВИЛА ИЗВЛЕЧЕНИЯ:
-1. КАЖДОЕ предложение с "?" — это вопрос. Извлеки ВСЕ.
-2. "Что?", "Да?", "Почему?" — тоже вопросы, извлекай их
-3. Если в одной строке 2-3 вопроса — раздели их на отдельные записи
-4. Таймкод — из начала строки [MM:SS]
-5. Исправь ошибки: "наджава" → "на Java", "питон" → "Python"
-6. Убери имена людей (Иван, Павел, Алексей)
-7. Ответ — краткий, 1-2 предложения
+ЧТО ИЗВЛЕКАТЬ (✅):
+- Технические вопросы: "Что такое REST API?", "Как работает HashMap?"
+- Вопросы про опыт: "Расскажите о вашем опыте?", "Какие проекты делали?"
+- Вопросы про навыки: "Вы работали с Docker?", "Знаете SQL?"
+- Уточняющие вопросы: "А как именно?", "Можете подробнее?", "То есть вы имеете в виду...?"
+- Проверочные вопросы: "А почему так?", "Какие альтернативы?"
 
-ПРИМЕР:
-Строка: "[05:30] А вы работали с Docker? И с Kubernetes тоже?"
-Результат: 2 вопроса с таймкодом "05:30"
+ЧТО НЕ ИЗВЛЕКАТЬ (❌):
+- Односложные междометия: "Да?", "Ага?", "Угу?", "М?"
+- Одиночные слова: "Что?", "А?"
 
-ФОРМАТ ОТВЕТА — только JSON массив:
-[
-  {{"question": "Вы работали с Docker?", "answer": "...", "timecode": "05:30", "topic": "{request.topic}", "difficulty": "{request.level}"}},
-  {{"question": "Вы работали с Kubernetes?", "answer": "...", "timecode": "05:30", "topic": "{request.topic}", "difficulty": "{request.level}"}}
-]
+ПРАВИЛА:
+1. Извлекай ВСЕ вопросы кроме односложных междометий
+2. Если в строке несколько вопросов — раздели их
+3. Таймкод бери из [MM:SS] в начале строки
+4. Исправь ошибки: "наджава" → "на Java"
+5. Убери имена людей
+6. Ответ — краткий, 1-2 предложения
+
+ФОРМАТ JSON:
+[{{"question": "Текст вопроса?", "answer": "Краткий ответ", "timecode": "MM:SS", "topic": "{request.topic}", "difficulty": "{request.level}"}}]
 
 ТРАНСКРИПЦИЯ (часть {i+1}/{len(chunks)}):
 {chunk}
 
-Верни JSON массив с КАЖДЫМ вопросом (ожидается ~{question_marks} вопросов):"""
+JSON массив со ВСЕМИ вопросами (кроме междометий):"""
             
             if USE_GROQ and GROQ_API_KEY:
                 chunk_questions = await call_groq_api(prompt)
@@ -958,47 +956,13 @@ async def extract_questions(request: ExtractQuestionsRequest):
         total_question_marks = transcript_with_times.count('?')
         
         # Убираем дубликаты (могут появиться на границах чанков)
+        # Убираем дубликаты и фильтруем некачественные вопросы
         unique_questions = deduplicate_questions(all_questions)
+        filtered_questions = filter_low_quality_questions(unique_questions)
         
-        extraction_rate = len(unique_questions) / max(total_question_marks, 1) * 100
-        print(f"📊 Total questions extracted: {len(unique_questions)} (from {len(all_questions)} raw)")
-        print(f"📈 Extraction rate: {extraction_rate:.0f}% ({len(unique_questions)}/{total_question_marks} question marks)")
+        print(f"📊 Extracted: {len(all_questions)} raw → {len(unique_questions)} unique → {len(filtered_questions)} quality")
         
-        # Если извлекли меньше 60% — делаем второй проход с другим промптом
-        if extraction_rate < 60 and total_question_marks > 5:
-            print(f"⚠️ Low extraction rate! Running second pass...")
-            
-            # Собираем уже найденные таймкоды
-            found_timecodes = set(q.get("timecode", "") for q in unique_questions)
-            
-            second_pass_prompt = f"""Проанализируй транскрипцию ЕЩЁ РАЗ. Нужно найти ПРОПУЩЕННЫЕ вопросы.
-
-В тексте {total_question_marks} вопросительных знаков, но найдено только {len(unique_questions)} вопросов.
-ПРОПУЩЕНО примерно {total_question_marks - len(unique_questions)} вопросов!
-
-УЖЕ НАЙДЕННЫЕ таймкоды (НЕ дублируй их): {', '.join(sorted(found_timecodes))}
-
-НАЙДИ ВОПРОСЫ, которые были ПРОПУЩЕНЫ:
-- Короткие вопросы: "Да?", "Что?", "Почему?", "А зачем?"
-- Уточняющие: "То есть...?", "Имеете в виду...?"
-- Вопросы без явного "?" но по смыслу вопросительные
-
-ТРАНСКРИПЦИЯ:
-{transcript_with_times[:20000]}
-
-JSON массив ТОЛЬКО с НОВЫМИ (пропущенными) вопросами:"""
-            
-            if USE_GROQ and GROQ_API_KEY:
-                second_pass_questions = await call_groq_api(second_pass_prompt)
-            else:
-                second_pass_questions = await call_ollama_api(second_pass_prompt)
-            
-            print(f"   🔄 Second pass found {len(second_pass_questions)} additional questions")
-            all_questions.extend(second_pass_questions)
-            unique_questions = deduplicate_questions(all_questions)
-            print(f"📊 After second pass: {len(unique_questions)} unique questions")
-        
-        return {"questions": unique_questions}
+        return {"questions": filtered_questions}
     except Exception as e:
         error_msg = f"LLM Error: {str(e)}"
         print(f"❌ {error_msg}")
@@ -1032,11 +996,11 @@ async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
             json={
                 "model": "llama-3.3-70b-versatile",  # Мощная модель, бесплатно
                 "messages": [
-                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Твоя задача — найти ВСЕ вопросы без исключения. Отвечай ТОЛЬКО валидным JSON массивом."},
+                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.1,  # Снижено для детерминизма и полноты
-                "max_tokens": 8000   # Увеличено для большего числа вопросов
+                "temperature": 0.3,  # Баланс между точностью и пониманием контекста
+                "max_tokens": 8000
             }
         )
         
@@ -1225,6 +1189,44 @@ def cleanup_temp_files(video_id: str):
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
 
+def filter_low_quality_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Фильтрация только явного мусора (односложные междометия)"""
+    if not questions:
+        return []
+    
+    # Только явный мусор — односложные междометия без контекста
+    garbage_patterns = [
+        r'^(да|нет|ага|угу|ну|ок|м+|хм+|э)\??$',  # Односложные междометия
+        r'^(что|как|а)\??$',  # Одиночные слова-переспросы
+        r'^.{1,4}\??$',  # Очень короткие (до 4 символов)
+    ]
+    
+    filtered = []
+    removed_count = 0
+    
+    for q in questions:
+        question_text = q.get('question', '').strip()
+        question_lower = question_text.lower()
+        
+        # Проверяем только на явный мусор
+        is_garbage = False
+        for pattern in garbage_patterns:
+            if re.match(pattern, question_lower):
+                is_garbage = True
+                break
+        
+        if is_garbage:
+            removed_count += 1
+            continue
+        
+        # Вопрос прошёл фильтрацию
+        filtered.append(q)
+    
+    if removed_count > 0:
+        print(f"🗑️ Filtered out {removed_count} garbage questions")
+    
+    return filtered
+
 def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Удаление дубликатов вопросов"""
     if not questions:
@@ -1256,8 +1258,8 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
             q['question'] = question_text
             question_lower = question_text.lower()
         
-        # Слишком короткий вопрос (минимум 3 символа — "Да?")
-        if len(question_text) < 3:
+        # Слишком короткий вопрос (минимум 5 символов)
+        if len(question_text) < 5:
             continue
         
         # Нормализуем для проверки ТОЧНЫХ дубликатов
