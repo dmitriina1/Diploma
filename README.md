@@ -65,20 +65,53 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                      Backend (FastAPI)                           │
 │                      http://localhost:8000                       │
-│  ┌─────────────┐  ┌─────────────────────────┐                   │
-│  │   yt-dlp    │  │    OpenRouter API       │                   │
-│  │  (download) │  │  (extract questions)    │                   │
-│  └─────────────┘  └─────────────────────────┘                   │
+│  ┌─────────────┐  ┌─────────────────────────┐  ┌─────────────┐  │
+│  │   yt-dlp    │  │    OpenRouter API       │  │ WhisperPool │  │
+│  │  (download) │  │  (extract questions)    │  │  (parallel) │  │
+│  └─────────────┘  └─────────────────────────┘  └─────────────┘  │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP
-              ┌──────────────┼──────────────┬─────────────┐
-              ▼              ▼              ▼             ▼
-┌──────────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────────┐
-│       n8n        │ │    Redis     │ │  PostgreSQL  │ │ Whisper Service│
-│ (orchestration)  │ │   (cache)    │ │   (storage)  │ │  (transcribe)  │
-│ localhost:5678   │ │localhost:6379│ │localhost:5432│ │  (internal)    │
-└──────────────────┘ └──────────────┘ └──────────────┘ └────────────────┘
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+┌──────────────────┐ ┌──────────────┐ ┌──────────────┐
+│       n8n        │ │    Redis     │ │  PostgreSQL  │
+│ (orchestration)  │ │   (cache)    │ │   (storage)  │
+│ localhost:5678   │ │localhost:6379│ │localhost:5432│
+└──────────────────┘ └──────────────┘ └──────────────┘
+                             │
+                             ▼
+              ┌──────────────────────────────┐
+              │  Nginx Load Balancer         │
+              │  (least_conn, localhost:8001)│
+              └──────────────┬───────────────┘
+                    ┌────────┴────────┐
+                    ▼                 ▼
+              ┌──────────┐      ┌──────────┐
+              │ Whisper-1│      │ Whisper-2│  ... до N реплик
+              │ (medium) │      │ (medium) │
+              └──────────┘      └──────────┘
 ```
+
+### Параллельная транскрипция (Whisper Pool)
+
+Система поддерживает **горизонтальное масштабирование** Whisper сервисов:
+
+| Компонент | Описание |
+|-----------|----------|
+| **Nginx LB** | `least_conn` балансировка между репликами |
+| **WhisperPool** | Разрезает аудио на N частей, транскрибирует параллельно |
+| **Overlap** | 5 сек перекрытие между частями для точного слияния |
+| **Масштабирование** | `docker-compose up -d --scale whisper=N` |
+
+**Рекомендации по масштабированию:**
+
+| RAM | CPU | Max реплик | Команда |
+|-----|-----|------------|---------|
+| 16 GB | 8 cores | 2 | `--scale whisper=2` |
+| 24 GB | 12 cores | 3 | `--scale whisper=3` |
+| 32 GB | 16 cores | 4 | `--scale whisper=4` |
+
+> **Важно:** Каждая реплика Whisper потребляет ~3-4 GB RAM (модель medium + буферы)
 
 ### Особенности архитектуры:
 - **faster-whisper** — в 4-6x быстрее openai-whisper на CPU благодаря CTranslate2 и int8 квантизации
@@ -141,9 +174,11 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 
 ### Требования
 - Docker Desktop (Windows/Mac) или Docker Engine (Linux)
-- 8 GB RAM минимум
+- **28 GB RAM** (рекомендуется для 2 Whisper реплик)
 - 10 GB свободного места
 - Интернет-соединение
+
+> **Минимум:** 12 GB RAM для 1 реплики Whisper. Каждая дополнительная реплика требует ~4 GB.
 
 ### 1. Клонирование репозитория
 ```bash
@@ -164,21 +199,18 @@ OPENROUTER_API_KEY=sk-or-v1-ваш_ключ_здесь
 > **Преимущество:** OpenRouter предоставляет доступ к множеству бесплатных моделей (Mistral, DeepSeek и др.) без rate limiting — обрабатывайте видео любой длины!
 
 ### 3. Запуск
-**Windows:**
-```cmd
-start.bat
-```
 
-**Linux/Mac:**
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-**Или вручную:**
+**Стандартный запуск (2 Whisper реплики):**
 ```bash
 docker-compose up -d
 ```
+
+**Масштабирование Whisper (3-4 реплики для быстрой обработки длинных видео):**
+```bash
+docker-compose up -d --scale whisper=3
+```
+
+> **Примечание:** При изменении количества реплик Nginx автоматически подхватывает новые инстансы.
 
 ### 4. Проверка
 | Сервис | URL |
@@ -188,6 +220,7 @@ docker-compose up -d
 | **Swagger UI** | http://localhost:8000/docs |
 | ReDoc | http://localhost:8000/redoc |
 | n8n | http://localhost:5678 |
+| **Whisper LB** | http://localhost:8001/health |
 
 ### 5. Остановка
 ```bash
@@ -231,14 +264,18 @@ docker-compose down
 ### Status — Статус и мониторинг
 
 #### `GET /health`
-Проверка здоровья сервиса.
+Проверка здоровья сервиса и статуса Whisper Pool.
 
 **Response:**
 ```json
 {
   "status": "healthy",
-  "whisper_service": true,
-  "whisper_url": "http://whisper:8001",
+  "whisper_pool": {
+    "url": "http://nginx-whisper:8001",
+    "pool_size": 2,
+    "is_healthy": true
+  },
+  "parallel_processing": true,
   "temp_files_count": 2,
   "temp_size_mb": 45.3
 }
