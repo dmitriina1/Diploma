@@ -22,7 +22,8 @@ N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/yo
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:8001")  # Отдельный Whisper сервис
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")  # Бесплатный быстрый LLM
-USE_GROQ = os.getenv("USE_GROQ", "true").lower() == "true"  # По умолчанию используем Groq
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Google Gemini — огромные лимиты!
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")  # auto, gemini, groq, ollama
 TEMP_DIR = Path("/app/temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
@@ -944,17 +945,15 @@ async def extract_questions(request: ExtractQuestionsRequest):
 
 JSON массив со ВСЕМИ вопросами (кроме междометий):"""
             
-            if USE_GROQ and GROQ_API_KEY:
-                chunk_questions = await call_groq_api(prompt)
-            else:
-                chunk_questions = await call_ollama_api(prompt)
+            # Выбор LLM провайдера: Gemini (рекомендуется) > Groq > Ollama
+            chunk_questions = await call_llm_api(prompt)
             
             all_questions.extend(chunk_questions)
             print(f"   ✅ Extracted {len(chunk_questions)} questions from chunk {i+1}")
             
-            # Задержка между чанками чтобы не превысить rate limit (30 req/min)
-            if i < len(chunks) - 1:
-                await asyncio.sleep(3)  # 3 сек между запросами = max 20 req/min
+            # Задержка между чанками (Gemini: не нужна, Groq: 3 сек)
+            if i < len(chunks) - 1 and not GEMINI_API_KEY:
+                await asyncio.sleep(2)  # Только для Groq
         
         # Подсчитаем общее количество вопросительных знаков
         total_question_marks = transcript_with_times.count('?')
@@ -987,6 +986,57 @@ JSON массив со ВСЕМИ вопросами (кроме междоме�
         })
         
         raise HTTPException(status_code=500, detail=error_msg)
+
+async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
+    """Умный выбор LLM провайдера: Gemini > Groq > Ollama"""
+    provider = LLM_PROVIDER.lower()
+    
+    # Auto-select лучший доступный провайдер
+    if provider == "auto":
+        if GEMINI_API_KEY:
+            provider = "gemini"
+        elif GROQ_API_KEY:
+            provider = "groq"
+        else:
+            provider = "ollama"
+    
+    print(f"🤖 Using LLM provider: {provider}")
+    
+    if provider == "gemini":
+        return await call_gemini_api(prompt)
+    elif provider == "groq":
+        return await call_groq_api(prompt)
+    else:
+        return await call_ollama_api(prompt)
+
+
+async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
+    """Вызов Google Gemini API — огромные лимиты (1M токенов/мин)!"""
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{
+                    "parts": [{
+                        "text": f"Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом.\n\n{prompt}"
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 8000
+                }
+            }
+        )
+        
+        if response.status_code != 200:
+            print(f"Gemini error: {response.status_code} - {response.text}")
+            raise Exception(f"Gemini API error: {response.status_code}")
+        
+        result = response.json()
+        llm_response = result["candidates"][0]["content"]["parts"][0]["text"]
+        return parse_questions_from_llm(llm_response)
+
 
 async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
     """Вызов Groq API для быстрой генерации — с retry при rate limiting (429)"""

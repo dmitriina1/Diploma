@@ -125,7 +125,7 @@ services:
     networks:
       - diploma-network
 
-  # ============== Backend (FastAPI + Groq) ==============
+  # ============== Backend (FastAPI + Gemini/Groq) ==============
   # Теперь без Whisper - использует whisper-service
   backend:
     build:
@@ -137,7 +137,9 @@ services:
       - REDIS_URL=redis://redis:6379
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
       - WHISPER_SERVICE_URL=http://whisper:8001
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-auto}
     ports:
       - "8000:8000"
     volumes:
