@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Отключаем XET (новый протокол HuggingFace) для надежной загрузки
+ENV HF_HUB_ENABLE_HF_TRANSFER=0
+ENV HF_HUB_DISABLE_XET=1
+
 # Установка минимальных зависимостей
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -16,10 +20,8 @@ RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-stati
     && rm -rf /tmp/ffmpeg* \
     && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
 
-# Установка Python зависимостей - сначала CPU PyTorch
+# Установка Python зависимостей — faster-whisper НЕ требует PyTorch!
 COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout 600 \
-    torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 COPY . .

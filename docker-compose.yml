@@ -108,6 +108,9 @@ services:
     container_name: diploma-whisper
     environment:
       - WHISPER_MODEL=medium
+      - CPU_THREADS=8
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      - HF_HUB_DISABLE_XET=1
     ports:
       - "8001:8001"
     volumes:

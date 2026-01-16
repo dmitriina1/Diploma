@@ -851,7 +851,7 @@ def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[D
 
 @app.post("/internal/extract-questions", tags=["Internal"])
 async def extract_questions(request: ExtractQuestionsRequest):
-    """Извлечение вопросов через Groq API с таймкодами и проверкой русского языка"""
+    """Извлечение вопросов через Groq API с таймкодами — обрабатывает чанками для полноты"""
     try:
         # Получаем сегменты с таймкодами из Redis
         transcript_data = await redis_client.get(f"transcript:{request.task_id}")
@@ -861,57 +861,144 @@ async def extract_questions(request: ExtractQuestionsRequest):
             segments = data.get("segments", [])
         
         # Формируем текст с таймкодами для LLM — каждый сегмент на отдельной строке
-        transcript_with_times = ""
+        all_lines = []
         for seg in segments:
             start_time = seg.get("start", 0)
             mins = int(start_time // 60)
             secs = int(start_time % 60)
             text = seg.get('text', '').strip()
             if text:
-                transcript_with_times += f"[{mins:02d}:{secs:02d}] {text}\n"
+                all_lines.append(f"[{mins:02d}:{secs:02d}] {text}")
+        
+        transcript_with_times = "\n".join(all_lines)
+        
+        print(f"📝 Transcript size: {len(transcript_with_times)} chars, {len(all_lines)} lines")
         
         if not transcript_with_times:
             transcript_with_times = request.transcript[:20000]
         
-        # Улучшенный промпт с точным сопоставлением таймкодов
-        prompt = f"""Ты эксперт по анализу собеседований. Твоя задача — извлечь ВСЕ вопросы из транскрипции с ТОЧНЫМИ таймкодами.
+        # === CHUNKING для длинных транскриптов ===
+        # Разбиваем на чанки по ~10000 символов для лучшего извлечения
+        CHUNK_SIZE = 10000  # Уменьшили для более тщательного анализа
+        
+        all_questions = []
+        
+        if len(transcript_with_times) <= CHUNK_SIZE:
+            # Короткий транскрипт — один вызов
+            chunks = [transcript_with_times]
+        else:
+            # Длинный транскрипт — разбиваем по строкам
+            lines = all_lines
+            chunks = []
+            current_chunk = []
+            current_size = 0
+            
+            for line in lines:
+                line_size = len(line) + 1  # +1 для \n
+                if current_size + line_size > CHUNK_SIZE and current_chunk:
+                    chunks.append("\n".join(current_chunk))
+                    current_chunk = [line]
+                    current_size = line_size
+                else:
+                    current_chunk.append(line)
+                    current_size += line_size
+            
+            if current_chunk:
+                chunks.append("\n".join(current_chunk))
+            
+            print(f"📦 Transcript split into {len(chunks)} chunks for complete extraction")
+        
+        # Обрабатываем каждый чанк
+        for i, chunk in enumerate(chunks):
+            print(f"🔍 Processing chunk {i+1}/{len(chunks)} ({len(chunk)} chars)...")
+            
+            # Подсчитаем примерное количество вопросов в чанке
+            question_marks = chunk.count('?')
+            print(f"   ❓ Found ~{question_marks} question marks in chunk")
+            
+            prompt = f"""Ты эксперт по анализу IT-собеседований. Твоя ЕДИНСТВЕННАЯ задача — найти ВСЕ вопросы.
 
-ФОРМАТ ВХОДНЫХ ДАННЫХ:
-Каждая строка начинается с таймкода [MM:SS], после которого идёт текст.
-Найди ВСЕ вопросы (предложения, заканчивающиеся на "?") и укажи таймкод той строки, где этот вопрос появляется.
+ВХОДНЫЕ ДАННЫЕ:
+Транскрипция собеседования с таймкодами [MM:SS].
+В этом тексте примерно {question_marks} вопросительных знаков — найди ВСЕ вопросы!
 
-КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:
-1. Извлеки КАЖДЫЙ вопрос (предложение с "?") — даже короткие типа "Что?", "Почему?"
-2. КАЖДЫЙ вопрос ОТДЕЛЬНО — если в строке несколько вопросов, раздели их
-3. Таймкод бери из начала строки [MM:SS], где находится вопрос
-4. "Вы писали на Java?", "Вы писали на Python?" — это РАЗНЫЕ вопросы с РАЗНЫМИ таймкодами
-5. Убирай имена (Иван, Павел, Николай) из вопросов
-6. ИСПРАВЬ ошибки Whisper: "наджава" → "на Java", "дивиллтер" → "developer"
-7. НЕ ПРИДУМЫВАЙ вопросы — только те, что реально есть в тексте
+ПРАВИЛА ИЗВЛЕЧЕНИЯ:
+1. КАЖДОЕ предложение с "?" — это вопрос. Извлеки ВСЕ.
+2. "Что?", "Да?", "Почему?" — тоже вопросы, извлекай их
+3. Если в одной строке 2-3 вопроса — раздели их на отдельные записи
+4. Таймкод — из начала строки [MM:SS]
+5. Исправь ошибки: "наджава" → "на Java", "питон" → "Python"
+6. Убери имена людей (Иван, Павел, Алексей)
+7. Ответ — краткий, 1-2 предложения
 
 ПРИМЕР:
-Вход: "[00:24] Скажите, чем вы занимаетесь? Какой опыт работы?"
-Выход: два вопроса с таймкодом "00:24"
+Строка: "[05:30] А вы работали с Docker? И с Kubernetes тоже?"
+Результат: 2 вопроса с таймкодом "05:30"
 
-ФОРМАТ JSON:
+ФОРМАТ ОТВЕТА — только JSON массив:
 [
-  {{"question": "Чем вы занимаетесь на текущем месте работы?", "answer": "Краткий ответ", "timecode": "00:24", "topic": "{request.topic}", "difficulty": "{request.level}"}},
-  {{"question": "Какой у вас опыт работы?", "answer": "Краткий ответ", "timecode": "00:24", "topic": "{request.topic}", "difficulty": "{request.level}"}}
+  {{"question": "Вы работали с Docker?", "answer": "...", "timecode": "05:30", "topic": "{request.topic}", "difficulty": "{request.level}"}},
+  {{"question": "Вы работали с Kubernetes?", "answer": "...", "timecode": "05:30", "topic": "{request.topic}", "difficulty": "{request.level}"}}
 ]
 
-Транскрипция:
-{transcript_with_times[:25000]}
+ТРАНСКРИПЦИЯ (часть {i+1}/{len(chunks)}):
+{chunk}
 
-Верни ТОЛЬКО JSON массив со ВСЕМИ вопросами:"""
+Верни JSON массив с КАЖДЫМ вопросом (ожидается ~{question_marks} вопросов):"""
+            
+            if USE_GROQ and GROQ_API_KEY:
+                chunk_questions = await call_groq_api(prompt)
+            else:
+                chunk_questions = await call_ollama_api(prompt)
+            
+            all_questions.extend(chunk_questions)
+            print(f"   ✅ Extracted {len(chunk_questions)} questions from chunk {i+1}")
         
-        if USE_GROQ and GROQ_API_KEY:
-            # Используем Groq API (быстро и качественно)
-            questions = await call_groq_api(prompt)
-        else:
-            # Fallback на Ollama
-            questions = await call_ollama_api(prompt)
+        # Подсчитаем общее количество вопросительных знаков
+        total_question_marks = transcript_with_times.count('?')
         
-        return {"questions": questions}
+        # Убираем дубликаты (могут появиться на границах чанков)
+        unique_questions = deduplicate_questions(all_questions)
+        
+        extraction_rate = len(unique_questions) / max(total_question_marks, 1) * 100
+        print(f"📊 Total questions extracted: {len(unique_questions)} (from {len(all_questions)} raw)")
+        print(f"📈 Extraction rate: {extraction_rate:.0f}% ({len(unique_questions)}/{total_question_marks} question marks)")
+        
+        # Если извлекли меньше 60% — делаем второй проход с другим промптом
+        if extraction_rate < 60 and total_question_marks > 5:
+            print(f"⚠️ Low extraction rate! Running second pass...")
+            
+            # Собираем уже найденные таймкоды
+            found_timecodes = set(q.get("timecode", "") for q in unique_questions)
+            
+            second_pass_prompt = f"""Проанализируй транскрипцию ЕЩЁ РАЗ. Нужно найти ПРОПУЩЕННЫЕ вопросы.
+
+В тексте {total_question_marks} вопросительных знаков, но найдено только {len(unique_questions)} вопросов.
+ПРОПУЩЕНО примерно {total_question_marks - len(unique_questions)} вопросов!
+
+УЖЕ НАЙДЕННЫЕ таймкоды (НЕ дублируй их): {', '.join(sorted(found_timecodes))}
+
+НАЙДИ ВОПРОСЫ, которые были ПРОПУЩЕНЫ:
+- Короткие вопросы: "Да?", "Что?", "Почему?", "А зачем?"
+- Уточняющие: "То есть...?", "Имеете в виду...?"
+- Вопросы без явного "?" но по смыслу вопросительные
+
+ТРАНСКРИПЦИЯ:
+{transcript_with_times[:20000]}
+
+JSON массив ТОЛЬКО с НОВЫМИ (пропущенными) вопросами:"""
+            
+            if USE_GROQ and GROQ_API_KEY:
+                second_pass_questions = await call_groq_api(second_pass_prompt)
+            else:
+                second_pass_questions = await call_ollama_api(second_pass_prompt)
+            
+            print(f"   🔄 Second pass found {len(second_pass_questions)} additional questions")
+            all_questions.extend(second_pass_questions)
+            unique_questions = deduplicate_questions(all_questions)
+            print(f"📊 After second pass: {len(unique_questions)} unique questions")
+        
+        return {"questions": unique_questions}
     except Exception as e:
         error_msg = f"LLM Error: {str(e)}"
         print(f"❌ {error_msg}")
@@ -934,8 +1021,8 @@ async def extract_questions(request: ExtractQuestionsRequest):
         raise HTTPException(status_code=500, detail=error_msg)
 
 async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
-    """Вызов Groq API для быстрой генерации"""
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    """Вызов Groq API для быстрой генерации — оптимизировано для полноты извлечения"""
+    async with httpx.AsyncClient(timeout=120.0) as client:  # Увеличен таймаут
         response = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
@@ -945,11 +1032,11 @@ async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
             json={
                 "model": "llama-3.3-70b-versatile",  # Мощная модель, бесплатно
                 "messages": [
-                    {"role": "system", "content": "Ты эксперт по IT-собеседованиям. Отвечай только JSON."},
+                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Твоя задача — найти ВСЕ вопросы без исключения. Отвечай ТОЛЬКО валидным JSON массивом."},
                     {"role": "user", "content": prompt}
                 ],
-                "temperature": 0.3,
-                "max_tokens": 4000
+                "temperature": 0.1,  # Снижено для детерминизма и полноты
+                "max_tokens": 8000   # Увеличено для большего числа вопросов
             }
         )
         
@@ -1169,8 +1256,8 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
             q['question'] = question_text
             question_lower = question_text.lower()
         
-        # Слишком короткий вопрос
-        if len(question_text) < 8:
+        # Слишком короткий вопрос (минимум 3 символа — "Да?")
+        if len(question_text) < 3:
             continue
         
         # Нормализуем для проверки ТОЧНЫХ дубликатов

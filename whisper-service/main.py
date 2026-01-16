@@ -1,35 +1,53 @@
 """
 Whisper Service — отдельный микросервис для транскрибации
+Использует faster-whisper (CTranslate2) — в 4-6x быстрее на CPU!
 Модель загружается один раз и остаётся в памяти
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import whisper
 import tempfile
 import os
 import gc
 import logging
+from typing import List, Dict, Any
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Whisper Service", version="1.0.0")
+app = FastAPI(title="Whisper Service (faster-whisper)", version="2.0.0")
 
 # Глобальная модель - загружается один раз при старте
 whisper_model = None
 MODEL_NAME = os.getenv("WHISPER_MODEL", "medium")
+# Количество потоков CPU для faster-whisper
+CPU_THREADS = int(os.getenv("CPU_THREADS", "4"))
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Загрузка Whisper модели при старте сервиса"""
+    """Загрузка faster-whisper модели при старте сервиса"""
     global whisper_model
-    logger.info(f"🚀 Starting Whisper Service...")
-    logger.info(f"📦 Loading Whisper model ({MODEL_NAME})...")
-    whisper_model = whisper.load_model(MODEL_NAME)
-    logger.info(f"✅ Whisper model loaded!")
+    from faster_whisper import WhisperModel
+    
+    logger.info(f"🚀 Starting Whisper Service (faster-whisper)...")
+    logger.info(f"📦 Loading model '{MODEL_NAME}' with {CPU_THREADS} CPU threads...")
+    
+    # Отключаем XET для надежной загрузки через HTTP
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+    
+    # faster-whisper с оптимизациями для CPU
+    whisper_model = WhisperModel(
+        MODEL_NAME,
+        device="cpu",
+        compute_type="int8",  # int8 квантизация — быстрее и меньше памяти
+        cpu_threads=CPU_THREADS,
+        download_root="/root/.cache/whisper",  # Кэш модели
+        local_files_only=False  # Скачать если нет в кэше
+    )
+    
+    logger.info(f"✅ faster-whisper model loaded! (int8 quantization, {CPU_THREADS} threads)")
 
 
 @app.get("/health")
@@ -38,7 +56,10 @@ async def health():
     return {
         "status": "healthy",
         "model_loaded": whisper_model is not None,
-        "model_name": MODEL_NAME
+        "model_name": MODEL_NAME,
+        "engine": "faster-whisper",
+        "compute_type": "int8",
+        "cpu_threads": CPU_THREADS
     }
 
 
@@ -51,7 +72,7 @@ class TranscribeResponse(BaseModel):
 @app.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe(file: UploadFile = File(...), language: str = "ru"):
     """
-    Транскрибация аудиофайла
+    Транскрибация аудиофайла (faster-whisper — 4-6x быстрее!)
     
     - **file**: Аудиофайл (mp3, wav, m4a и др.)
     - **language**: Язык аудио (по умолчанию 'ru')
@@ -68,41 +89,54 @@ async def transcribe(file: UploadFile = File(...), language: str = "ru"):
     
     try:
         file_size_mb = len(content) / (1024 * 1024)
-        logger.info(f"🎤 Transcribing {file.filename} ({file_size_mb:.1f} MB)...")
+        logger.info(f"🎤 Transcribing {file.filename} ({file_size_mb:.1f} MB) with faster-whisper...")
         
-        # Транскрибация с оптимизациями для длинных файлов
-        result = whisper_model.transcribe(
+        # faster-whisper транскрибация
+        segments_generator, info = whisper_model.transcribe(
             tmp_path,
             language=language,
             task="transcribe",
-            verbose=False,
-            fp16=False,  # CPU не поддерживает fp16
-            condition_on_previous_text=True  # Лучше для длинных файлов
+            beam_size=5,  # Баланс скорость/качество
+            vad_filter=True,  # Voice Activity Detection — пропускает тишину (ускоряет!)
+            vad_parameters=dict(
+                min_silence_duration_ms=500,  # Минимальная тишина для пропуска
+                speech_pad_ms=200  # Padding вокруг речи
+            ),
+            condition_on_previous_text=True,  # Лучше для длинных файлов
+            compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0,
+            no_speech_threshold=0.6
         )
         
-        # Формируем сегменты
+        # Собираем сегменты из генератора
         segments = []
-        for seg in result.get("segments", []):
+        full_text_parts = []
+        
+        for seg in segments_generator:
             segments.append({
-                "start": seg["start"],
-                "end": seg["end"],
-                "text": seg["text"].strip()
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text.strip()
             })
+            full_text_parts.append(seg.text.strip())
         
-        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(result['text'])} chars")
+        full_text = " ".join(full_text_parts)
         
-        # Очистка памяти после обработки длинных файлов
+        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(full_text)} chars")
+        logger.info(f"📊 Detected language: {info.language} (prob: {info.language_probability:.2f})")
+        
+        # Очистка памяти после обработки
         gc.collect()
         
         return TranscribeResponse(
-            text=result["text"],
+            text=full_text,
             segments=segments,
-            language=result.get("language", language)
+            language=info.language
         )
     
     except Exception as e:
         logger.error(f"❌ Transcription error: {e}")
-        gc.collect()  # Очистка памяти даже при ошибке
+        gc.collect()
         raise HTTPException(status_code=500, detail=str(e))
     
     finally:
@@ -127,34 +161,42 @@ async def transcribe_from_path(audio_path: str, language: str = "ru"):
     
     try:
         file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
-        logger.info(f"🎤 Transcribing {audio_path} ({file_size_mb:.1f} MB)...")
+        logger.info(f"🎤 Transcribing {audio_path} ({file_size_mb:.1f} MB) with faster-whisper...")
         
-        result = whisper_model.transcribe(
+        segments_generator, info = whisper_model.transcribe(
             audio_path,
             language=language,
             task="transcribe",
-            verbose=False,
-            fp16=False,
+            beam_size=5,
+            vad_filter=True,
+            vad_parameters=dict(
+                min_silence_duration_ms=500,
+                speech_pad_ms=200
+            ),
             condition_on_previous_text=True
         )
         
         segments = []
-        for seg in result.get("segments", []):
+        full_text_parts = []
+        
+        for seg in segments_generator:
             segments.append({
-                "start": seg["start"],
-                "end": seg["end"],
-                "text": seg["text"].strip()
+                "start": seg.start,
+                "end": seg.end,
+                "text": seg.text.strip()
             })
+            full_text_parts.append(seg.text.strip())
         
-        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(result['text'])} chars")
+        full_text = " ".join(full_text_parts)
         
-        # Очистка памяти
+        logger.info(f"✅ Transcription complete: {len(segments)} segments, {len(full_text)} chars")
+        
         gc.collect()
         
         return {
-            "text": result["text"],
+            "text": full_text,
             "segments": segments,
-            "language": result.get("language", language)
+            "language": info.language
         }
     
     except Exception as e:
