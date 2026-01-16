@@ -22,8 +22,9 @@ N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/yo
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:8001")  # Отдельный Whisper сервис
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")  # Бесплатный быстрый LLM
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Google Gemini — огромные лимиты!
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")  # auto, gemini, groq, ollama
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Google Gemini
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")  # OpenRouter — без лимитов!
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")  # auto, openrouter, groq, gemini, ollama
 TEMP_DIR = Path("/app/temp")
 TEMP_DIR.mkdir(exist_ok=True)
 
@@ -988,21 +989,26 @@ JSON массив со ВСЕМИ вопросами (кроме междоме�
         raise HTTPException(status_code=500, detail=error_msg)
 
 async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
-    """Умный выбор LLM провайдера: Gemini > Groq > Ollama"""
+    """Умный выбор LLM провайдера: OpenRouter (без лимитов) > Groq > Gemini > Ollama"""
     provider = LLM_PROVIDER.lower()
     
     # Auto-select лучший доступный провайдер
+    # OpenRouter приоритетнее — практически без лимитов!
     if provider == "auto":
-        if GEMINI_API_KEY:
-            provider = "gemini"
+        if OPENROUTER_API_KEY:
+            provider = "openrouter"
         elif GROQ_API_KEY:
             provider = "groq"
+        elif GEMINI_API_KEY:
+            provider = "gemini"
         else:
             provider = "ollama"
     
     print(f"🤖 Using LLM provider: {provider}")
     
-    if provider == "gemini":
+    if provider == "openrouter":
+        return await call_openrouter_api(prompt)
+    elif provider == "gemini":
         return await call_gemini_api(prompt)
     elif provider == "groq":
         return await call_groq_api(prompt)
@@ -1010,32 +1016,83 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
         return await call_ollama_api(prompt)
 
 
-async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
-    """Вызов Google Gemini API — огромные лимиты (1M токенов/мин)!"""
-    async with httpx.AsyncClient(timeout=120.0) as client:
+async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
+    """OpenRouter API — бесплатные модели без лимитов для длинных видео!"""
+    async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
-            headers={"Content-Type": "application/json"},
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://interview-prep.local",
+                "X-Title": "Interview Prep"
+            },
             json={
-                "contents": [{
-                    "parts": [{
-                        "text": f"Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом.\n\n{prompt}"
-                    }]
-                }],
-                "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 8000
-                }
+                "model": "mistralai/devstral-2512:free",  # Mistral Devstral — быстрый и бесплатный!
+                "messages": [
+                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 8000
             }
         )
         
         if response.status_code != 200:
-            print(f"Gemini error: {response.status_code} - {response.text}")
-            raise Exception(f"Gemini API error: {response.status_code}")
+            print(f"OpenRouter error: {response.status_code} - {response.text}")
+            # Fallback на Groq если OpenRouter не работает
+            if GROQ_API_KEY:
+                print("⚠️ OpenRouter failed, falling back to Groq...")
+                return await call_groq_api(prompt)
+            raise Exception(f"OpenRouter API error: {response.status_code}")
         
         result = response.json()
-        llm_response = result["candidates"][0]["content"]["parts"][0]["text"]
+        llm_response = result["choices"][0]["message"]["content"]
         return parse_questions_from_llm(llm_response)
+
+
+async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
+    """Вызов Google Gemini API — огромные лимиты (1M токенов/мин)!"""
+    # Пробуем разные модели Gemini
+    models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"]
+    
+    for model in models:
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "contents": [{
+                            "parts": [{
+                                "text": f"Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом.\n\n{prompt}"
+                            }]
+                        }],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "maxOutputTokens": 8000
+                        }
+                    }
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    llm_response = result["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"✅ Gemini model {model} works!")
+                    return parse_questions_from_llm(llm_response)
+                elif response.status_code == 404:
+                    print(f"⚠️ Gemini model {model} not found, trying next...")
+                    continue
+                else:
+                    print(f"Gemini error: {response.status_code} - {response.text}")
+                    raise Exception(f"Gemini API error: {response.status_code}")
+        except httpx.TimeoutException:
+            print(f"⚠️ Gemini model {model} timeout, trying next...")
+            continue
+    
+    # Все модели не сработали — fallback на Groq
+    print("⚠️ All Gemini models failed, falling back to Groq...")
+    return await call_groq_api(prompt)
 
 
 async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:

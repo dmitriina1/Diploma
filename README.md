@@ -41,7 +41,7 @@
 6. **Сохраняет результат** в JSON с таймкодами
 
 ### Ключевые особенности:
-- ✅ **100% бесплатно** — Groq API предоставляет бесплатный доступ к LLaMA 70B
+- ✅ **100% бесплатно** — OpenRouter предоставляет бесплатный доступ к Mistral и другим моделям
 - ✅ **~100% точность** — гибридная транскрипция (субтитры + Whisper)
 - ✅ **Надёжные субтитры** — 15 попыток с обходом rate limiting, правильный парсинг YouTube VTT
 - ✅ **Retry субтитров** — 10 попыток с интервалом 3 сек + проверка после транскрибации
@@ -66,7 +66,7 @@
 │                      Backend (FastAPI)                           │
 │                      http://localhost:8000                       │
 │  ┌─────────────┐  ┌─────────────────────────┐                   │
-│  │   yt-dlp    │  │      Groq API           │                   │
+│  │   yt-dlp    │  │    OpenRouter API       │                   │
 │  │  (download) │  │  (extract questions)    │                   │
 │  └─────────────┘  └─────────────────────────┘                   │
 └────────────────────────────┬────────────────────────────────────┘
@@ -100,7 +100,7 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
                                ↓
               Transcript + Timecodes (~100% accuracy)
                                ↓
-                         Groq API (LLM)
+                      OpenRouter API (LLM)
                                ↓
            Questions (JSON) + Answers + Timecodes
 ```
@@ -116,7 +116,7 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 | Транскрибация | **faster-whisper** (CTranslate2) | Speech-to-Text (medium, int8, **4-6x быстрее**) |
 | **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
 | **Гибридная транскрипция** | Whisper + Subtitles | ~100% точность |
-| LLM | **Groq API** (LLaMA 3.3 70B) | Извлечение вопросов (chunking + фильтрация) |
+| LLM | **OpenRouter** (Mistral, DeepSeek, и др.) | Извлечение вопросов (chunking + фильтрация) |
 | YouTube | **yt-dlp** | Скачивание аудио |
 | Оркестрация | **n8n** | Workflow automation (автоимпорт) |
 | Кэш | **Redis** | Хранение задач и результатов |
@@ -151,26 +151,17 @@ git clone <repository-url>
 cd Diploma
 ```
 
-### 2. Настройка Groq API (бесплатно)
 ### 2. Настройка LLM API (бесплатно)
 
-**Вариант A: Google Gemini (рекомендуется — огромные лимиты!)**
-1. Зарегистрируйтесь на [aistudio.google.com](https://aistudio.google.com)
-2. Получите API ключ
+**OpenRouter (рекомендуется — без лимитов для бесплатных моделей!)**
+1. Зарегистрируйтесь на [openrouter.ai](https://openrouter.ai)
+2. Создайте API ключ в разделе Keys
 3. Создайте файл `.env`:
 ```env
-GEMINI_API_KEY=ваш_ключ_здесь
+OPENROUTER_API_KEY=sk-or-v1-ваш_ключ_здесь
 ```
 
-**Вариант B: Groq (быстрый, но есть лимиты)**
-1. Зарегистрируйтесь на [console.groq.com](https://console.groq.com)
-2. Создайте API ключ
-3. Создайте файл `.env`:
-```env
-GROQ_API_KEY=gsk_ваш_ключ_здесь
-```
-
-> **Совет:** Gemini имеет лимит 1M токенов/мин (против 6K у Groq) — нет ошибок 429!
+> **Преимущество:** OpenRouter предоставляет доступ к множеству бесплатных моделей (Mistral, DeepSeek и др.) без rate limiting — обрабатывайте видео любой длины!
 
 ### 3. Запуск
 **Windows:**
@@ -407,7 +398,7 @@ Real-time обновления прогресса.
 | `Download error: ...` | Ошибка скачивания аудио/субтитров |
 | `Whisper service timeout: ...` | Таймаут транскрибации (видео слишком длинное) |
 | `Transcription error: ...` | Ошибка Whisper сервиса |
-| `LLM Error: ...` | Ошибка Groq API при извлечении вопросов |
+| `LLM Error: ...` | Ошибка OpenRouter API при извлечении вопросов |
 | `Save error: ...` | Ошибка сохранения результата |
 
 ---
@@ -458,11 +449,10 @@ Diploma/
 ### Переменные окружения (.env)
 
 ```env
-# Обязательно
-GROQ_API_KEY=gsk_ваш_ключ
+# Обязательно (один из вариантов)
+OPENROUTER_API_KEY=sk-or-v1-ваш_ключ    # Рекомендуется!
 
-# Опционально (есть значения по умолчанию)
-USE_GROQ=true
+# Опционально (fallback)
 DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
 REDIS_URL=redis://redis:6379
 N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
