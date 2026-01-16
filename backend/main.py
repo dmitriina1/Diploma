@@ -75,6 +75,34 @@ class WhisperPool:
             self.is_healthy = False
             return False
     
+    async def detect_pool_size(self) -> int:
+        """
+        Автоматическое определение количества Whisper реплик.
+        Делаем несколько запросов и смотрим на разные upstream адреса в логах Nginx.
+        Fallback: используем значение из конфига.
+        """
+        try:
+            # Пробуем определить через DNS резолвинг (Docker Compose создаёт записи для каждой реплики)
+            import socket
+            # whisper — имя сервиса в docker-compose
+            # Docker создаёт A-записи для каждой реплики
+            try:
+                # Получаем все IP адреса сервиса whisper
+                ips = socket.getaddrinfo("whisper", 8001, socket.AF_INET, socket.SOCK_STREAM)
+                unique_ips = set(ip[4][0] for ip in ips)
+                detected = len(unique_ips)
+                if detected > 0:
+                    print(f"🔍 Detected {detected} Whisper replicas via DNS")
+                    self.pool_size = detected
+                    return detected
+            except socket.gaierror:
+                pass
+        except Exception as e:
+            print(f"⚠️ Could not detect pool size: {e}")
+        
+        print(f"📊 Using configured pool_size: {self.pool_size}")
+        return self.pool_size
+    
     async def transcribe(self, audio_path: Path, language: str = "ru") -> Dict[str, Any]:
         """
         Транскрибация одного аудиофайла через Nginx → Whisper Pool.
@@ -277,11 +305,13 @@ async def lifespan(app: FastAPI):
         service_url=WHISPER_SERVICE_URL,
         pool_size=WHISPER_POOL_SIZE
     )
-    print(f"📡 Whisper Pool: {WHISPER_SERVICE_URL} (pool_size={WHISPER_POOL_SIZE})")
+    print(f"📡 Whisper Pool: {WHISPER_SERVICE_URL} (initial pool_size={WHISPER_POOL_SIZE})")
     
-    # Проверяем доступность Whisper через Nginx
+    # Проверяем доступность и определяем реальное количество реплик
     if await whisper_pool.health_check():
-        print(f"✅ Whisper Pool is healthy!")
+        # Автоопределение количества реплик через DNS
+        detected_size = await whisper_pool.detect_pool_size()
+        print(f"✅ Whisper Pool is healthy! Detected {detected_size} replicas")
     else:
         print("⚠️ Whisper Pool not available yet (will retry on use)")
     
@@ -384,10 +414,14 @@ async def health():
     """Проверка здоровья сервиса"""
     global whisper_pool
     
-    # Проверяем WhisperPool через Nginx
+    # Проверяем WhisperPool через Nginx и обновляем pool_size
     pool_healthy = False
+    pool_size = 0
     if whisper_pool:
         pool_healthy = await whisper_pool.health_check()
+        if pool_healthy:
+            await whisper_pool.detect_pool_size()
+        pool_size = whisper_pool.pool_size
     
     # Считаем temp файлы
     temp_files = list(TEMP_DIR.glob("*"))
@@ -397,10 +431,10 @@ async def health():
         "status": "healthy",
         "whisper_pool": {
             "url": WHISPER_SERVICE_URL,
-            "pool_size": WHISPER_POOL_SIZE,
+            "pool_size": pool_size,
             "is_healthy": pool_healthy
         },
-        "parallel_processing": whisper_pool.pool_size > 1 if whisper_pool else False,
+        "parallel_processing": pool_size > 1,
         "temp_files_count": len(temp_files),
         "temp_size_mb": round(temp_size_mb, 2)
     }
@@ -874,7 +908,7 @@ async def transcribe_audio(request: TranscribeRequest):
         duration = await get_audio_duration(audio_path)
         print(f"🎵 Audio duration: {duration:.1f} seconds ({duration/60:.1f} minutes)")
         
-        # 2. Проверяем доступность WhisperPool
+        # 2. Проверяем доступность WhisperPool и обновляем pool_size
         if not whisper_pool:
             raise HTTPException(status_code=503, detail="WhisperPool not initialized")
         
@@ -882,10 +916,13 @@ async def transcribe_audio(request: TranscribeRequest):
         if not pool_healthy:
             raise HTTPException(status_code=503, detail="Whisper Pool not available")
         
+        # Автоопределение количества реплик (на случай scale up/down)
+        await whisper_pool.detect_pool_size()
+        
         print(f"🖥️ Whisper Pool: {whisper_pool.pool_size} workers via Nginx")
         
         # 3. Транскрибация через WhisperPool
-        # Параллелим если видео > 2 минут на воркер И pool_size > 1
+        # Параллелим если видео > MIN_CHUNK_DURATION на воркер И pool_size > 1
         min_parallel_duration = MIN_CHUNK_DURATION * whisper_pool.pool_size
         use_parallel = whisper_pool.pool_size > 1 and duration >= min_parallel_duration
         
