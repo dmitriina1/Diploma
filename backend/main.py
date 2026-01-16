@@ -951,6 +951,10 @@ JSON массив со ВСЕМИ вопросами (кроме междоме�
             
             all_questions.extend(chunk_questions)
             print(f"   ✅ Extracted {len(chunk_questions)} questions from chunk {i+1}")
+            
+            # Задержка между чанками чтобы не превысить rate limit (30 req/min)
+            if i < len(chunks) - 1:
+                await asyncio.sleep(3)  # 3 сек между запросами = max 20 req/min
         
         # Подсчитаем общее количество вопросительных знаков
         total_question_marks = transcript_with_times.count('?')
@@ -985,32 +989,52 @@ JSON массив со ВСЕМИ вопросами (кроме междоме�
         raise HTTPException(status_code=500, detail=error_msg)
 
 async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
-    """Вызов Groq API для быстрой генерации — оптимизировано для полноты извлечения"""
-    async with httpx.AsyncClient(timeout=120.0) as client:  # Увеличен таймаут
-        response = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "llama-3.3-70b-versatile",  # Мощная модель, бесплатно
-                "messages": [
-                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,  # Баланс между точностью и пониманием контекста
-                "max_tokens": 8000
-            }
-        )
-        
-        if response.status_code != 200:
-            print(f"Groq error: {response.status_code} - {response.text}")
-            raise Exception(f"Groq API error: {response.status_code}")
-        
-        result = response.json()
-        llm_response = result["choices"][0]["message"]["content"]
-        return parse_questions_from_llm(llm_response)
+    """Вызов Groq API для быстрой генерации — с retry при rate limiting (429)"""
+    max_retries = 5
+    base_delay = 10  # Начальная задержка 10 секунд
+    
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.3-70b-versatile",  # Мощная модель, бесплатно
+                        "messages": [
+                            {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 8000
+                    }
+                )
+                
+                if response.status_code == 429:
+                    # Rate limiting — ждём и повторяем
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff: 10, 20, 40, 80, 160 сек
+                    print(f"⏳ Groq rate limit (429). Retry {attempt + 1}/{max_retries} after {delay}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                
+                if response.status_code != 200:
+                    print(f"Groq error: {response.status_code} - {response.text}")
+                    raise Exception(f"Groq API error: {response.status_code}")
+                
+                result = response.json()
+                llm_response = result["choices"][0]["message"]["content"]
+                return parse_questions_from_llm(llm_response)
+                
+        except httpx.TimeoutException:
+            print(f"⏳ Groq timeout. Retry {attempt + 1}/{max_retries}...")
+            await asyncio.sleep(base_delay)
+            continue
+    
+    # Все попытки исчерпаны
+    raise Exception("Groq API error: 429 (rate limit exceeded after retries)")
 
 async def call_ollama_api(prompt: str) -> List[Dict[str, Any]]:
     """Fallback на локальный Ollama"""
