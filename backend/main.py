@@ -639,8 +639,25 @@ async def download_audio(request: DownloadRequest):
             "subtitles_count": len(subtitles)
         }
     except Exception as e:
-        print(f"Download error: {e}")
-        raise HTTPException(status_code=500, detail=f"Download error: {str(e)}")
+        error_msg = f"Download error: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        # Обновляем статус задачи — ошибка скачивания
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "error"
+            task["error"] = error_msg
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем ошибку клиенту через WebSocket
+        await manager.broadcast_to_task(request.task_id, {
+            "type": "error",
+            "task_id": request.task_id,
+            "error": error_msg
+        })
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
@@ -720,14 +737,60 @@ async def transcribe_audio(request: TranscribeRequest):
             video_id = video_id.decode() if isinstance(video_id, bytes) else video_id
             cleanup_temp_files(video_id)
         
+        # Обновляем статус задачи — транскрипция завершена
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["progress"] = 60  # Транскрипция завершена
+            task["stage"] = "Транскрипция завершена"
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
         return {
             "transcript": merged_transcript,
             "segments": merged_segments,
             "has_subtitles": len(youtube_subtitles) > 0
         }
+    except httpx.TimeoutException as e:
+        error_msg = f"Whisper service timeout: видео слишком длинное для обработки ({e})"
+        print(f"❌ Transcription timeout: {e}")
+        
+        # Обновляем статус задачи — ошибка таймаута
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "error"
+            task["error"] = error_msg
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем ошибку клиенту через WebSocket
+        await manager.broadcast_to_task(request.task_id, {
+            "type": "error",
+            "task_id": request.task_id,
+            "error": error_msg
+        })
+        
+        raise HTTPException(status_code=504, detail=error_msg)
+        
     except Exception as e:
-        print(f"Transcription error: {e}")
-        raise HTTPException(status_code=500, detail=f"Transcription error: {str(e)}")
+        error_msg = f"Transcription error: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        # Обновляем статус задачи — ошибка
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "error"
+            task["error"] = error_msg
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем ошибку клиенту через WebSocket
+        await manager.broadcast_to_task(request.task_id, {
+            "type": "error",
+            "task_id": request.task_id,
+            "error": error_msg
+        })
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[Dict]) -> List[Dict]:
     """
@@ -850,8 +913,25 @@ async def extract_questions(request: ExtractQuestionsRequest):
         
         return {"questions": questions}
     except Exception as e:
-        print(f"LLM Error: {e}")
-        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")
+        error_msg = f"LLM Error: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        # Обновляем статус задачи — ошибка извлечения вопросов
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "error"
+            task["error"] = error_msg
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем ошибку клиенту через WebSocket
+        await manager.broadcast_to_task(request.task_id, {
+            "type": "error",
+            "task_id": request.task_id,
+            "error": error_msg
+        })
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
     """Вызов Groq API для быстрой генерации"""
@@ -941,7 +1021,25 @@ async def save_questions(request: SaveQuestionsRequest):
         
         return {"status": "saved", "count": len(request.questions)}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Save error: {str(e)}")
+        error_msg = f"Save error: {str(e)}"
+        print(f"❌ {error_msg}")
+        
+        # Обновляем статус задачи — ошибка сохранения
+        task_data = await redis_client.get(f"task:{request.task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "error"
+            task["error"] = error_msg
+            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем ошибку клиенту через WebSocket
+        await manager.broadcast_to_task(request.task_id, {
+            "type": "error",
+            "task_id": request.task_id,
+            "error": error_msg
+        })
+        
+        raise HTTPException(status_code=500, detail=error_msg)
 
 # ============== Helper Functions ==============
 def is_valid_youtube_url(url: str) -> bool:

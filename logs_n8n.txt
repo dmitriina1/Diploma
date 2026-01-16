@@ -1,0 +1,77 @@
+﻿diploma-n8n  | 📦 Workflow already imported
+diploma-n8n  | 🚀 Starting n8n...
+diploma-n8n  | Initializing n8n process
+diploma-n8n  | n8n ready on ::, port 5678
+diploma-n8n  | n8n Task Broker ready on 127.0.0.1, port 5679
+diploma-n8n  | Failed to start Python task runner in internal mode. because Python 3 is missing from this system. Launching a Python runner in internal mode is intended only for debugging and is not recommended for production. Users are encouraged to deploy in external mode. See: https://docs.n8n.io/hosting/configuration/task-runners/#setting-up-external-mode
+diploma-n8n  | [license SDK] Skipping renewal on init: license cert is not initialized
+diploma-n8n  | Registered runner "JS Task Runner" (LmznmElspxQM1ZgYXg_Da) 
+diploma-n8n  | Version: 2.3.5
+diploma-n8n  | Start Active Workflows:
+diploma-n8n  | Activated workflow "YouTube Questions Extractor" (ID: 26n39JKF8C6vpap6)
+diploma-n8n  | 
+diploma-n8n  | Editor is now accessible via:
+diploma-n8n  | http://n8n:5678
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | timeout of 3000ms exceeded
+diploma-n8n  | Error while fetching community nodes: timeout of 3000ms exceeded
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | Received SIGTERM. Shutting down...
+diploma-n8n  | [runnner:js] Received SIGTERM signal, shutting down...
+diploma-n8n  | [runnner:js] Task runner stopped
+diploma-n8n  | 
+diploma-n8n  | Stopping n8n...
+diploma-n8n  | 📦 Workflow already imported
+diploma-n8n  | 🚀 Starting n8n...
+diploma-n8n  | Initializing n8n process
+diploma-n8n  | n8n ready on ::, port 5678
+diploma-n8n  | n8n Task Broker ready on 127.0.0.1, port 5679
+diploma-n8n  | Failed to start Python task runner in internal mode. because Python 3 is missing from this system. Launching a Python runner in internal mode is intended only for debugging and is not recommended for production. Users are encouraged to deploy in external mode. See: https://docs.n8n.io/hosting/configuration/task-runners/#setting-up-external-mode
+diploma-n8n  | [license SDK] Skipping renewal on init: license cert is not initialized
+diploma-n8n  | Registered runner "JS Task Runner" (kkboLUTYaWIpLvMqtUBfn) 
+diploma-n8n  | Version: 2.3.5
+diploma-n8n  | 
+diploma-n8n  | Editor is now accessible via:
+diploma-n8n  | http://n8n:5678
+diploma-n8n  | Received SIGTERM. Shutting down...
+diploma-n8n  | [runnner:js] Received SIGTERM signal, shutting down...
+diploma-n8n  | [runnner:js] Task runner stopped
+diploma-n8n  | 
+diploma-n8n  | Stopping n8n...
+diploma-n8n  | 📦 First time setup - importing workflow...
+diploma-n8n  | Importing 1 workflows...
+diploma-n8n  | Deactivating workflow "YouTube Questions Extractor". Remember to activate later.
+diploma-n8n  | Successfully imported 1 workflow.
+diploma-n8n  | 🔄 Publishing workflow LnjXjvIUDUp7YgoV...
+diploma-n8n  | Publishing workflow with ID: LnjXjvIUDUp7YgoV (current version)
+diploma-n8n  | Note: Changes will not take effect if n8n is running.
+diploma-n8n  | Please restart n8n for changes to take effect if n8n is currently running.
+diploma-n8n  | ✅ Workflow imported and published!
+diploma-n8n  | 🚀 Starting n8n...
+diploma-n8n  | Initializing n8n process
+diploma-n8n  | n8n ready on ::, port 5678
+diploma-n8n  | n8n Task Broker ready on 127.0.0.1, port 5679
+diploma-n8n  | Failed to start Python task runner in internal mode. because Python 3 is missing from this system. Launching a Python runner in internal mode is intended only for debugging and is not recommended for production. Users are encouraged to deploy in external mode. See: https://docs.n8n.io/hosting/configuration/task-runners/#setting-up-external-mode
+diploma-n8n  | [license SDK] Skipping renewal on init: license cert is not initialized
+diploma-n8n  | Registered runner "JS Task Runner" (9YnWzK_CZPwJQtnUq43zt) 
+diploma-n8n  | Version: 2.3.5
+diploma-n8n  | Start Active Workflows:
+diploma-n8n  | Activated workflow "YouTube Questions Extractor" (ID: LnjXjvIUDUp7YgoV)
+diploma-n8n  | 
+diploma-n8n  | Editor is now accessible via:
+diploma-n8n  | http://n8n:5678
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | User attempted to access a workflow without permissions
+diploma-n8n  | timeout of 3000ms exceeded
+diploma-n8n  | Error while fetching community nodes: timeout of 3000ms exceeded

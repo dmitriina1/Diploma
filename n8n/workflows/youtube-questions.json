@@ -68,7 +68,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ audio_path: $('Download Audio').item.json.audio_path, task_id: $('Webhook').item.json.body.task_id }) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 3600000
         }
       },
       "id": "transcribe",

@@ -240,7 +240,7 @@ docker-compose down
 #### `GET /api/task/{task_id}`
 Получение статуса задачи.
 
-**Response:**
+**Response (успех):**
 ```json
 {
   "task_id": "uuid",
@@ -252,6 +252,17 @@ docker-compose down
     "video_title": "Название видео",
     "questions_count": 15
   }
+}
+```
+
+**Response (ошибка):**
+```json
+{
+  "task_id": "uuid",
+  "status": "error",
+  "progress": 40,
+  "step": "Транскрибация...",
+  "error": "Whisper service timeout: видео слишком длинное для обработки"
 }
 ```
 
@@ -371,7 +382,17 @@ Real-time обновления прогресса.
 ```json
 {"type": "progress", "task_id": "uuid", "progress": 50, "step": "Транскрибация..."}
 {"type": "result", "task_id": "uuid", "questions": [...], "video_title": "..."}
+{"type": "error", "task_id": "uuid", "error": "Описание ошибки..."}
 ```
+
+**Типы ошибок в WebSocket:**
+| Ошибка | Описание |
+|--------|----------|
+| `Download error: ...` | Ошибка скачивания аудио/субтитров |
+| `Whisper service timeout: ...` | Таймаут транскрибации (видео слишком длинное) |
+| `Transcription error: ...` | Ошибка Whisper сервиса |
+| `LLM Error: ...` | Ошибка Groq API при извлечении вопросов |
+| `Save error: ...` | Ошибка сохранения результата |
 
 ---
 
@@ -582,6 +603,30 @@ ws.onmessage = (event) => {
 
 ## 🔧 Troubleshooting
 
+### Архитектура обработки ошибок
+
+> **Важно:** POST `/api/process-video` **всегда возвращает HTTP 200** — это нормально для асинхронной архитектуры.
+
+```
+POST /api/process-video → 200 {"task_id": "abc", "status": "started"}
+                              ↓
+               [Задача обрабатывается в фоне через n8n]
+                              ↓
+               При ошибке: Redis обновляется + WebSocket шлёт "error"
+```
+
+**Как узнать об ошибке:**
+1. **WebSocket** — получите `{"type": "error", "error": "..."}` в реальном времени
+2. **Polling** — `GET /api/task/{task_id}` вернёт `{"status": "error", "error": "..."}`
+
+**Все internal endpoints обновляют статус задачи при ошибках:**
+- `/internal/download-audio` → `status: "error"` + WebSocket уведомление
+- `/internal/transcribe` → `status: "error"` + WebSocket (+ отдельная обработка таймаутов)
+- `/internal/extract-questions` → `status: "error"` + WebSocket
+- `/internal/save-questions` → `status: "error"` + WebSocket
+
+---
+
 ### Проблема: "NetworkError when attempting to fetch resource"
 **Решение:** Перезапустите backend
 ```bash
@@ -616,6 +661,36 @@ docker-compose restart backend
 
 ### Проблема: Groq API rate limit
 **Решение:** Бесплатный план Groq — 30 запросов/минуту. Подождите минуту между запросами.
+
+### Проблема: Timeout при обработке длинного видео
+**Решение:** ✅ **НАСТРОЕНО** Таймауты увеличены для поддержки видео до 2 часов:
+
+| Компонент | Таймаут | Назначение |
+|-----------|---------|------------|
+| n8n HTTP Request → transcribe | 60 мин (3600000ms) | Ожидание Whisper |
+| Backend httpx → Whisper | 30 мин (1800s) | Вызов whisper-service |
+| Backend → n8n webhook | 30 мин (1800s) | Trigger workflow |
+
+Если видео очень длинное и всё равно timeout:
+```bash
+# Проверить прогресс Whisper в логах
+docker-compose logs -f whisper-service
+
+# Увеличить таймаут в n8n (если нужно)
+# Файл: n8n/workflows/youtube-questions.json
+# Найти "transcribe" node → "requestOptions" → "timeout"
+```
+
+### Проблема: Задача зависла в статусе "processing"
+**Решение:** Проверьте логи whisper-service. Если Whisper завис:
+```bash
+# Перезапустить только Whisper (модель перезагрузится ~30 сек)
+docker-compose restart whisper-service
+
+# Если нужно — перезапустить всё
+docker-compose restart
+```
+Статус задачи останется "processing", но новые задачи будут работать. При ошибке внутри pipeline статус автоматически обновится на "error" с описанием проблемы.
 
 ### Проблема: Контейнеры не запускаются
 **Решение:**
