@@ -20,13 +20,18 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localh
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/youtube-questions")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:8001")  # Отдельный Whisper сервис
+# Несколько Whisper инстансов для параллельной обработки
+WHISPER_SERVICES = os.getenv("WHISPER_SERVICES", "http://localhost:8001,http://localhost:8002").split(",")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")  # Бесплатный быстрый LLM
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Google Gemini
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")  # OpenRouter — без лимитов!
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")  # auto, openrouter, groq, gemini, ollama
 TEMP_DIR = Path("/app/temp")
 TEMP_DIR.mkdir(exist_ok=True)
+
+# Параметры параллельной обработки
+AUDIO_OVERLAP_SECONDS = 5  # Перекрытие между частями аудио для корректного слияния
+MIN_CHUNK_DURATION = 60  # Минимальная длина части в секундах (не делить короткие видео)
 
 # TTL для Redis (24 часа для длинных видео)
 REDIS_TTL = 86400  # 24 часа
@@ -82,19 +87,25 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
     
-    # Whisper теперь в отдельном сервисе
-    print(f"📡 Whisper service URL: {WHISPER_SERVICE_URL}")
+    # Whisper теперь распределённый (несколько инстансов)
+    print(f"📡 Whisper services: {WHISPER_SERVICES}")
     
-    # Проверяем доступность Whisper сервиса
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(f"{WHISPER_SERVICE_URL}/health")
-            if response.status_code == 200:
-                print("✅ Whisper service is available!")
-            else:
-                print("⚠️ Whisper service not ready yet (will retry on use)")
-    except Exception as e:
-        print(f"⚠️ Whisper service not available yet: {e}")
+    # Проверяем доступность Whisper сервисов
+    available_services = []
+    for service_url in WHISPER_SERVICES:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{service_url.strip()}/health")
+                if response.status_code == 200:
+                    available_services.append(service_url.strip())
+                    print(f"✅ Whisper service {service_url} is available!")
+        except Exception as e:
+            print(f"⚠️ Whisper service {service_url} not available yet: {e}")
+    
+    if available_services:
+        print(f"✅ {len(available_services)}/{len(WHISPER_SERVICES)} Whisper services ready")
+    else:
+        print("⚠️ No Whisper services available yet (will retry on use)")
     
     yield
     
@@ -193,14 +204,15 @@ async def root():
 @app.get("/health", tags=["Status"])
 async def health():
     """Проверка здоровья сервиса"""
-    # Проверяем доступность Whisper сервиса
-    whisper_healthy = False
-    try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(f"{WHISPER_SERVICE_URL}/health")
-            whisper_healthy = response.status_code == 200
-    except:
-        pass
+    # Проверяем доступность Whisper сервисов
+    whisper_status = {}
+    for i, service_url in enumerate(WHISPER_SERVICES):
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.get(f"{service_url.strip()}/health")
+                whisper_status[f"whisper-{i+1}"] = response.status_code == 200
+        except:
+            whisper_status[f"whisper-{i+1}"] = False
     
     # Считаем temp файлы
     temp_files = list(TEMP_DIR.glob("*"))
@@ -208,8 +220,9 @@ async def health():
     
     return {
         "status": "healthy",
-        "whisper_service": whisper_healthy,
-        "whisper_url": WHISPER_SERVICE_URL,
+        "whisper_services": whisper_status,
+        "whisper_urls": WHISPER_SERVICES,
+        "parallel_processing": len([v for v in whisper_status.values() if v]) > 1,
         "temp_files_count": len(temp_files),
         "temp_size_mb": round(temp_size_mb, 2)
     }
@@ -523,10 +536,10 @@ async def download_audio(request: DownloadRequest):
         video_id = extract_video_id(request.youtube_url)
         audio_path = TEMP_DIR / f"{video_id}.mp3"
         
-        # Пробуем скачать субтитры (15 попыток, 10 сек между ними)
+        # Пробуем скачать субтитры (5 попыток, 3 сек между ними) — оптимизировано
         subtitles = []
-        max_retries = 15
-        retry_delay = 10  # Большая задержка между попытками
+        max_retries = 5
+        retry_delay = 3  # Быстрее, но достаточно для YouTube
 
         # Ротация User-Agent для обхода блокировки
         user_agents = [
@@ -663,34 +676,55 @@ async def download_audio(request: DownloadRequest):
 
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
-    """Транскрибация аудио через Whisper Service + слияние с YouTube субтитрами"""
+    """
+    Параллельная транскрибация аудио через несколько Whisper инстансов.
+    
+    Архитектура:
+    1. Определить длительность аудио
+    2. Разрезать на N частей (N = кол-во Whisper инстансов)
+    3. Отправить части параллельно на разные инстансы
+    4. Объединить результаты с учётом overlap
+    5. Слить с YouTube субтитрами (если есть)
+    """
+    import subprocess
     
     try:
-        # 1. Вызываем Whisper Service для транскрибации
-        print(f"🎤 Calling Whisper service at {WHISPER_SERVICE_URL}...")
+        audio_path = Path(request.audio_path)
         
-        async with httpx.AsyncClient(timeout=1800.0) as client:  # 30 мин таймаут для видео до 2 часов
-            # Отправляем файл на whisper-service
-            with open(request.audio_path, "rb") as audio_file:
-                files = {"file": (Path(request.audio_path).name, audio_file, "audio/mpeg")}
-                response = await client.post(
-                    f"{WHISPER_SERVICE_URL}/transcribe",
-                    files=files,
-                    params={"language": "ru"}
-                )
+        # 1. Определяем длительность аудио через ffprobe
+        duration = await get_audio_duration(audio_path)
+        print(f"🎵 Audio duration: {duration:.1f} seconds ({duration/60:.1f} minutes)")
         
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Whisper service error: {response.text}")
+        # 2. Определяем доступные Whisper сервисы
+        available_services = await get_available_whisper_services()
+        num_services = len(available_services)
         
-        result = response.json()
-        whisper_transcript = result["text"]
-        whisper_segments = result.get("segments", [])
+        if num_services == 0:
+            raise HTTPException(status_code=503, detail="No Whisper services available")
         
-        # 2. Получаем субтитры YouTube из Redis (если есть)
+        print(f"🖥️ Available Whisper services: {num_services}")
+        
+        # 3. Решаем: параллельно или последовательно
+        # Параллелим только если видео > 2 минут на сервис И есть несколько сервисов
+        min_parallel_duration = MIN_CHUNK_DURATION * num_services
+        
+        if duration < min_parallel_duration or num_services == 1:
+            # Короткое видео или один сервис — обычная обработка
+            print(f"📝 Using single Whisper instance (duration < {min_parallel_duration}s or single service)")
+            whisper_result = await transcribe_single(audio_path, available_services[0])
+        else:
+            # Длинное видео — параллельная обработка
+            print(f"⚡ Using PARALLEL transcription with {num_services} Whisper instances")
+            whisper_result = await transcribe_parallel(audio_path, duration, available_services, request.task_id)
+        
+        whisper_transcript = whisper_result["text"]
+        whisper_segments = whisper_result.get("segments", [])
+        
+        # 4. Получаем субтитры YouTube из Redis (если есть)
         subtitles_data = await redis_client.get(f"subtitles:{request.task_id}")
         youtube_subtitles = json.loads(subtitles_data) if subtitles_data else []
         
-        # 2.1 Если субтитров нет — пробуем прочитать из файла (могли загрузиться позже)
+        # Проверяем файл субтитров (могли загрузиться позже)
         if not youtube_subtitles:
             video_id = await redis_client.get(f"video_id:{request.task_id}")
             if video_id:
@@ -701,14 +735,13 @@ async def transcribe_audio(request: TranscribeRequest):
                     youtube_subtitles = parse_vtt_subtitles(sub_file)
                     if youtube_subtitles:
                         print(f"✅ Found late-loaded ru subtitles: {len(youtube_subtitles)} segments")
-                        # Сохраняем в Redis
                         await redis_client.set(
                             f"subtitles:{request.task_id}",
                             json.dumps(youtube_subtitles),
                             ex=REDIS_TTL
                         )
         
-        # 3. Слияние: субтитры (точный текст) + Whisper (пунктуация)
+        # 5. Слияние: субтитры (точный текст) + Whisper (пунктуация)
         if youtube_subtitles:
             print(f"🔀 Merging {len(youtube_subtitles)} subtitles with Whisper...")
             merged_segments = merge_subtitles_with_whisper(youtube_subtitles, whisper_segments)
@@ -718,81 +751,278 @@ async def transcribe_audio(request: TranscribeRequest):
             merged_segments = whisper_segments
             merged_transcript = whisper_transcript
         
-        # 4. Сохраняем все версии в Redis
+        # 6. Сохраняем все версии в Redis
         await redis_client.set(
             f"transcript:{request.task_id}", 
             json.dumps({
-                "transcript": merged_transcript,  # Финальная версия
+                "transcript": merged_transcript,
                 "segments": merged_segments,
                 "whisper_raw": whisper_transcript,
                 "whisper_segments": whisper_segments,
                 "youtube_subtitles": youtube_subtitles,
                 "has_subtitles": len(youtube_subtitles) > 0,
-                "length": len(merged_transcript)
+                "length": len(merged_transcript),
+                "parallel_processing": num_services > 1 and duration >= min_parallel_duration
             }),
             ex=REDIS_TTL
         )
         
-        # Удаляем временные файлы (mp3 + vtt)
+        # Удаляем временные файлы
         video_id = await redis_client.get(f"video_id:{request.task_id}")
         if video_id:
             video_id = video_id.decode() if isinstance(video_id, bytes) else video_id
             cleanup_temp_files(video_id)
         
-        # Обновляем статус задачи — транскрипция завершена
+        # Обновляем статус задачи
         task_data = await redis_client.get(f"task:{request.task_id}")
         if task_data:
             task = json.loads(task_data)
-            task["progress"] = 60  # Транскрипция завершена
+            task["progress"] = 60
             task["stage"] = "Транскрипция завершена"
             await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
         
         return {
             "transcript": merged_transcript,
             "segments": merged_segments,
-            "has_subtitles": len(youtube_subtitles) > 0
+            "has_subtitles": len(youtube_subtitles) > 0,
+            "parallel_processing_used": num_services > 1 and duration >= min_parallel_duration
         }
+        
     except httpx.TimeoutException as e:
-        error_msg = f"Whisper service timeout: видео слишком длинное для обработки ({e})"
+        error_msg = f"Whisper service timeout: видео слишком длинное ({e})"
         print(f"❌ Transcription timeout: {e}")
-        
-        # Обновляем статус задачи — ошибка таймаута
-        task_data = await redis_client.get(f"task:{request.task_id}")
-        if task_data:
-            task = json.loads(task_data)
-            task["status"] = "error"
-            task["error"] = error_msg
-            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
-        
-        # Отправляем ошибку клиенту через WebSocket
-        await manager.broadcast_to_task(request.task_id, {
-            "type": "error",
-            "task_id": request.task_id,
-            "error": error_msg
-        })
-        
+        await update_task_error(request.task_id, error_msg)
         raise HTTPException(status_code=504, detail=error_msg)
         
     except Exception as e:
         error_msg = f"Transcription error: {str(e)}"
         print(f"❌ {error_msg}")
+        await update_task_error(request.task_id, error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+async def get_audio_duration(audio_path: Path) -> float:
+    """Получить длительность аудио через ffprobe"""
+    import subprocess
+    
+    try:
+        result = subprocess.run([
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)
+        ], capture_output=True, text=True, timeout=30)
         
-        # Обновляем статус задачи — ошибка
-        task_data = await redis_client.get(f"task:{request.task_id}")
-        if task_data:
-            task = json.loads(task_data)
-            task["status"] = "error"
-            task["error"] = error_msg
-            await redis_client.set(f"task:{request.task_id}", json.dumps(task), ex=REDIS_TTL)
+        return float(result.stdout.strip())
+    except Exception as e:
+        print(f"⚠️ ffprobe error: {e}, estimating duration from file size")
+        # Fallback: оценка по размеру файла (MP3 192kbps ≈ 24KB/сек)
+        file_size = audio_path.stat().st_size
+        return file_size / (24 * 1024)
+
+
+async def get_available_whisper_services() -> List[str]:
+    """Получить список доступных Whisper сервисов"""
+    available = []
+    
+    for service_url in WHISPER_SERVICES:
+        service_url = service_url.strip()
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{service_url}/health")
+                if response.status_code == 200:
+                    available.append(service_url)
+        except:
+            print(f"⚠️ Whisper service {service_url} not available")
+    
+    return available
+
+
+async def transcribe_single(audio_path: Path, service_url: str) -> Dict[str, Any]:
+    """Транскрибация через один Whisper сервис"""
+    async with httpx.AsyncClient(timeout=1800.0) as client:
+        with open(audio_path, "rb") as audio_file:
+            files = {"file": (audio_path.name, audio_file, "audio/mpeg")}
+            response = await client.post(
+                f"{service_url}/transcribe",
+                files=files,
+                params={"language": "ru"}
+            )
+    
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail=f"Whisper error: {response.text}")
+    
+    return response.json()
+
+
+async def transcribe_parallel(
+    audio_path: Path, 
+    duration: float, 
+    services: List[str],
+    task_id: str
+) -> Dict[str, Any]:
+    """
+    Параллельная транскрибация: разрезаем аудио на части и обрабатываем одновременно.
+    
+    Используем overlap для корректного слияния на границах.
+    """
+    import subprocess
+    
+    num_parts = len(services)
+    part_duration = duration / num_parts
+    
+    print(f"✂️ Splitting audio into {num_parts} parts of ~{part_duration:.0f}s each")
+    
+    # Создаём части аудио с overlap
+    audio_parts = []
+    for i in range(num_parts):
+        start_time = max(0, i * part_duration - AUDIO_OVERLAP_SECONDS if i > 0 else 0)
+        # Для последней части — до конца
+        if i == num_parts - 1:
+            end_time = duration
+        else:
+            end_time = (i + 1) * part_duration + AUDIO_OVERLAP_SECONDS
         
-        # Отправляем ошибку клиенту через WebSocket
-        await manager.broadcast_to_task(request.task_id, {
-            "type": "error",
-            "task_id": request.task_id,
-            "error": error_msg
+        part_path = TEMP_DIR / f"{audio_path.stem}_part{i}.mp3"
+        
+        # FFmpeg команда для вырезания части
+        cmd = [
+            "ffmpeg", "-y", "-i", str(audio_path),
+            "-ss", str(start_time),
+            "-to", str(end_time),
+            "-c", "copy",  # Быстрое копирование без перекодирования
+            str(part_path)
+        ]
+        
+        subprocess.run(cmd, capture_output=True, timeout=60)
+        
+        audio_parts.append({
+            "path": part_path,
+            "start_offset": start_time,
+            "service": services[i],
+            "index": i
         })
         
-        raise HTTPException(status_code=500, detail=error_msg)
+        print(f"   Part {i+1}: {start_time:.1f}s - {end_time:.1f}s → {services[i]}")
+    
+    # Отправляем все части параллельно
+    async def transcribe_part(part: Dict) -> Dict[str, Any]:
+        """Транскрибация одной части"""
+        try:
+            async with httpx.AsyncClient(timeout=1800.0) as client:
+                with open(part["path"], "rb") as audio_file:
+                    files = {"file": (part["path"].name, audio_file, "audio/mpeg")}
+                    response = await client.post(
+                        f"{part['service']}/transcribe",
+                        files=files,
+                        params={"language": "ru"}
+                    )
+            
+            if response.status_code != 200:
+                print(f"⚠️ Part {part['index']} failed: {response.text}")
+                return {"text": "", "segments": [], "index": part["index"], "offset": part["start_offset"]}
+            
+            result = response.json()
+            result["index"] = part["index"]
+            result["offset"] = part["start_offset"]
+            return result
+            
+        except Exception as e:
+            print(f"⚠️ Part {part['index']} error: {e}")
+            return {"text": "", "segments": [], "index": part["index"], "offset": part["start_offset"]}
+        finally:
+            # Удаляем временный файл части
+            if part["path"].exists():
+                part["path"].unlink()
+    
+    # Запускаем все транскрибации параллельно
+    print(f"🚀 Starting parallel transcription...")
+    results = await asyncio.gather(*[transcribe_part(part) for part in audio_parts])
+    
+    # Сортируем по индексу
+    results = sorted(results, key=lambda x: x["index"])
+    
+    # Объединяем результаты с учётом offset
+    merged_segments = []
+    merged_text_parts = []
+    
+    for result in results:
+        offset = result.get("offset", 0)
+        
+        for seg in result.get("segments", []):
+            # Корректируем таймкоды с учётом offset
+            adjusted_seg = {
+                "start": seg["start"] + offset,
+                "end": seg["end"] + offset,
+                "text": seg["text"]
+            }
+            merged_segments.append(adjusted_seg)
+        
+        if result.get("text"):
+            merged_text_parts.append(result["text"])
+    
+    # Удаляем дубликаты на границах (overlap)
+    merged_segments = remove_overlap_duplicates(merged_segments)
+    
+    # Сортируем по времени
+    merged_segments = sorted(merged_segments, key=lambda x: x["start"])
+    
+    full_text = " ".join(merged_text_parts)
+    
+    print(f"✅ Parallel transcription complete: {len(merged_segments)} segments")
+    
+    return {
+        "text": full_text,
+        "segments": merged_segments,
+        "language": "ru"
+    }
+
+
+def remove_overlap_duplicates(segments: List[Dict]) -> List[Dict]:
+    """Удаление дублирующихся сегментов на границах overlap"""
+    if not segments:
+        return []
+    
+    # Сортируем по времени начала
+    sorted_segs = sorted(segments, key=lambda x: x["start"])
+    
+    unique = [sorted_segs[0]]
+    
+    for seg in sorted_segs[1:]:
+        last = unique[-1]
+        
+        # Если сегменты сильно пересекаются (>50% по времени) — это дубликат
+        overlap_start = max(last["start"], seg["start"])
+        overlap_end = min(last["end"], seg["end"])
+        overlap_duration = max(0, overlap_end - overlap_start)
+        
+        seg_duration = seg["end"] - seg["start"]
+        
+        if seg_duration > 0 and overlap_duration / seg_duration > 0.5:
+            # Дубликат — пропускаем
+            continue
+        
+        # Если тексты почти идентичны — дубликат
+        if last["text"].strip().lower() == seg["text"].strip().lower():
+            continue
+        
+        unique.append(seg)
+    
+    return unique
+
+
+async def update_task_error(task_id: str, error_msg: str):
+    """Обновить статус задачи с ошибкой"""
+    task_data = await redis_client.get(f"task:{task_id}")
+    if task_data:
+        task = json.loads(task_data)
+        task["status"] = "error"
+        task["error"] = error_msg
+        await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
+    
+    await manager.broadcast_to_task(task_id, {
+        "type": "error",
+        "task_id": task_id,
+        "error": error_msg
+    })
 
 def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[Dict]) -> List[Dict]:
     """
@@ -880,8 +1110,8 @@ async def extract_questions(request: ExtractQuestionsRequest):
             transcript_with_times = request.transcript[:20000]
         
         # === CHUNKING для длинных транскриптов ===
-        # Разбиваем на чанки по ~10000 символов для лучшего извлечения
-        CHUNK_SIZE = 10000  # Уменьшили для более тщательного анализа
+        # Разбиваем на чанки по ~5000 символов для лучшего извлечения
+        CHUNK_SIZE = 5000  # Уменьшено для повышения точности
         
         all_questions = []
         
@@ -914,37 +1144,49 @@ async def extract_questions(request: ExtractQuestionsRequest):
         for i, chunk in enumerate(chunks):
             print(f"🔍 Processing chunk {i+1}/{len(chunks)} ({len(chunk)} chars)...")
             
-            prompt = f"""Ты эксперт по анализу IT-собеседований. Извлеки ВСЕ вопросы интервьюера из транскрипции.
+            prompt = f"""Ты эксперт по анализу IT-собеседований. Твоя задача — извлечь ВОПРОСЫ ИНТЕРВЬЮЕРА из транскрипции.
 
-ВХОДНЫЕ ДАННЫЕ:
-Транскрипция собеседования с таймкодами [MM:SS].
+=== ПРАВИЛА ИЗВЛЕЧЕНИЯ ===
 
-ЧТО ИЗВЛЕКАТЬ (✅):
+✅ ИЗВЛЕКАЙ (вопросы интервьюера):
 - Технические вопросы: "Что такое REST API?", "Как работает HashMap?"
-- Вопросы про опыт: "Расскажите о вашем опыте?", "Какие проекты делали?"
-- Вопросы про навыки: "Вы работали с Docker?", "Знаете SQL?"
-- Уточняющие вопросы: "А как именно?", "Можете подробнее?", "То есть вы имеете в виду...?"
-- Проверочные вопросы: "А почему так?", "Какие альтернативы?"
+- Вопросы про опыт: "Расскажите о вашем опыте работы?", "Какие проекты вы делали?"
+- Уточняющие вопросы: "А как именно это работает?", "Можете подробнее объяснить?"
+- Проверочные вопросы: "А почему вы выбрали такой подход?", "Какие альтернативы знаете?"
 
-ЧТО НЕ ИЗВЛЕКАТЬ (❌):
+❌ НЕ ИЗВЛЕКАЙ (ответы кандидата и мусор):
+- Ответы кандидата на вопросы (даже если заканчиваются на "?")
 - Односложные междометия: "Да?", "Ага?", "Угу?", "М?"
-- Одиночные слова: "Что?", "А?"
+- Риторические вопросы в ответах: "ну типа как бы да?"
+- Переспросы кандидата: "Вы имеете в виду...?"
 
-ПРАВИЛА:
-1. Извлекай ВСЕ вопросы кроме односложных междометий
-2. Если в строке несколько вопросов — раздели их
-3. Таймкод бери из [MM:SS] в начале строки
-4. Исправь ошибки: "наджава" → "на Java"
-5. Убери имена людей
-6. Ответ — краткий, 1-2 предложения
+=== ПРИМЕРЫ (Few-shot) ===
 
-ФОРМАТ JSON:
-[{{"question": "Текст вопроса?", "answer": "Краткий ответ", "timecode": "MM:SS", "topic": "{request.topic}", "difficulty": "{request.level}"}}]
+ПРИМЕР 1 — Извлечь:
+Транскрипция: "[01:23] Расскажите что вы знаете про микросервисную архитектуру?"
+Ответ: [{{"question": "Что вы знаете про микросервисную архитектуру?", "timecode": "01:23", "topic": "{request.topic}", "difficulty": "{request.level}", "answer": "Микросервисы — архитектурный стиль, где приложение состоит из независимых сервисов"}}]
 
-ТРАНСКРИПЦИЯ (часть {i+1}/{len(chunks)}):
+ПРИМЕР 2 — Извлечь:
+Транскрипция: "[05:45] А какие паттерны проектирования вы использовали на практике?"
+Ответ: [{{"question": "Какие паттерны проектирования вы использовали на практике?", "timecode": "05:45", "topic": "{request.topic}", "difficulty": "{request.level}", "answer": "Singleton, Factory, Observer, Strategy — основные GoF паттерны"}}]
+
+ПРИМЕР 3 — НЕ извлекать (это ответ кандидата):
+Транскрипция: "[02:30] Ну это когда у нас есть отдельные сервисы которые общаются через API?"
+Ответ: [] (это ответ кандидата, не вопрос интервьюера)
+
+ПРИМЕР 4 — НЕ извлекать (междометие):
+Транскрипция: "[03:00] Угу?"
+Ответ: [] (односложное междометие)
+
+=== ФОРМАТ ОТВЕТА ===
+Верни ТОЛЬКО валидный JSON массив. Никакого текста до или после.
+
+[{{"question": "Текст вопроса?", "answer": "Краткий ответ (1-2 предложения)", "timecode": "MM:SS", "topic": "{request.topic}", "difficulty": "{request.level}"}}]
+
+=== ТРАНСКРИПЦИЯ (часть {i+1}/{len(chunks)}) ===
 {chunk}
 
-JSON массив со ВСЕМИ вопросами (кроме междометий):"""
+JSON:"""
             
             # Выбор LLM провайдера: Gemini (рекомендуется) > Groq > Ollama
             chunk_questions = await call_llm_api(prompt)
