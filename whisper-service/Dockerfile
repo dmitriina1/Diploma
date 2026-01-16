@@ -26,8 +26,11 @@ RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 COPY . .
 
+# Делаем entrypoint исполняемым
+RUN chmod +x entrypoint.sh
+
 # Порт сервиса
 EXPOSE 8001
 
-# Запуск
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Entrypoint для автоматического расчёта CPU_THREADS
+ENTRYPOINT ["/app/entrypoint.sh"]

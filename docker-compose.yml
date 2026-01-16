@@ -105,7 +105,7 @@ services:
   # Модель загружается один раз и остаётся в памяти каждого контейнера
   # 
   # ВАЖНО: CPU_THREADS должен быть = 16 / N (где N - количество инстансов)
-  # 2 инстанса: CPU_THREADS=8, 3 инстанса: CPU_THREADS=5, 4 инстанса: CPU_THREADS=4
+  # 2 инстанса: CPU_THREADS=4, 3 инстанса: CPU_THREADS=4, 4 инстанса: CPU_THREADS=4
   
   whisper:
     build:
@@ -113,7 +113,7 @@ services:
       dockerfile: Dockerfile
     environment:
       - WHISPER_MODEL=medium
-      - CPU_THREADS=${WHISPER_CPU_THREADS:-8}
+
       - HF_HUB_ENABLE_HF_TRANSFER=0
       - HF_HUB_DISABLE_XET=1
     volumes:
@@ -215,3 +215,6 @@ volumes:
 networks:
   diploma-network:
     driver: bridge
+
+
+

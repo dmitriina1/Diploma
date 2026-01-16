@@ -21,8 +21,11 @@ app = FastAPI(title="Whisper Service (faster-whisper)", version="2.0.0")
 # Глобальная модель - загружается один раз при старте
 whisper_model = None
 MODEL_NAME = os.getenv("WHISPER_MODEL", "medium")
-# Количество потоков CPU для faster-whisper
-CPU_THREADS = int(os.getenv("CPU_THREADS", "4"))
+# Ensure CPU_THREADS is explicitly set via environment variables
+CPU_THREADS = os.getenv("CPU_THREADS")
+if not CPU_THREADS:
+    raise ValueError("CPU_THREADS environment variable must be set!")
+CPU_THREADS = int(CPU_THREADS)
 
 
 @app.on_event("startup")
