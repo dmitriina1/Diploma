@@ -99,23 +99,20 @@ services:
     networks:
       - diploma-network
 
-  # ============== Whisper Services (параллельная транскрибация для ускорения) ==============
-  # Два инстанса для обработки частей аудио параллельно (1.6-1.8x ускорение)
+  # ============== Whisper Service Pool (масштабируемая транскрибация) ==============
+  # Масштабирование: docker-compose up -d --scale whisper=N
+  # Nginx автоматически балансирует нагрузку между всеми репликами
   # Модель загружается один раз и остаётся в памяти каждого контейнера
   
-  whisper-1:
+  whisper:
     build:
       context: ./whisper-service
       dockerfile: Dockerfile
-    container_name: diploma-whisper-1
     environment:
       - WHISPER_MODEL=medium
       - CPU_THREADS=8
-      - INSTANCE_ID=1
       - HF_HUB_ENABLE_HF_TRANSFER=0
       - HF_HUB_DISABLE_XET=1
-    ports:
-      - "8001:8001"
     volumes:
       - whisper_cache:/root/.cache/whisper
       - shared_temp:/app/temp
@@ -127,34 +124,33 @@ services:
       start_period: 120s
     networks:
       - diploma-network
+    deploy:
+      replicas: 2  # По умолчанию 2 инстанса, можно менять через --scale
+      resources:
+        limits:
+          memory: 4G  # Лимит памяти на инстанс
 
-  whisper-2:
-    build:
-      context: ./whisper-service
-      dockerfile: Dockerfile
-    container_name: diploma-whisper-2
-    environment:
-      - WHISPER_MODEL=medium
-      - CPU_THREADS=8
-      - INSTANCE_ID=2
-      - HF_HUB_ENABLE_HF_TRANSFER=0
-      - HF_HUB_DISABLE_XET=1
-    ports:
-      - "8002:8001"
+  # ============== Nginx Load Balancer для Whisper Pool ==============
+  # Распределяет запросы между Whisper инстансами (least_conn)
+  nginx-whisper:
+    image: nginx:alpine
+    container_name: diploma-nginx-whisper
     volumes:
-      - whisper_cache:/root/.cache/whisper
-      - shared_temp:/app/temp
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8001:8001"  # Внешний порт для мониторинга
+    depends_on:
+      - whisper
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
     networks:
       - diploma-network
 
   # ============== Backend (FastAPI + OpenRouter/Groq/Gemini) ==============
-  # Координирует параллельную обработку через whisper-1 и whisper-2
+  # Координирует обработку через Nginx Load Balancer → Whisper Pool
   backend:
     build:
       context: ./backend
@@ -164,7 +160,8 @@ services:
       - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
       - REDIS_URL=redis://redis:6379
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/youtube-questions
-      - WHISPER_SERVICES=http://whisper-1:8001,http://whisper-2:8001
+      - WHISPER_SERVICE_URL=http://nginx-whisper:8001
+      - WHISPER_POOL_SIZE=${WHISPER_POOL_SIZE:-2}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
@@ -181,9 +178,7 @@ services:
         condition: service_healthy
       n8n:
         condition: service_started
-      whisper-1:
-        condition: service_started
-      whisper-2:
+      nginx-whisper:
         condition: service_started
     networks:
       - diploma-network

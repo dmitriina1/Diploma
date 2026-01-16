@@ -20,8 +20,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localh
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "http://localhost:5678/webhook/youtube-questions")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-# Несколько Whisper инстансов для параллельной обработки
-WHISPER_SERVICES = os.getenv("WHISPER_SERVICES", "http://localhost:8001,http://localhost:8002").split(",")
+# Whisper через Nginx Load Balancer
+WHISPER_SERVICE_URL = os.getenv("WHISPER_SERVICE_URL", "http://localhost:8001")
+WHISPER_POOL_SIZE = int(os.getenv("WHISPER_POOL_SIZE", "2"))  # Количество Whisper реплик
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")  # Бесплатный быстрый LLM
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Google Gemini
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")  # OpenRouter — без лимитов!
@@ -39,6 +40,190 @@ REDIS_TTL = 86400  # 24 часа
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
 connected_clients: Dict[str, WebSocket] = {}
+whisper_pool: Optional["WhisperPool"] = None  # Инициализируется при старте
+
+
+# ============== WhisperPool — пул транскрибации с балансировкой ==============
+class WhisperPool:
+    """
+    Пул Whisper сервисов с Nginx Load Balancer.
+    
+    Архитектура:
+    - Nginx балансирует запросы между Whisper репликами (least_conn)
+    - Backend делит аудио на части и отправляет параллельно
+    - Результаты объединяются с учётом overlap
+    
+    Масштабирование:
+        docker-compose up -d --scale whisper=N
+    """
+    
+    def __init__(self, service_url: str, pool_size: int = 2):
+        self.service_url = service_url.rstrip("/")
+        self.pool_size = pool_size
+        self.is_healthy = False
+        self._lock = asyncio.Lock()
+    
+    async def health_check(self) -> bool:
+        """Проверка доступности Whisper через Nginx"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.service_url}/health")
+                self.is_healthy = response.status_code == 200
+                return self.is_healthy
+        except Exception as e:
+            print(f"⚠️ Whisper pool health check failed: {e}")
+            self.is_healthy = False
+            return False
+    
+    async def transcribe(self, audio_path: Path, language: str = "ru") -> Dict[str, Any]:
+        """
+        Транскрибация одного аудиофайла через Nginx → Whisper Pool.
+        Nginx автоматически выбирает наименее загруженный инстанс.
+        """
+        async with httpx.AsyncClient(timeout=1800.0) as client:
+            with open(audio_path, "rb") as audio_file:
+                files = {"file": (audio_path.name, audio_file, "audio/mpeg")}
+                response = await client.post(
+                    f"{self.service_url}/transcribe",
+                    files=files,
+                    params={"language": language}
+                )
+        
+        if response.status_code != 200:
+            raise Exception(f"Whisper error: {response.text}")
+        
+        return response.json()
+    
+    async def transcribe_parallel(
+        self, 
+        audio_path: Path, 
+        duration: float,
+        task_id: str
+    ) -> Dict[str, Any]:
+        """
+        Параллельная транскрибация: разрезаем аудио на части и отправляем
+        одновременно на разные Whisper инстансы через Nginx.
+        
+        Args:
+            audio_path: Путь к аудиофайлу
+            duration: Длительность в секундах
+            task_id: ID задачи для логирования
+            
+        Returns:
+            Объединённый результат транскрибации
+        """
+        import subprocess
+        
+        num_parts = self.pool_size
+        part_duration = duration / num_parts
+        
+        print(f"✂️ Splitting audio into {num_parts} parts of ~{part_duration:.0f}s each")
+        
+        # Создаём части аудио с overlap
+        audio_parts = []
+        for i in range(num_parts):
+            start_time = max(0, i * part_duration - AUDIO_OVERLAP_SECONDS if i > 0 else 0)
+            end_time = duration if i == num_parts - 1 else (i + 1) * part_duration + AUDIO_OVERLAP_SECONDS
+            
+            part_path = TEMP_DIR / f"{audio_path.stem}_part{i}.mp3"
+            
+            # FFmpeg для вырезания части
+            cmd = [
+                "ffmpeg", "-y", "-i", str(audio_path),
+                "-ss", str(start_time),
+                "-to", str(end_time),
+                "-c", "copy",
+                str(part_path)
+            ]
+            
+            subprocess.run(cmd, capture_output=True, timeout=60)
+            
+            audio_parts.append({
+                "path": part_path,
+                "start_offset": start_time,
+                "index": i
+            })
+            
+            print(f"   Part {i+1}: {start_time:.1f}s - {end_time:.1f}s")
+        
+        # Параллельная транскрибация всех частей
+        async def transcribe_part(part: Dict) -> Dict[str, Any]:
+            try:
+                result = await self.transcribe(part["path"])
+                result["index"] = part["index"]
+                result["offset"] = part["start_offset"]
+                return result
+            except Exception as e:
+                print(f"⚠️ Part {part['index']} error: {e}")
+                return {"text": "", "segments": [], "index": part["index"], "offset": part["start_offset"]}
+            finally:
+                # Удаляем временный файл части
+                if part["path"].exists():
+                    part["path"].unlink()
+        
+        print(f"🚀 Starting parallel transcription ({num_parts} parts)...")
+        results = await asyncio.gather(*[transcribe_part(part) for part in audio_parts])
+        
+        # Сортируем по индексу и объединяем
+        results = sorted(results, key=lambda x: x["index"])
+        
+        merged_segments = []
+        merged_text_parts = []
+        
+        for result in results:
+            offset = result.get("offset", 0)
+            
+            for seg in result.get("segments", []):
+                adjusted_seg = {
+                    "start": seg["start"] + offset,
+                    "end": seg["end"] + offset,
+                    "text": seg["text"]
+                }
+                merged_segments.append(adjusted_seg)
+            
+            if result.get("text"):
+                merged_text_parts.append(result["text"])
+        
+        # Удаляем дубликаты на границах overlap
+        merged_segments = self._remove_overlap_duplicates(merged_segments)
+        merged_segments = sorted(merged_segments, key=lambda x: x["start"])
+        
+        print(f"✅ Parallel transcription complete: {len(merged_segments)} segments")
+        
+        return {
+            "text": " ".join(merged_text_parts),
+            "segments": merged_segments,
+            "language": "ru"
+        }
+    
+    def _remove_overlap_duplicates(self, segments: List[Dict]) -> List[Dict]:
+        """Удаление дублирующихся сегментов на границах overlap"""
+        if not segments:
+            return []
+        
+        sorted_segs = sorted(segments, key=lambda x: x["start"])
+        unique = [sorted_segs[0]]
+        
+        for seg in sorted_segs[1:]:
+            last = unique[-1]
+            
+            # Проверяем перекрытие
+            overlap_start = max(last["start"], seg["start"])
+            overlap_end = min(last["end"], seg["end"])
+            overlap_duration = max(0, overlap_end - overlap_start)
+            
+            seg_duration = seg["end"] - seg["start"]
+            
+            if seg_duration > 0 and overlap_duration / seg_duration > 0.5:
+                continue  # Дубликат
+            
+            if last["text"].strip().lower() == seg["text"].strip().lower():
+                continue  # Одинаковый текст
+            
+            unique.append(seg)
+        
+        return unique
+
 
 # ============== Pydantic модели ==============
 class YouTubeRequest(BaseModel):
@@ -81,31 +266,24 @@ class TaskStatus(BaseModel):
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client
+    global redis_client, whisper_pool
     
     # Startup
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
     
-    # Whisper теперь распределённый (несколько инстансов)
-    print(f"📡 Whisper services: {WHISPER_SERVICES}")
+    # Инициализируем WhisperPool
+    whisper_pool = WhisperPool(
+        service_url=WHISPER_SERVICE_URL,
+        pool_size=WHISPER_POOL_SIZE
+    )
+    print(f"📡 Whisper Pool: {WHISPER_SERVICE_URL} (pool_size={WHISPER_POOL_SIZE})")
     
-    # Проверяем доступность Whisper сервисов
-    available_services = []
-    for service_url in WHISPER_SERVICES:
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{service_url.strip()}/health")
-                if response.status_code == 200:
-                    available_services.append(service_url.strip())
-                    print(f"✅ Whisper service {service_url} is available!")
-        except Exception as e:
-            print(f"⚠️ Whisper service {service_url} not available yet: {e}")
-    
-    if available_services:
-        print(f"✅ {len(available_services)}/{len(WHISPER_SERVICES)} Whisper services ready")
+    # Проверяем доступность Whisper через Nginx
+    if await whisper_pool.health_check():
+        print(f"✅ Whisper Pool is healthy!")
     else:
-        print("⚠️ No Whisper services available yet (will retry on use)")
+        print("⚠️ Whisper Pool not available yet (will retry on use)")
     
     yield
     
@@ -204,15 +382,12 @@ async def root():
 @app.get("/health", tags=["Status"])
 async def health():
     """Проверка здоровья сервиса"""
-    # Проверяем доступность Whisper сервисов
-    whisper_status = {}
-    for i, service_url in enumerate(WHISPER_SERVICES):
-        try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.get(f"{service_url.strip()}/health")
-                whisper_status[f"whisper-{i+1}"] = response.status_code == 200
-        except:
-            whisper_status[f"whisper-{i+1}"] = False
+    global whisper_pool
+    
+    # Проверяем WhisperPool через Nginx
+    pool_healthy = False
+    if whisper_pool:
+        pool_healthy = await whisper_pool.health_check()
     
     # Считаем temp файлы
     temp_files = list(TEMP_DIR.glob("*"))
@@ -220,9 +395,12 @@ async def health():
     
     return {
         "status": "healthy",
-        "whisper_services": whisper_status,
-        "whisper_urls": WHISPER_SERVICES,
-        "parallel_processing": len([v for v in whisper_status.values() if v]) > 1,
+        "whisper_pool": {
+            "url": WHISPER_SERVICE_URL,
+            "pool_size": WHISPER_POOL_SIZE,
+            "is_healthy": pool_healthy
+        },
+        "parallel_processing": whisper_pool.pool_size > 1 if whisper_pool else False,
         "temp_files_count": len(temp_files),
         "temp_size_mb": round(temp_size_mb, 2)
     }
@@ -677,15 +855,16 @@ async def download_audio(request: DownloadRequest):
 @app.post("/internal/transcribe", tags=["Internal"])
 async def transcribe_audio(request: TranscribeRequest):
     """
-    Параллельная транскрибация аудио через несколько Whisper инстансов.
+    Параллельная транскрибация аудио через Nginx-балансируемый Whisper Pool.
     
     Архитектура:
     1. Определить длительность аудио
-    2. Разрезать на N частей (N = кол-во Whisper инстансов)
-    3. Отправить части параллельно на разные инстансы
+    2. Разрезать на N частей (N = WHISPER_POOL_SIZE)
+    3. Отправить части параллельно через Nginx (least_conn балансировка)
     4. Объединить результаты с учётом overlap
     5. Слить с YouTube субтитрами (если есть)
     """
+    global whisper_pool
     import subprocess
     
     try:
@@ -695,27 +874,27 @@ async def transcribe_audio(request: TranscribeRequest):
         duration = await get_audio_duration(audio_path)
         print(f"🎵 Audio duration: {duration:.1f} seconds ({duration/60:.1f} minutes)")
         
-        # 2. Определяем доступные Whisper сервисы
-        available_services = await get_available_whisper_services()
-        num_services = len(available_services)
+        # 2. Проверяем доступность WhisperPool
+        if not whisper_pool:
+            raise HTTPException(status_code=503, detail="WhisperPool not initialized")
         
-        if num_services == 0:
-            raise HTTPException(status_code=503, detail="No Whisper services available")
+        pool_healthy = await whisper_pool.health_check()
+        if not pool_healthy:
+            raise HTTPException(status_code=503, detail="Whisper Pool not available")
         
-        print(f"🖥️ Available Whisper services: {num_services}")
+        print(f"🖥️ Whisper Pool: {whisper_pool.pool_size} workers via Nginx")
         
-        # 3. Решаем: параллельно или последовательно
-        # Параллелим только если видео > 2 минут на сервис И есть несколько сервисов
-        min_parallel_duration = MIN_CHUNK_DURATION * num_services
+        # 3. Транскрибация через WhisperPool
+        # Параллелим если видео > 2 минут на воркер И pool_size > 1
+        min_parallel_duration = MIN_CHUNK_DURATION * whisper_pool.pool_size
+        use_parallel = whisper_pool.pool_size > 1 and duration >= min_parallel_duration
         
-        if duration < min_parallel_duration or num_services == 1:
-            # Короткое видео или один сервис — обычная обработка
-            print(f"📝 Using single Whisper instance (duration < {min_parallel_duration}s or single service)")
-            whisper_result = await transcribe_single(audio_path, available_services[0])
+        if use_parallel:
+            print(f"⚡ Using PARALLEL transcription with {whisper_pool.pool_size} workers")
+            whisper_result = await whisper_pool.transcribe_parallel(audio_path, duration, request.task_id)
         else:
-            # Длинное видео — параллельная обработка
-            print(f"⚡ Using PARALLEL transcription with {num_services} Whisper instances")
-            whisper_result = await transcribe_parallel(audio_path, duration, available_services, request.task_id)
+            print(f"📝 Using single Whisper request (duration < {min_parallel_duration}s or single worker)")
+            whisper_result = await whisper_pool.transcribe(audio_path)
         
         whisper_transcript = whisper_result["text"]
         whisper_segments = whisper_result.get("segments", [])
@@ -762,7 +941,8 @@ async def transcribe_audio(request: TranscribeRequest):
                 "youtube_subtitles": youtube_subtitles,
                 "has_subtitles": len(youtube_subtitles) > 0,
                 "length": len(merged_transcript),
-                "parallel_processing": num_services > 1 and duration >= min_parallel_duration
+                "parallel_processing": use_parallel,
+                "pool_size": whisper_pool.pool_size
             }),
             ex=REDIS_TTL
         )
@@ -817,196 +997,6 @@ async def get_audio_duration(audio_path: Path) -> float:
         # Fallback: оценка по размеру файла (MP3 192kbps ≈ 24KB/сек)
         file_size = audio_path.stat().st_size
         return file_size / (24 * 1024)
-
-
-async def get_available_whisper_services() -> List[str]:
-    """Получить список доступных Whisper сервисов"""
-    available = []
-    
-    for service_url in WHISPER_SERVICES:
-        service_url = service_url.strip()
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{service_url}/health")
-                if response.status_code == 200:
-                    available.append(service_url)
-        except:
-            print(f"⚠️ Whisper service {service_url} not available")
-    
-    return available
-
-
-async def transcribe_single(audio_path: Path, service_url: str) -> Dict[str, Any]:
-    """Транскрибация через один Whisper сервис"""
-    async with httpx.AsyncClient(timeout=1800.0) as client:
-        with open(audio_path, "rb") as audio_file:
-            files = {"file": (audio_path.name, audio_file, "audio/mpeg")}
-            response = await client.post(
-                f"{service_url}/transcribe",
-                files=files,
-                params={"language": "ru"}
-            )
-    
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Whisper error: {response.text}")
-    
-    return response.json()
-
-
-async def transcribe_parallel(
-    audio_path: Path, 
-    duration: float, 
-    services: List[str],
-    task_id: str
-) -> Dict[str, Any]:
-    """
-    Параллельная транскрибация: разрезаем аудио на части и обрабатываем одновременно.
-    
-    Используем overlap для корректного слияния на границах.
-    """
-    import subprocess
-    
-    num_parts = len(services)
-    part_duration = duration / num_parts
-    
-    print(f"✂️ Splitting audio into {num_parts} parts of ~{part_duration:.0f}s each")
-    
-    # Создаём части аудио с overlap
-    audio_parts = []
-    for i in range(num_parts):
-        start_time = max(0, i * part_duration - AUDIO_OVERLAP_SECONDS if i > 0 else 0)
-        # Для последней части — до конца
-        if i == num_parts - 1:
-            end_time = duration
-        else:
-            end_time = (i + 1) * part_duration + AUDIO_OVERLAP_SECONDS
-        
-        part_path = TEMP_DIR / f"{audio_path.stem}_part{i}.mp3"
-        
-        # FFmpeg команда для вырезания части
-        cmd = [
-            "ffmpeg", "-y", "-i", str(audio_path),
-            "-ss", str(start_time),
-            "-to", str(end_time),
-            "-c", "copy",  # Быстрое копирование без перекодирования
-            str(part_path)
-        ]
-        
-        subprocess.run(cmd, capture_output=True, timeout=60)
-        
-        audio_parts.append({
-            "path": part_path,
-            "start_offset": start_time,
-            "service": services[i],
-            "index": i
-        })
-        
-        print(f"   Part {i+1}: {start_time:.1f}s - {end_time:.1f}s → {services[i]}")
-    
-    # Отправляем все части параллельно
-    async def transcribe_part(part: Dict) -> Dict[str, Any]:
-        """Транскрибация одной части"""
-        try:
-            async with httpx.AsyncClient(timeout=1800.0) as client:
-                with open(part["path"], "rb") as audio_file:
-                    files = {"file": (part["path"].name, audio_file, "audio/mpeg")}
-                    response = await client.post(
-                        f"{part['service']}/transcribe",
-                        files=files,
-                        params={"language": "ru"}
-                    )
-            
-            if response.status_code != 200:
-                print(f"⚠️ Part {part['index']} failed: {response.text}")
-                return {"text": "", "segments": [], "index": part["index"], "offset": part["start_offset"]}
-            
-            result = response.json()
-            result["index"] = part["index"]
-            result["offset"] = part["start_offset"]
-            return result
-            
-        except Exception as e:
-            print(f"⚠️ Part {part['index']} error: {e}")
-            return {"text": "", "segments": [], "index": part["index"], "offset": part["start_offset"]}
-        finally:
-            # Удаляем временный файл части
-            if part["path"].exists():
-                part["path"].unlink()
-    
-    # Запускаем все транскрибации параллельно
-    print(f"🚀 Starting parallel transcription...")
-    results = await asyncio.gather(*[transcribe_part(part) for part in audio_parts])
-    
-    # Сортируем по индексу
-    results = sorted(results, key=lambda x: x["index"])
-    
-    # Объединяем результаты с учётом offset
-    merged_segments = []
-    merged_text_parts = []
-    
-    for result in results:
-        offset = result.get("offset", 0)
-        
-        for seg in result.get("segments", []):
-            # Корректируем таймкоды с учётом offset
-            adjusted_seg = {
-                "start": seg["start"] + offset,
-                "end": seg["end"] + offset,
-                "text": seg["text"]
-            }
-            merged_segments.append(adjusted_seg)
-        
-        if result.get("text"):
-            merged_text_parts.append(result["text"])
-    
-    # Удаляем дубликаты на границах (overlap)
-    merged_segments = remove_overlap_duplicates(merged_segments)
-    
-    # Сортируем по времени
-    merged_segments = sorted(merged_segments, key=lambda x: x["start"])
-    
-    full_text = " ".join(merged_text_parts)
-    
-    print(f"✅ Parallel transcription complete: {len(merged_segments)} segments")
-    
-    return {
-        "text": full_text,
-        "segments": merged_segments,
-        "language": "ru"
-    }
-
-
-def remove_overlap_duplicates(segments: List[Dict]) -> List[Dict]:
-    """Удаление дублирующихся сегментов на границах overlap"""
-    if not segments:
-        return []
-    
-    # Сортируем по времени начала
-    sorted_segs = sorted(segments, key=lambda x: x["start"])
-    
-    unique = [sorted_segs[0]]
-    
-    for seg in sorted_segs[1:]:
-        last = unique[-1]
-        
-        # Если сегменты сильно пересекаются (>50% по времени) — это дубликат
-        overlap_start = max(last["start"], seg["start"])
-        overlap_end = min(last["end"], seg["end"])
-        overlap_duration = max(0, overlap_end - overlap_start)
-        
-        seg_duration = seg["end"] - seg["start"]
-        
-        if seg_duration > 0 and overlap_duration / seg_duration > 0.5:
-            # Дубликат — пропускаем
-            continue
-        
-        # Если тексты почти идентичны — дубликат
-        if last["text"].strip().lower() == seg["text"].strip().lower():
-            continue
-        
-        unique.append(seg)
-    
-    return unique
 
 
 async def update_task_error(task_id: str, error_msg: str):
