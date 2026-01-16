@@ -965,7 +965,7 @@ async def transcribe_audio(request: TranscribeRequest):
             "transcript": merged_transcript,
             "segments": merged_segments,
             "has_subtitles": len(youtube_subtitles) > 0,
-            "parallel_processing_used": num_services > 1 and duration >= min_parallel_duration
+            "parallel_processing_used": use_parallel
         }
         
     except httpx.TimeoutException as e:
