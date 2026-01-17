@@ -1917,14 +1917,51 @@ async def delete_question(question_id: int):
 
 @app.post("/api/admin/approve-questions", tags=["Admin"])
 async def approve_questions(question_ids: List[int]):
-    """Одобрить вопросы и обновить вероятности"""
+    """Одобрить вопросы, объединяя дубликаты с существующими одобренными"""
     import asyncpg
     from similarity_search import invalidate_similarity_cache
     
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        # Одобрить вопросы
-        await conn.execute("UPDATE questions SET approved = TRUE WHERE id = ANY($1)", question_ids)
+        approved_count = 0
+        for question_id in question_ids:
+            # Получить текст вопроса
+            question_text = await conn.fetchval("SELECT question FROM questions WHERE id = $1", question_id)
+            if not question_text:
+                continue
+            
+            # Нормализовать текст
+            normalized = re.sub(r'\W+', '', question_text.lower())
+            
+            # Проверить, есть ли уже одобренный с таким же нормализованным текстом
+            existing_id = await conn.fetchval("""
+                SELECT id FROM questions 
+                WHERE approved = TRUE 
+                AND LOWER(REGEXP_REPLACE(question, '\\W+', '', 'g')) = $1
+                LIMIT 1
+            """, normalized)
+            
+            if existing_id:
+                # Получить source_url и video_title дубликата
+                duplicate_data = await conn.fetchrow("SELECT source_url, video_title FROM questions WHERE id = $1", question_id)
+                
+                # Обновить существующий вопрос: добавить source_url и video_title дубликата (если разный)
+                if duplicate_data['source_url'] and duplicate_data['source_url'] != await conn.fetchval("SELECT source_url FROM questions WHERE id = $1", existing_id):
+                    # Для простоты, обновим на новый source_url
+                    await conn.execute("UPDATE questions SET source_url = $1, video_title = $2 WHERE id = $3", 
+                                       duplicate_data['source_url'], duplicate_data['video_title'], existing_id)
+                
+                # Объединить видео связи: перенести все связи с question_id на existing_id
+                await conn.execute("""
+                    UPDATE question_video SET question_id = $1 WHERE question_id = $2
+                """, existing_id, question_id)
+                
+                # Удалить дубликат
+                await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
+            else:
+                # Одобрить вопрос
+                await conn.execute("UPDATE questions SET approved = TRUE WHERE id = $1", question_id)
+                approved_count += 1
         
         # Обновить вероятности для всех вопросов
         await update_probabilities(conn)
@@ -1932,7 +1969,7 @@ async def approve_questions(question_ids: List[int]):
         # Инвалидируем кэш поиска похожих вопросов
         await invalidate_similarity_cache()
         
-        return {"message": f"Approved {len(question_ids)} questions"}
+        return {"message": f"Approved {approved_count} questions, merged duplicates"}
     finally:
         await conn.close()
 
