@@ -15,6 +15,8 @@ import httpx
 import redis.asyncio as redis
 import yt_dlp
 
+from similarity_search import get_similar_questions as search_similar_questions
+
 # ============== Конфигурация ==============
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -1734,6 +1736,7 @@ def filter_low_quality_questions(questions: List[Dict[str, Any]]) -> List[Dict[s
             removed_count += 1
             continue
         
+        
         # Вопрос прошёл фильтрацию
         filtered.append(q)
     
@@ -1814,9 +1817,18 @@ async def get_admin_questions():
             FROM questions
             ORDER BY created_at DESC
         """)
-        
         result = []
         for q in questions:
+            # Получить похожие вопросы среди одобренных (без учета самого себя)
+            try:
+                similar = await search_similar_questions(q["question"], q["id"], limit=1000)
+                # Фильтровать по порогу similarity_score > 0.7 и взять топ-5
+                filtered_similar = [s for s in similar if s['similarity_score'] > 0.7]
+                top_similar = sorted(filtered_similar, key=lambda x: x['similarity_score'], reverse=True)[:5]
+                similar_count = len(top_similar)
+            except Exception as e:
+                print(f"⚠️ Failed to get similar questions for {q['id']}: {e}")
+                similar_count = 0
             result.append({
                 "id": q["id"],
                 "question": q["question"],
@@ -1828,7 +1840,7 @@ async def get_admin_questions():
                 "source_url": q["source_url"],
                 "video_title": q["video_title"],
                 "created_at": q["created_at"],
-                "similar_count": 0  # Temporarily disabled
+                "similar_count": similar_count
             })
         
         return {"questions": result}
@@ -1939,15 +1951,24 @@ async def get_similar_questions(question_id: int):
             raise HTTPException(status_code=404, detail="Question not found")
 
         # Используем семантический поиск
-        similar_questions = await get_similar_questions(current_question, question_id, limit=10)
+        similar_questions = await get_similar_questions(current_question, question_id, limit=1000)
+        # Фильтровать по порогу similarity_score > 0.7 и взять топ-5
+        filtered_similar = [s for s in similar_questions if s['similarity_score'] > 0.7]
+        top_similar = sorted(filtered_similar, key=lambda x: x['similarity_score'], reverse=True)[:5]
 
-        return JSONResponse(content={"similar_questions": similar_questions}, media_type="application/json; charset=utf-8")
+        return JSONResponse(content={"similar_questions": top_similar}, media_type="application/json; charset=utf-8")
     finally:
         await conn.close()
 
 @app.put("/api/admin/replace-question/{question_id}", tags=["Admin"])
-async def replace_question(question_id: int, new_question_id: int):
+async def replace_question(question_id: int, data: dict):
     """Заменить вопрос на похожий"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    new_question_id = data.get("similar_question_id")
+    if not new_question_id:
+        raise HTTPException(status_code=400, detail="similar_question_id required")
     import asyncpg
     from similarity_search import invalidate_similarity_cache
     
