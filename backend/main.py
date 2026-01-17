@@ -315,6 +315,16 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ Whisper Pool not available yet (will retry on use)")
     
+    # Инициализируем систему поиска похожих вопросов
+    from similarity_search import initialize_similarity_search
+    try:
+        await initialize_similarity_search()
+    except Exception as e:
+        print(f"⚠️ Failed to initialize similarity search: {e}")
+        import traceback
+        traceback.print_exc()
+    print("🔍 Similarity search initialized")
+    
     yield
     
     # Shutdown
@@ -573,24 +583,84 @@ async def get_client_tasks(client_id: str):
     
     return {"tasks": tasks, "count": len(tasks)}
 
-@app.get("/api/questions", tags=["Export"])
+@app.get("/api/questions", tags=["Public"])
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
     """
-    Получение всех вопросов с фильтрацией
+    Получение всех одобренных вопросов с вероятностью для PublicSide
     
     - **topic**: Фильтр по теме (опционально)
     - **level**: Фильтр по уровню (опционально)
     """
-    questions_data = await redis_client.get("all_questions")
-    if questions_data:
-        questions = json.loads(questions_data)
-        # Фильтрация
+    import asyncpg
+    from fastapi.responses import JSONResponse
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получить общее количество обработанных видео
+        total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+        if total_videos == 0:
+            return JSONResponse(content={"questions": []}, media_type="application/json; charset=utf-8")
+        
+        # Получить вопросы с источниками
+        query = """
+        SELECT 
+            q.id, q.question, q.answer, q.topic, q.difficulty, q.probability, q.timecode,
+            json_agg(json_build_object(
+                'video_id', pv.id,
+                'url', pv.youtube_url,
+                'title', pv.title
+            )) as sources
+        FROM questions q
+        LEFT JOIN question_video qv ON q.id = qv.question_id
+        LEFT JOIN processed_videos pv ON qv.video_id = pv.id
+        WHERE q.approved = TRUE
+        """
+        params = []
         if topic:
-            questions = [q for q in questions if q.get("topic", "").lower() == topic.lower()]
+            query += " AND LOWER(q.topic) = LOWER($1)"
+            params.append(topic)
         if level:
-            questions = [q for q in questions if q.get("difficulty", "").lower() == level.lower()]
-        return {"questions": questions}
-    return {"questions": []}
+            query += " AND LOWER(q.difficulty) = LOWER($2)"
+            params.append(level)
+        
+        query += " GROUP BY q.id, q.question, q.answer, q.topic, q.difficulty, q.probability, q.timecode"
+        
+        questions = await conn.fetch(query, *params)
+        
+        result = []
+        for q in questions:
+            sources_raw = q["sources"]
+            if sources_raw and sources_raw != [None]:  # json_agg returns [null] for no matches
+                try:
+                    if isinstance(sources_raw, str):
+                        sources = json.loads(sources_raw)
+                    else:
+                        sources = sources_raw
+                    sources = [s for s in sources if s is not None]  # Filter out nulls
+                except (json.JSONDecodeError, TypeError):
+                    sources = []
+            else:
+                sources = []
+            result.append({
+                "id": q["id"],
+                "question": q["question"],
+                "answer": q["answer"],
+                "topic": q["topic"],
+                "difficulty": q["difficulty"],
+                "probability": q["probability"],
+                "timecode": q["timecode"],
+                "approved": True,  # All questions are approved
+                "sources": sources
+            })
+        
+        return JSONResponse(content={"questions": result}, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        import traceback
+        print(f"Error in get_all_questions: {e}")
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+    finally:
+        await conn.close()
 
 @app.get("/api/export/{task_id}", tags=["Export"])
 async def export_questions_json(task_id: str):
@@ -1437,14 +1507,56 @@ async def call_ollama_api(prompt: str) -> List[Dict[str, Any]]:
 
 @app.post("/internal/save-questions")
 async def save_questions(request: SaveQuestionsRequest):
-    """Сохранение вопросов"""
+    """Сохранение вопросов в БД"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
     try:
-        # Добавляем метаданные к вопросам
-        for q in request.questions:
-            q["source_url"] = request.youtube_url
-            q["video_title"] = request.video_title
+        # Найти или создать видео
+        video_id = await conn.fetchval("""
+            INSERT INTO processed_videos (youtube_url, video_id, title, transcript, questions_count)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (youtube_url) DO UPDATE SET
+                questions_count = EXCLUDED.questions_count
+            RETURNING id
+        """, request.youtube_url, request.youtube_url.split('v=')[-1][:11], request.video_title, "", len(request.questions))
         
-        # Сохраняем в Redis (для демо)
+        # Сохранить вопросы с дедупликацией
+        question_ids = []
+        for q in request.questions:
+            # Проверить, существует ли уже такой вопрос из этого видео
+            existing_question = await conn.fetchval("""
+                SELECT q.id FROM questions q
+                JOIN question_video qv ON q.id = qv.question_id
+                WHERE q.question = $1 AND q.timecode = $2 AND qv.video_id = $3
+                LIMIT 1
+            """, q["question"], q.get("timecode", ""), video_id)
+            
+            if existing_question:
+                # Вопрос уже существует, пропускаем
+                question_ids.append(existing_question)
+                continue
+            
+            # Вопрос новый, вставляем
+            q_id = await conn.fetchval("""
+                INSERT INTO questions (question, answer, topic, difficulty, source_url, video_title, timecode, approved)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, FALSE)
+                RETURNING id
+            """, q["question"], q.get("answer", ""), q.get("topic", ""), q.get("difficulty", ""), request.youtube_url, request.video_title, q.get("timecode", ""))
+            question_ids.append(q_id)
+            
+            # Создать связь вопрос-видео
+            await conn.execute("""
+                INSERT INTO question_video (question_id, video_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+            """, q_id, video_id)
+        
+        # Обновить вероятности
+        await update_probabilities(conn)
+        
+        # Сохраняем в Redis для совместимости
         existing = await redis_client.get("all_questions")
         all_questions = json.loads(existing) if existing else []
         all_questions.extend(request.questions)
@@ -1469,6 +1581,9 @@ async def save_questions(request: SaveQuestionsRequest):
             "questions": request.questions,
             "video_title": request.video_title
         })
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
         
         return {"status": "saved", "count": len(request.questions)}
     except Exception as e:
@@ -1666,6 +1781,18 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
         normalized = re.sub(r'[^\w\s]', '', question_lower)
         normalized = ' '.join(normalized.split())  # Убираем лишние пробелы
         
+        # Нормализуем уровень сложности
+        difficulty = q.get('difficulty', '').lower().strip()
+        if difficulty in ['easy', 'beginner', 'новичок', 'джуниор']:
+            q['difficulty'] = 'junior'
+        elif difficulty in ['medium', 'intermediate', 'middle', 'средний', 'миддл']:
+            q['difficulty'] = 'middle'
+        elif difficulty in ['hard', 'advanced', 'expert', 'senior', 'сложный', 'сеньор']:
+            q['difficulty'] = 'senior'
+        else:
+            # Если уровень не распознан, ставим middle по умолчанию
+            q['difficulty'] = 'middle'
+        
         # Проверяем только на ТОЧНЫЕ дубликаты (вся строка целиком)
         if normalized not in seen_questions:
             seen_questions.add(normalized)
@@ -1673,10 +1800,206 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
     
     return unique_questions
 
+# ============== Admin Panel Endpoints ==============
+
+@app.get("/api/admin/questions", tags=["Admin"])
+async def get_admin_questions():
+    """Получить все вопросы для админа (одобренные и не одобренные)"""
+    import asyncpg
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        questions = await conn.fetch("""
+            SELECT id, question, answer, topic, difficulty, probability, approved, source_url, video_title, created_at
+            FROM questions
+            ORDER BY created_at DESC
+        """)
+        
+        result = []
+        for q in questions:
+            result.append({
+                "id": q["id"],
+                "question": q["question"],
+                "answer": q["answer"],
+                "topic": q["topic"],
+                "difficulty": q["difficulty"],
+                "probability": q["probability"],
+                "approved": q["approved"],
+                "source_url": q["source_url"],
+                "video_title": q["video_title"],
+                "created_at": q["created_at"],
+                "similar_count": 0  # Temporarily disabled
+            })
+        
+        return {"questions": result}
+    finally:
+        await conn.close()
+
+@app.post("/api/admin/questions", tags=["Admin"])
+async def create_question(question: str, answer: Optional[str] = None, topic: Optional[str] = "General", difficulty: Optional[str] = "middle"):
+    """Создать новый вопрос"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        question_id = await conn.fetchval("""
+            INSERT INTO questions (question, answer, topic, difficulty, approved)
+            VALUES ($1, $2, $3, $4, TRUE)
+            RETURNING id
+        """, question, answer, topic, difficulty)
+        
+        # Обновить вероятности
+        await update_probabilities(conn)
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
+        
+        return {"id": question_id, "message": "Question created"}
+    finally:
+        await conn.close()
+
+@app.put("/api/admin/questions/{question_id}", tags=["Admin"])
+async def update_question(question_id: int, question: str, answer: Optional[str] = None, topic: Optional[str] = None, difficulty: Optional[str] = None):
+    """Обновить вопрос"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("""
+            UPDATE questions 
+            SET question = $1, answer = $2, topic = $3, difficulty = $4, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5
+        """, question, answer, topic, difficulty, question_id)
+        
+        # Обновить вероятности
+        await update_probabilities(conn)
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
+        
+        return {"message": "Question updated"}
+    finally:
+        await conn.close()
+
+@app.delete("/api/admin/questions/{question_id}", tags=["Admin"])
+async def delete_question(question_id: int):
+    """Удалить вопрос"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
+        
+        # Обновить вероятности
+        await update_probabilities(conn)
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
+        
+        return {"message": "Question deleted"}
+    finally:
+        await conn.close()
+
+@app.post("/api/admin/approve-questions", tags=["Admin"])
+async def approve_questions(question_ids: List[int]):
+    """Одобрить вопросы и обновить вероятности"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Одобрить вопросы
+        await conn.execute("UPDATE questions SET approved = TRUE WHERE id = ANY($1)", question_ids)
+        
+        # Обновить вероятности для всех вопросов
+        await update_probabilities(conn)
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
+        
+        return {"message": f"Approved {len(question_ids)} questions"}
+    finally:
+        await conn.close()
+
+@app.get("/api/admin/similar-questions/{question_id}", tags=["Admin"])
+async def get_similar_questions(question_id: int):
+    """Найти похожие вопросы для замены с использованием семантического поиска"""
+    import asyncpg
+    from similarity_search import get_similar_questions
+    from fastapi.responses import JSONResponse
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получить текущий вопрос
+        current_question = await conn.fetchval("SELECT question FROM questions WHERE id = $1", question_id)
+        if not current_question:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        # Используем семантический поиск
+        similar_questions = await get_similar_questions(current_question, question_id, limit=10)
+
+        return JSONResponse(content={"similar_questions": similar_questions}, media_type="application/json; charset=utf-8")
+    finally:
+        await conn.close()
+
+@app.put("/api/admin/replace-question/{question_id}", tags=["Admin"])
+async def replace_question(question_id: int, new_question_id: int):
+    """Заменить вопрос на похожий"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получить данные нового вопроса
+        new_data = await conn.fetchrow("""
+            SELECT question, answer, topic, difficulty
+            FROM questions WHERE id = $1
+        """, new_question_id)
+        
+        if not new_data:
+            raise HTTPException(status_code=404, detail="New question not found")
+        
+        # Обновить текущий вопрос
+        await conn.execute("""
+            UPDATE questions 
+            SET question = $1, answer = $2, topic = $3, difficulty = $4, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $5
+        """, new_data["question"], new_data["answer"], new_data["topic"], new_data["difficulty"], question_id)
+        
+        # Инвалидируем кэш поиска похожих вопросов
+        await invalidate_similarity_cache()
+        
+        return {"message": "Question replaced"}
+    finally:
+        await conn.close()
+
+async def update_probabilities(conn):
+    """Обновить вероятности для всех вопросов - процент от общего количества видео"""
+    
+    # Получить общее количество обработанных видео
+    total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+    
+    if total_videos > 0:
+        # Обновить вероятности - процент видео, где встречается вопрос
+        await conn.execute("""
+            UPDATE questions 
+            SET probability = (
+                SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
+                FROM question_video qv
+                WHERE qv.question_id = questions.id
+            )
+            WHERE approved = TRUE
+        """, total_videos)
+
 async def trigger_n8n_workflow(task_id: str, request: YouTubeRequest):
     """Запуск n8n workflow"""
+    print(f"🚀 Starting n8n workflow for task {task_id}")
     try:
         async with httpx.AsyncClient(timeout=1800.0) as client:  # 30 мин для длинных видео
+            print(f"📡 Sending request to n8n: {N8N_WEBHOOK_URL}")
             response = await client.post(
                 N8N_WEBHOOK_URL,
                 json={
@@ -1687,6 +2010,8 @@ async def trigger_n8n_workflow(task_id: str, request: YouTubeRequest):
                 }
             )
             print(f"n8n response: {response.status_code}")
+            if response.status_code != 200:
+                print(f"n8n response body: {response.text}")
     except Exception as e:
         print(f"n8n error: {e}")
         # Обновляем статус ошибки

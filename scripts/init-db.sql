@@ -1,3 +1,6 @@
+-- Включить расширение для поиска по схожести (триграммы)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Таблица для хранения вопросов
 CREATE TABLE IF NOT EXISTS questions (
     id SERIAL PRIMARY KEY,
@@ -7,6 +10,8 @@ CREATE TABLE IF NOT EXISTS questions (
     difficulty VARCHAR(20) CHECK (difficulty IN ('junior', 'middle', 'senior')),
     source_url VARCHAR(500),
     video_title VARCHAR(500),
+    probability FLOAT DEFAULT 0.0,  -- Вероятность выпадения вопроса (%)
+    approved BOOLEAN DEFAULT FALSE,  -- Одобрен ли вопрос админом
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -36,11 +41,22 @@ CREATE TABLE IF NOT EXISTS processed_videos (
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Таблица для связи вопросов и видео (для расчёта вероятности)
+CREATE TABLE IF NOT EXISTS question_video (
+    id SERIAL PRIMARY KEY,
+    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+    video_id INTEGER REFERENCES processed_videos(id) ON DELETE CASCADE,
+    UNIQUE(question_id, video_id)
+);
+
 -- Индексы для быстрого поиска
 CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);
 CREATE INDEX IF NOT EXISTS idx_questions_difficulty ON questions(difficulty);
+CREATE INDEX IF NOT EXISTS idx_questions_approved ON questions(approved);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON processing_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_client ON processing_tasks(client_id);
+CREATE INDEX IF NOT EXISTS idx_question_video_question ON question_video(question_id);
+CREATE INDEX IF NOT EXISTS idx_question_video_video ON question_video(video_id);
 
 -- Функция обновления времени
 CREATE OR REPLACE FUNCTION update_updated_at_column()
