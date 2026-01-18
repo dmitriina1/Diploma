@@ -1922,60 +1922,65 @@ async def delete_question(question_id: int):
         await conn.close()
 
 @app.post("/api/admin/approve-questions", tags=["Admin"])
-async def approve_questions(question_ids: List[int]):
-    """Одобрить вопросы, объединяя дубликаты с существующими одобренными"""
+async def approve_questions(data: Dict[str, List[int]]):
+    """Одобрить вопросы, объединяя семантические дубликаты с существующими одобренными"""
+    question_ids = data.get("question_ids", [])
     import asyncpg
-    from similarity_search import invalidate_similarity_cache
-    
+    from similarity_search import invalidate_similarity_cache, get_similar_questions
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         approved_count = 0
+        merged_count = 0
+
         for question_id in question_ids:
             # Получить текст вопроса
-            question_text = await conn.fetchval("SELECT question FROM questions WHERE id = $1", question_id)
-            if not question_text:
+            question_data = await conn.fetchrow("SELECT question, answer, topic, difficulty, source_url, video_title FROM questions WHERE id = $1", question_id)
+            if not question_data:
                 continue
-            
-            # Нормализовать текст
-            normalized = re.sub(r'\W+', '', question_text.lower())
-            
-            # Проверить, есть ли уже одобренный с таким же нормализованным текстом
-            existing_id = await conn.fetchval("""
-                SELECT id FROM questions 
-                WHERE approved = TRUE 
-                AND LOWER(REGEXP_REPLACE(question, '\\W+', '', 'g')) = $1
-                LIMIT 1
-            """, normalized)
-            
-            if existing_id:
-                # Получить source_url и video_title дубликата
-                duplicate_data = await conn.fetchrow("SELECT source_url, video_title FROM questions WHERE id = $1", question_id)
-                
-                # Обновить существующий вопрос: добавить source_url и video_title дубликата (если разный)
-                if duplicate_data['source_url'] and duplicate_data['source_url'] != await conn.fetchval("SELECT source_url FROM questions WHERE id = $1", existing_id):
+
+            question_text = question_data['question']
+
+            # Используем семантический поиск для поиска похожих одобренных вопросов
+            similar_questions = await get_similar_questions(question_text, question_id, limit=10)
+
+            # Фильтруем по порогу схожести (> 0.8 для объединения)
+            very_similar = [s for s in similar_questions if s['similarity_score'] > 0.8]
+
+            if very_similar:
+                # Найден очень похожий вопрос - объединяем
+                existing_id = very_similar[0]['id']  # Берем самый похожий
+
+                # Обновить существующий вопрос: добавить source_url и video_title (если разный)
+                if question_data['source_url'] and question_data['source_url'] != await conn.fetchval("SELECT source_url FROM questions WHERE id = $1", existing_id):
                     # Для простоты, обновим на новый source_url
-                    await conn.execute("UPDATE questions SET source_url = $1, video_title = $2 WHERE id = $3", 
-                                       duplicate_data['source_url'], duplicate_data['video_title'], existing_id)
-                
+                    await conn.execute("UPDATE questions SET source_url = $1, video_title = $2 WHERE id = $3",
+                                       question_data['source_url'], question_data['video_title'], existing_id)
+
                 # Объединить видео связи: перенести все связи с question_id на existing_id
                 await conn.execute("""
                     UPDATE question_video SET question_id = $1 WHERE question_id = $2
                 """, existing_id, question_id)
-                
+
                 # Удалить дубликат
                 await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
+                merged_count += 1
             else:
-                # Одобрить вопрос
+                # Нет очень похожих вопросов - одобряем как новый
                 await conn.execute("UPDATE questions SET approved = TRUE WHERE id = $1", question_id)
                 approved_count += 1
-        
+
         # Обновить вероятности для всех вопросов
         await update_probabilities(conn)
-        
+
         # Инвалидируем кэш поиска похожих вопросов
         await invalidate_similarity_cache()
-        
-        return {"message": f"Approved {approved_count} questions, merged duplicates"}
+
+        return {
+            "message": f"Одобрено {approved_count} вопросов, объединено {merged_count} дубликатов",
+            "approved_count": approved_count,
+            "merged_count": merged_count
+        }
     finally:
         await conn.close()
 

@@ -85,18 +85,39 @@ function AdminPanel() {
   };
 
   const handleApproveQuestions = async (questionIds) => {
+    // Сначала проверяем, есть ли вопросы с очень похожими (similarity > 0.8)
+    const questionsWithHighSimilarity = questions.filter(q =>
+      questionIds.includes(q.id) && q.similar_count > 0
+    );
+
+    if (questionsWithHighSimilarity.length > 0) {
+      // Показываем предупреждение
+      const confirmMessage = `Найдены вопросы, похожие на существующие:\n${
+        questionsWithHighSimilarity.map(q => `- "${q.question}" (похожих: ${q.similar_count})`).join('\n')
+      }\n\nПохожие вопросы будут автоматически объединены. Продолжить?`;
+
+      if (!window.confirm(confirmMessage)) {
+        return; // Пользователь отменил
+      }
+    }
+
     try {
       const response = await fetch(`${API_URL}/api/admin/approve-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(questionIds)
+        body: JSON.stringify({ question_ids: questionIds }) // Изменено на объект с ключом
       });
 
       if (response.ok) {
+        const result = await response.json();
+        alert(result.message); // Показываем результат
         fetchQuestions(); // Обновить список
+      } else {
+        alert('Ошибка при одобрении вопросов');
       }
     } catch (error) {
       console.error('Error approving questions:', error);
+      alert('Ошибка при одобрении вопросов');
     }
   };
 
