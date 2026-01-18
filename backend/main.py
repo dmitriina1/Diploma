@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import httpx
@@ -1854,10 +1854,19 @@ async def get_admin_questions():
         await conn.close()
 
 @app.post("/api/admin/questions", tags=["Admin"])
-async def create_question(question: str, answer: Optional[str] = None, topic: Optional[str] = "General", difficulty: Optional[str] = "middle", timecode: Optional[str] = None):
+async def create_question(data: dict = Body(...)):
     """Создать новый вопрос"""
     import asyncpg
     from similarity_search import invalidate_similarity_cache
+    
+    question = data.get("question")
+    answer = data.get("answer")
+    topic = data.get("topic", "General")
+    difficulty = data.get("difficulty", "middle")
+    timecode = data.get("timecode")
+    
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
     
     conn = await asyncpg.connect(DATABASE_URL)
     try:
