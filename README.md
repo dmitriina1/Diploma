@@ -48,6 +48,7 @@
 - ✅ **Локальное развёртывание** — все данные остаются на вашем сервере
 - ✅ **Таймкоды** — каждый вопрос привязан к моменту в видео
 - ✅ **Автокоррекция** — LLM исправляет ошибки распознавания речи
+- ✅ **Similarity Search** — семантический поиск дубликатов вопросов
 - ✅ **Real-time прогресс** — WebSocket + Polling для отслеживания
 - ✅ **Swagger UI** — интерактивная документация API
 
@@ -69,6 +70,10 @@
 │  │   yt-dlp    │  │    OpenRouter API       │  │ WhisperPool │  │
 │  │  (download) │  │  (extract questions)    │  │  (parallel) │  │
 │  └─────────────┘  └─────────────────────────┘  └─────────────┘  │
+│  ┌─────────────────────┐                                        │
+│  │ Similarity Search    │                                        │
+│  │ (embeddings + FAISS) │                                        │
+│  └─────────────────────┘                                        │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP
               ┌──────────────┼──────────────┐
@@ -107,12 +112,12 @@
 
 | RAM | CPU | Max реплик | Команда |
 |-----|-----|------------|---------|
-| 16 GB | 8 cores | 2 | `--scale whisper=2` |
-| 24 GB | 12 cores | 3 | `--scale whisper=3` |
-| 32 GB | 16 cores | 4 | `--scale whisper=4` |
-| 48 GB | 24 cores | 6 | `--scale whisper=6` |
+| 16 GB | 8 cores | 1 | `--scale whisper=1` |
+| 24 GB | 12 cores | 2 | `--scale whisper=2` (default) |
+| 32 GB | 16 cores | 3 | `--scale whisper=3` |
+| 48 GB | 24 cores | 4 | `--scale whisper=4` |
 
-> **Важно:** Каждая реплика Whisper потребляет ~3-4 GB RAM (модель medium + буферы)
+> **Важно:** Каждая реплика Whisper с medium моделью потребляет ~6-8 GB RAM (модель + буферы + similarity search)
 
 ### Особенности архитектуры:
 - **faster-whisper** — в 4-6x быстрее openai-whisper на CPU благодаря CTranslate2 и int8 квантизации
@@ -137,6 +142,9 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
                       OpenRouter API (LLM)
                                ↓
            Questions (JSON) + Answers + Timecodes
+                               ↓
+                 Similarity Search (FAISS)
+                      (дубликаты + кластеризация)
 ```
 
 ---
@@ -147,8 +155,7 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 | Компонент | Технология | Назначение |
 |-----------|------------|------------|
 | API Server | **FastAPI** | REST API, WebSocket, Swagger |
-| Транскрибация | **faster-whisper** (CTranslate2) | Speech-to-Text (medium, int8, **4-6x быстрее**) |
-| **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
+| Транскрибация | **faster-whisper** (CTranslate2) | Speech-to-Text (medium, int8, **4-6x быстрее**) || **Similarity Search** | **SentenceTransformer + FAISS** | Семантический поиск похожих вопросов || **YouTube Subtitles** | **yt-dlp** | Автоматические/ручные субтитры |
 | **Гибридная транскрипция** | Whisper + Subtitles | ~100% точность |
 | LLM | **OpenRouter** (Mistral, DeepSeek, и др.) | Извлечение вопросов (chunking + фильтрация) |
 | YouTube | **yt-dlp** | Скачивание аудио |
@@ -175,11 +182,11 @@ YouTube URL → yt-dlp → Audio (MP3) + Subtitles (VTT)
 
 ### Требования
 - Docker Desktop (Windows/Mac) или Docker Engine (Linux)
-- **28 GB RAM** (рекомендуется для 2 Whisper реплик)
-- 10 GB свободного места
+- **32 GB RAM** (рекомендуется для 2 Whisper реплик с medium моделью)
+- 15 GB свободного места
 - Интернет-соединение
 
-> **Минимум:** 12 GB RAM для 1 реплики Whisper. Каждая дополнительная реплика требует ~4 GB.
+> **Минимум:** 16 GB RAM для 1 реплики Whisper. Каждая реплика Whisper с medium моделью потребляет ~6-8 GB RAM.
 
 ### 1. Клонирование репозитория
 ```bash
@@ -438,6 +445,121 @@ Real-time обновления прогресса.
 | `Transcription error: ...` | Ошибка Whisper сервиса |
 | `LLM Error: ...` | Ошибка OpenRouter API при извлечении вопросов |
 | `Save error: ...` | Ошибка сохранения результата |
+
+---
+
+### Admin — Управление вопросами
+
+#### `GET /api/admin/questions`
+Получить все вопросы для администрирования.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "question": "Что такое REST API?",
+    "answer": "REST — архитектурный стиль...",
+    "timecode": "01:23",
+    "topic": "Backend",
+    "difficulty": "middle",
+    "probability": 25.0,
+    "sources": [
+      {"youtube_url": "https://youtube.com/watch?v=abc", "timecode": "01:23"},
+      {"youtube_url": "https://youtube.com/watch?v=def", "timecode": "05:45"}
+    ],
+    "similar_count": 2,
+    "approved": false
+  }
+]
+```
+
+#### `POST /api/admin/questions`
+Создать новый вопрос вручную.
+
+**Request:**
+```json
+{
+  "question": "Что такое микросервисы?",
+  "answer": "Микросервисы — архитектурный подход...",
+  "topic": "Backend",
+  "difficulty": "middle"
+}
+```
+
+#### `PUT /api/admin/questions/{question_id}`
+Обновить вопрос.
+
+**Request:**
+```json
+{
+  "question": "Обновленный вопрос",
+  "answer": "Обновленный ответ",
+  "topic": "Frontend",
+  "difficulty": "hard"
+}
+```
+
+#### `DELETE /api/admin/questions/{question_id}`
+Удалить вопрос.
+
+#### `POST /api/admin/approve-questions`
+Одобрить вопросы (с семантической дедупликацией).
+
+**Request:**
+```json
+{
+  "question_ids": [1, 2, 3]
+}
+```
+
+**Response:**
+```json
+{
+  "approved_count": 3,
+  "merged_count": 1,
+  "message": "Вопросы одобрены. 1 вопрос объединен с похожим."
+}
+```
+
+#### `GET /api/admin/similar-questions/{question_id}`
+Найти похожие вопросы для замены.
+
+**Response:**
+```json
+[
+  {
+    "id": 5,
+    "question": "Что такое RESTful API?",
+    "similarity_score": 0.92,
+    "probability": 15.0
+  },
+  {
+    "id": 12,
+    "question": "Объясните REST API",
+    "similarity_score": 0.88,
+    "probability": 30.0
+  }
+]
+```
+
+#### `PUT /api/admin/replace-question/{question_id}`
+Заменить вопрос на похожий (слияние).
+
+**Request:**
+```json
+{
+  "replace_with_id": 12
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Вопрос заменен. Метаданные объединены.",
+  "new_probability": 45.0
+}
+```
 
 ---
 

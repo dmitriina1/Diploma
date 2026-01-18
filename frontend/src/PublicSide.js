@@ -21,7 +21,7 @@ function PublicSide() {
 
   const fetchQuestions = async () => {
     try {
-      const response = await fetch('/api/questions');
+      const response = await fetch(`${API_URL}/api/questions`);
       const data = await response.json();
       setQuestions(data.questions || []);
     } catch (error) {

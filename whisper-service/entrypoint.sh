@@ -36,4 +36,4 @@ export CPU_THREADS=$CPU_THREADS
 
 # Запускаем приложение
 echo "🎯 Starting uvicorn with $CPU_THREADS CPU threads..."
-exec uvicorn main:app --host 0.0.0.0 --port 8001
+exec uvicorn main:app --host 0.0.0.0 --port 8000

@@ -22,7 +22,7 @@ function AdminPanel() {
 
   const fetchQuestions = async () => {
     try {
-      const response = await fetch('/api/admin/questions');
+      const response = await fetch(`${API_URL}/api/admin/questions`);
       const data = await response.json();
       setQuestions(data.questions || []);
     } catch (error) {
@@ -37,7 +37,7 @@ function AdminPanel() {
     setProcessingStatus({ progress: 0, step: 'Начинаем обработку...' });
 
     try {
-      const response = await fetch('/api/process-video', {
+      const response = await fetch(`${API_URL}/api/process-video`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ youtube_url: url, topic, level })
@@ -57,7 +57,7 @@ function AdminPanel() {
 
   const pollTask = async (taskId) => {
     try {
-      const response = await fetch(`/api/task/${taskId}`);
+      const response = await fetch(`${API_URL}/api/task/${taskId}`);
       const data = await response.json();
 
       setProcessingStatus({
@@ -86,7 +86,7 @@ function AdminPanel() {
 
   const handleApproveQuestions = async (questionIds) => {
     try {
-      const response = await fetch('/api/admin/approve-questions', {
+      const response = await fetch(`${API_URL}/api/admin/approve-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(questionIds)
@@ -102,7 +102,7 @@ function AdminPanel() {
 
   const handleShowSimilar = async (questionId) => {
     try {
-      const response = await fetch(`/api/admin/similar-questions/${questionId}`);
+      const response = await fetch(`${API_URL}/api/admin/similar-questions/${questionId}`);
       const data = await response.json();
       setSimilarQuestions(data.similar_questions || []);
       setShowSimilar(questionId);
@@ -113,7 +113,7 @@ function AdminPanel() {
 
   const handleReplaceQuestion = async (questionId, similarQuestionId) => {
     try {
-      const response = await fetch(`/api/admin/replace-question/${questionId}`, {
+      const response = await fetch(`${API_URL}/api/admin/replace-question/${questionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ similar_question_id: similarQuestionId })
@@ -130,7 +130,7 @@ function AdminPanel() {
 
   const handleEditQuestion = async (questionId, updatedData) => {
     try {
-      const response = await fetch(`/api/admin/questions/${questionId}`, {
+      const response = await fetch(`${API_URL}/api/admin/questions/${questionId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedData)
@@ -149,7 +149,7 @@ function AdminPanel() {
     if (!confirm('Вы уверены, что хотите удалить этот вопрос?')) return;
 
     try {
-      const response = await fetch(`/api/admin/questions/${questionId}`, {
+      const response = await fetch(`${API_URL}/api/admin/questions/${questionId}`, {
         method: 'DELETE'
       });
 
@@ -163,7 +163,7 @@ function AdminPanel() {
 
   const handleCreateQuestion = async () => {
     try {
-      const response = await fetch('/api/admin/questions', {
+      const response = await fetch(`${API_URL}/api/admin/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newQuestion)

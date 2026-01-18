@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS questions (
     difficulty VARCHAR(20) CHECK (difficulty IN ('junior', 'middle', 'senior')),
     source_url VARCHAR(500),
     video_title VARCHAR(500),
+    timecode VARCHAR(20),  -- Время в видео (например, "10:30")
     probability FLOAT DEFAULT 0.0,  -- Вероятность выпадения вопроса (%)
     approved BOOLEAN DEFAULT FALSE,  -- Одобрен ли вопрос админом
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -48,6 +49,9 @@ CREATE TABLE IF NOT EXISTS question_video (
     video_id INTEGER REFERENCES processed_videos(id) ON DELETE CASCADE,
     UNIQUE(question_id, video_id)
 );
+
+-- Добавить столбец timecode, если он не существует (для обратной совместимости)
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS timecode VARCHAR(20);
 
 -- Индексы для быстрого поиска
 CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);

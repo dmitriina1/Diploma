@@ -141,6 +141,8 @@ similarity_search = QuestionSimilaritySearch()
 
 async def get_similar_questions(question_text: str, question_id: int = None, limit: int = 10) -> List[Dict[str, Any]]:
     """Удобная функция для поиска похожих вопросов"""
+    if similarity_search.model is None:
+        return []
     return await similarity_search.find_similar(question_text, question_id, limit)
 
 async def initialize_similarity_search():

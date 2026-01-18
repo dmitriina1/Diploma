@@ -451,6 +451,11 @@ async def health():
         "temp_size_mb": round(temp_size_mb, 2)
     }
 
+@app.get("/favicon.ico", tags=["Status"])
+async def favicon():
+    """Favicon для браузера"""
+    return {"message": "No favicon"}
+
 @app.delete("/api/cleanup-temp", tags=["Status"])
 async def cleanup_all_temp():
     """Очистка всех временных файлов (для администрирования)"""
@@ -1813,7 +1818,7 @@ async def get_admin_questions():
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         questions = await conn.fetch("""
-            SELECT id, question, answer, topic, difficulty, probability, approved, source_url, video_title, created_at
+            SELECT id, question, answer, topic, difficulty, probability, timecode, approved, source_url, video_title, created_at
             FROM questions
             ORDER BY created_at DESC
         """)
@@ -1836,6 +1841,7 @@ async def get_admin_questions():
                 "topic": q["topic"],
                 "difficulty": q["difficulty"],
                 "probability": q["probability"],
+                "timecode": q["timecode"],
                 "approved": q["approved"],
                 "source_url": q["source_url"],
                 "video_title": q["video_title"],
@@ -1848,7 +1854,7 @@ async def get_admin_questions():
         await conn.close()
 
 @app.post("/api/admin/questions", tags=["Admin"])
-async def create_question(question: str, answer: Optional[str] = None, topic: Optional[str] = "General", difficulty: Optional[str] = "middle"):
+async def create_question(question: str, answer: Optional[str] = None, topic: Optional[str] = "General", difficulty: Optional[str] = "middle", timecode: Optional[str] = None):
     """Создать новый вопрос"""
     import asyncpg
     from similarity_search import invalidate_similarity_cache
@@ -1856,10 +1862,10 @@ async def create_question(question: str, answer: Optional[str] = None, topic: Op
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         question_id = await conn.fetchval("""
-            INSERT INTO questions (question, answer, topic, difficulty, approved)
-            VALUES ($1, $2, $3, $4, TRUE)
+            INSERT INTO questions (question, answer, topic, difficulty, timecode, approved)
+            VALUES ($1, $2, $3, $4, $5, TRUE)
             RETURNING id
-        """, question, answer, topic, difficulty)
+        """, question, answer, topic, difficulty, timecode)
         
         # Обновить вероятности
         await update_probabilities(conn)
@@ -1872,7 +1878,7 @@ async def create_question(question: str, answer: Optional[str] = None, topic: Op
         await conn.close()
 
 @app.put("/api/admin/questions/{question_id}", tags=["Admin"])
-async def update_question(question_id: int, question: str, answer: Optional[str] = None, topic: Optional[str] = None, difficulty: Optional[str] = None):
+async def update_question(question_id: int, question: str, answer: Optional[str] = None, topic: Optional[str] = None, difficulty: Optional[str] = None, timecode: Optional[str] = None):
     """Обновить вопрос"""
     import asyncpg
     from similarity_search import invalidate_similarity_cache
@@ -1881,9 +1887,9 @@ async def update_question(question_id: int, question: str, answer: Optional[str]
     try:
         await conn.execute("""
             UPDATE questions 
-            SET question = $1, answer = $2, topic = $3, difficulty = $4, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $5
-        """, question, answer, topic, difficulty, question_id)
+            SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $6
+        """, question, answer, topic, difficulty, timecode, question_id)
         
         # Обновить вероятности
         await update_probabilities(conn)
@@ -2041,14 +2047,17 @@ async def update_probabilities(conn):
     total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
     
     if total_videos > 0:
-        # Обновить вероятности - процент видео, где встречается вопрос
+        # Обновить вероятности - процент видео, где встречается вопрос (минимум 2 видео для расчёта)
         await conn.execute("""
             UPDATE questions 
-            SET probability = (
-                SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
-                FROM question_video qv
-                WHERE qv.question_id = questions.id
-            )
+            SET probability = CASE 
+                WHEN $1 > 1 THEN (
+                    SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
+                    FROM question_video qv
+                    WHERE qv.question_id = questions.id
+                )
+                ELSE 0.0  -- Не показывать вероятность при 1 видео
+            END
             WHERE approved = TRUE
         """, total_videos)
 
