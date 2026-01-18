@@ -16,6 +16,7 @@ function AdminPanel() {
   const [newQuestion, setNewQuestion] = useState({ question: '', answer: '', topic: 'General', difficulty: 'middle' });
   const [similarNewQuestions, setSimilarNewQuestions] = useState([]);
   const [showSimilarNewQuestions, setShowSimilarNewQuestions] = useState(false);
+  const [forceCreateMode, setForceCreateMode] = useState(false);
   const [activeTab, setActiveTab] = useState('unapproved');
 
   useEffect(() => {
@@ -164,25 +165,27 @@ function AdminPanel() {
   };
 
   const handleCreateQuestion = async () => {
+    // Если это режим принудительного создания, сразу создаем вопрос
+    if (forceCreateMode) {
+      await performCreateQuestion();
+      return;
+    }
+
     // Если похожие вопросы еще не проверялись, проверим их сначала
     if (!showSimilarNewQuestions && newQuestion.question.trim()) {
       const similar = await checkSimilarQuestions();
       // После проверки проверяем, нашлись ли похожие вопросы
       if (similar.length > 0) {
+        setForceCreateMode(true); // Включаем режим принудительного создания
         return; // Не создаем вопрос, показываем предупреждение
       }
     }
     
-    // Если есть похожие вопросы и пользователь все равно хочет создать, показываем подтверждение
-    if (showSimilarNewQuestions && similarNewQuestions.length > 0) {
-      const confirmed = window.confirm(
-        `Найдено ${similarNewQuestions.length} похожих вопросов. Вы уверены, что хотите создать новый вопрос?`
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
+    // Если похожих вопросов нет или они уже проверены, создаем вопрос
+    await performCreateQuestion();
+  };
 
+  const performCreateQuestion = async () => {
     try {
       const response = await fetch(`${API_URL}/api/admin/questions`, {
         method: 'POST',
@@ -194,11 +197,18 @@ function AdminPanel() {
         setNewQuestion({ question: '', answer: '', topic: 'General', difficulty: 'middle' });
         setSimilarNewQuestions([]);
         setShowSimilarNewQuestions(false);
+        setForceCreateMode(false);
         fetchQuestions();
       }
     } catch (error) {
       console.error('Error creating question:', error);
     }
+  };
+
+  const cancelCreateQuestion = () => {
+    setForceCreateMode(false);
+    setShowSimilarNewQuestions(false);
+    setSimilarNewQuestions([]);
   };
 
   const checkSimilarQuestions = async () => {
@@ -277,10 +287,11 @@ function AdminPanel() {
             value={newQuestion.question}
             onChange={(e) => {
               setNewQuestion({...newQuestion, question: e.target.value});
-              // Очищаем похожие вопросы при изменении текста
-              if (showSimilarNewQuestions) {
+              // Очищаем похожие вопросы и режим принудительного создания при изменении текста
+              if (showSimilarNewQuestions || forceCreateMode) {
                 setShowSimilarNewQuestions(false);
                 setSimilarNewQuestions([]);
+                setForceCreateMode(false);
               }
             }}
           />
@@ -331,12 +342,20 @@ function AdminPanel() {
           )}
           
           <div className="button-group">
-            <button type="button" onClick={checkSimilarQuestions} className="check-similar-btn">
-              Проверить похожие
-            </button>
-            <button onClick={handleCreateQuestion} disabled={!newQuestion.question.trim()}>
-              Создать
-            </button>
+            {forceCreateMode ? (
+              <>
+                <button onClick={handleCreateQuestion} className="force-create-btn">
+                  Создать все равно
+                </button>
+                <button type="button" onClick={cancelCreateQuestion} className="cancel-btn">
+                  Отмена
+                </button>
+              </>
+            ) : (
+              <button onClick={handleCreateQuestion} disabled={!newQuestion.question.trim()}>
+                Создать
+              </button>
+            )}
           </div>
         </div>
       </div>
