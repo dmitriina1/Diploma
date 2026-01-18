@@ -669,6 +669,25 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
     finally:
         await conn.close()
 
+@app.get("/api/questions/similar", tags=["Public"])
+async def get_similar_questions(query: str, limit: int = 5):
+    """
+    Поиск похожих вопросов по тексту
+    
+    - **query**: Текст для поиска похожих вопросов
+    - **limit**: Максимальное количество результатов (по умолчанию 5)
+    """
+    try:
+        from similarity_search import initialize_similarity_search
+        await initialize_similarity_search()  # Убедимся, что модель загружена
+        similar_questions = await search_similar_questions(query, None, limit)
+        return similar_questions
+    except Exception as e:
+        import traceback
+        print(f"Error in get_similar_questions: {e}")
+        traceback.print_exc()
+        return {"error": str(e)}
+
 @app.get("/api/export/{task_id}", tags=["Export"])
 async def export_questions_json(task_id: str):
     """Скачать вопросы задачи в формате JSON"""

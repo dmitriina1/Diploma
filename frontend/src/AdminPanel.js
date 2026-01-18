@@ -14,6 +14,8 @@ function AdminPanel() {
   const [similarQuestions, setSimilarQuestions] = useState([]);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [newQuestion, setNewQuestion] = useState({ question: '', answer: '', topic: 'General', difficulty: 'middle' });
+  const [similarNewQuestions, setSimilarNewQuestions] = useState([]);
+  const [showSimilarNewQuestions, setShowSimilarNewQuestions] = useState(false);
   const [activeTab, setActiveTab] = useState('unapproved');
 
   useEffect(() => {
@@ -171,10 +173,27 @@ function AdminPanel() {
 
       if (response.ok) {
         setNewQuestion({ question: '', answer: '', topic: 'General', difficulty: 'middle' });
+        setSimilarNewQuestions([]);
+        setShowSimilarNewQuestions(false);
         fetchQuestions();
       }
     } catch (error) {
       console.error('Error creating question:', error);
+    }
+  };
+
+  const checkSimilarQuestions = async () => {
+    if (!newQuestion.question.trim()) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/api/questions/similar?query=${encodeURIComponent(newQuestion.question)}&limit=5`);
+      if (response.ok) {
+        const data = await response.json();
+        setSimilarNewQuestions(data);
+        setShowSimilarNewQuestions(data.length > 0);
+      }
+    } catch (error) {
+      console.error('Error checking similar questions:', error);
     }
   };
 
@@ -235,7 +254,14 @@ function AdminPanel() {
             type="text"
             placeholder="Вопрос"
             value={newQuestion.question}
-            onChange={(e) => setNewQuestion({...newQuestion, question: e.target.value})}
+            onChange={(e) => {
+              setNewQuestion({...newQuestion, question: e.target.value});
+              // Очищаем похожие вопросы при изменении текста
+              if (showSimilarNewQuestions) {
+                setShowSimilarNewQuestions(false);
+                setSimilarNewQuestions([]);
+              }
+            }}
           />
           <input
             type="text"
@@ -254,7 +280,43 @@ function AdminPanel() {
             <option value="middle">Middle</option>
             <option value="senior">Senior</option>
           </select>
-          <button onClick={handleCreateQuestion}>Создать</button>
+          
+          {/* Предупреждение о похожих вопросах */}
+          {showSimilarNewQuestions && (
+            <div className="similar-warning">
+              <p>⚠️ Найдено {similarNewQuestions.length} похожих вопросов. Если вы уверены, что хотите создать новый вопрос, нажмите "Создать".</p>
+              <button 
+                type="button" 
+                onClick={() => setShowSimilarNewQuestions(!showSimilarNewQuestions)}
+                className="show-similar-btn"
+              >
+                {showSimilarNewQuestions ? 'Скрыть похожие' : 'Показать похожие'}
+              </button>
+            </div>
+          )}
+          
+          {/* Список похожих вопросов */}
+          {showSimilarNewQuestions && similarNewQuestions.length > 0 && (
+            <div className="similar-questions-list">
+              <h4>Похожие вопросы:</h4>
+              {similarNewQuestions.map((q, index) => (
+                <div key={index} className="similar-question-item">
+                  <strong>{q.question}</strong>
+                  <p>{q.answer}</p>
+                  <small>Тема: {q.topic} | Сложность: {q.difficulty}</small>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div className="button-group">
+            <button type="button" onClick={checkSimilarQuestions} className="check-similar-btn">
+              Проверить похожие
+            </button>
+            <button onClick={handleCreateQuestion} disabled={!newQuestion.question.trim()}>
+              Создать
+            </button>
+          </div>
         </div>
       </div>
 
