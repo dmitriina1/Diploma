@@ -206,9 +206,11 @@ function AdminPanel() {
   };
 
   const cancelCreateQuestion = () => {
+    // Очищаем все состояния и поля ввода
+    setNewQuestion({ question: '', answer: '', topic: 'General', difficulty: 'middle' });
+    setSimilarNewQuestions([]);
+    setShowSimilarNewQuestions(false);
     setForceCreateMode(false);
-    // Не сбрасываем similarNewQuestions и showSimilarNewQuestions,
-    // чтобы пользователь мог снова посмотреть похожие вопросы
   };
 
   const checkSimilarQuestions = async () => {
