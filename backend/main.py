@@ -1339,14 +1339,14 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
     provider = LLM_PROVIDER.lower()
     
     # Auto-select лучший доступный провайдер
-    # Groq приоритетнее — стабильнее и быстрее!
+    # OpenRouter приоритетнее — практически без лимитов!
     if provider == "auto":
-        if GROQ_API_KEY:
+        if OPENROUTER_API_KEY:
+            provider = "openrouter"
+        elif GROQ_API_KEY:
             provider = "groq"
         elif GEMINI_API_KEY:
             provider = "gemini"
-        elif OPENROUTER_API_KEY:
-            provider = "openrouter"
         else:
             provider = "ollama"
     
@@ -1364,47 +1364,37 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
 
 async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
     """OpenRouter API — бесплатные модели без лимитов для длинных видео!"""
-    try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://interview-prep.local",
-                    "X-Title": "Interview Prep"
-                },
-                json={
-                    "model": "mistralai/devstral-2512:free",  # Mistral Devstral — быстрый и бесплатный!
-                    "messages": [
-                        {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 8000
-                }
-            )
-            
-            if response.status_code != 200:
-                print(f"OpenRouter error: {response.status_code} - {response.text}")
-                # Fallback на Groq если OpenRouter не работает
-                if GROQ_API_KEY:
-                    print("⚠️ OpenRouter failed, falling back to Groq...")
-                    return await call_groq_api(prompt)
-                raise Exception(f"OpenRouter API error: {response.status_code}")
-            
-            result = response.json()
-            llm_response = result["choices"][0]["message"]["content"]
-            return parse_questions_from_llm(llm_response)
-    except (httpx.RemoteProtocolError, httpx.ConnectError, Exception) as e:
-        error_msg = str(e)
-        if "disconnected" in error_msg.lower() or "connection" in error_msg.lower():
-            print(f"⚠️ OpenRouter connection error: {error_msg}")
-            # Fallback на Groq при проблемах соединения
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        response = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://interview-prep.local",
+                "X-Title": "Interview Prep"
+            },
+            json={
+                "model": "mistralai/devstral-2512:free",  # Mistral Devstral — быстрый и бесплатный!
+                "messages": [
+                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 8000
+            }
+        )
+        
+        if response.status_code != 200:
+            print(f"OpenRouter error: {response.status_code} - {response.text}")
+            # Fallback на Groq если OpenRouter не работает
             if GROQ_API_KEY:
-                print("🔄 OpenRouter disconnected, falling back to Groq...")
+                print("⚠️ OpenRouter failed, falling back to Groq...")
                 return await call_groq_api(prompt)
-        raise e
+            raise Exception(f"OpenRouter API error: {response.status_code}")
+        
+        result = response.json()
+        llm_response = result["choices"][0]["message"]["content"]
+        return parse_questions_from_llm(llm_response)
 
 
 async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
@@ -2031,6 +2021,21 @@ async def replace_question(question_id: int, data: dict):
     finally:
         await conn.close()
 
+@app.post("/api/admin/recalculate-probabilities", tags=["Admin"])
+async def recalculate_probabilities():
+    """Пересчитать вероятности для всех вопросов (админ функция)"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+        return {"message": "Probabilities recalculated"}
+    finally:
+        await conn.close()
+
+
 async def update_probabilities(conn):
     """Обновить вероятности для всех вопросов - процент от общего количества видео"""
     
@@ -2038,16 +2043,20 @@ async def update_probabilities(conn):
     total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
     
     if total_videos > 0:
-        # Обновить вероятности - процент видео, где встречается вопрос (минимум 2 видео для расчёта)
+        # Обновить вероятности - процент видео, где встречается вопрос (только если вопрос в 2+ видео)
         await conn.execute("""
             UPDATE questions 
             SET probability = CASE 
-                WHEN $1 > 1 THEN (
+                WHEN (
+                    SELECT COUNT(DISTINCT qv.video_id)
+                    FROM question_video qv
+                    WHERE qv.question_id = questions.id
+                ) >= 2 THEN (
                     SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
                     FROM question_video qv
                     WHERE qv.question_id = questions.id
                 )
-                ELSE 0.0  -- Не показывать вероятность при 1 видео
+                ELSE 0.0  -- Не показывать вероятность если вопрос только в 1 видео
             END
             WHERE approved = TRUE
         """, total_videos)
