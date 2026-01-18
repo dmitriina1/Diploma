@@ -207,8 +207,8 @@ function AdminPanel() {
 
   const cancelCreateQuestion = () => {
     setForceCreateMode(false);
-    setShowSimilarNewQuestions(false);
-    setSimilarNewQuestions([]);
+    // Не сбрасываем similarNewQuestions и showSimilarNewQuestions,
+    // чтобы пользователь мог снова посмотреть похожие вопросы
   };
 
   const checkSimilarQuestions = async () => {
@@ -314,9 +314,14 @@ function AdminPanel() {
           </select>
           
           {/* Предупреждение о похожих вопросах */}
-          {showSimilarNewQuestions && (
+          {similarNewQuestions.length > 0 && (
             <div className="similar-warning">
-              <p>⚠️ Найдено {similarNewQuestions.length} похожих вопросов. Если вы уверены, что хотите создать новый вопрос, нажмите "Создать".</p>
+              <p>
+                {forceCreateMode 
+                  ? `⚠️ Найдено ${similarNewQuestions.length} похожих вопросов. Вы уверены, что хотите создать новый вопрос?`
+                  : `⚠️ Найдено ${similarNewQuestions.length} похожих вопросов. Если вы уверены, что хотите создать новый вопрос, нажмите "Создать".`
+                }
+              </p>
               <button 
                 type="button" 
                 onClick={() => setShowSimilarNewQuestions(!showSimilarNewQuestions)}
