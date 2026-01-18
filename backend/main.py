@@ -1339,14 +1339,14 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
     provider = LLM_PROVIDER.lower()
     
     # Auto-select лучший доступный провайдер
-    # OpenRouter приоритетнее — практически без лимитов!
+    # Groq приоритетнее — стабильнее и быстрее!
     if provider == "auto":
-        if OPENROUTER_API_KEY:
-            provider = "openrouter"
-        elif GROQ_API_KEY:
+        if GROQ_API_KEY:
             provider = "groq"
         elif GEMINI_API_KEY:
             provider = "gemini"
+        elif OPENROUTER_API_KEY:
+            provider = "openrouter"
         else:
             provider = "ollama"
     
@@ -1364,37 +1364,47 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
 
 async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
     """OpenRouter API — бесплатные модели без лимитов для длинных видео!"""
-    async with httpx.AsyncClient(timeout=180.0) as client:
-        response = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://interview-prep.local",
-                "X-Title": "Interview Prep"
-            },
-            json={
-                "model": "mistralai/devstral-2512:free",  # Mistral Devstral — быстрый и бесплатный!
-                "messages": [
-                    {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 8000
-            }
-        )
-        
-        if response.status_code != 200:
-            print(f"OpenRouter error: {response.status_code} - {response.text}")
-            # Fallback на Groq если OpenRouter не работает
+    try:
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://interview-prep.local",
+                    "X-Title": "Interview Prep"
+                },
+                json={
+                    "model": "mistralai/devstral-2512:free",  # Mistral Devstral — быстрый и бесплатный!
+                    "messages": [
+                        {"role": "system", "content": "Ты эксперт по анализу IT-собеседований. Извлекай только осмысленные технические вопросы и вопросы про опыт. Игнорируй междометия и переспросы. Отвечай ТОЛЬКО валидным JSON массивом."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 8000
+                }
+            )
+            
+            if response.status_code != 200:
+                print(f"OpenRouter error: {response.status_code} - {response.text}")
+                # Fallback на Groq если OpenRouter не работает
+                if GROQ_API_KEY:
+                    print("⚠️ OpenRouter failed, falling back to Groq...")
+                    return await call_groq_api(prompt)
+                raise Exception(f"OpenRouter API error: {response.status_code}")
+            
+            result = response.json()
+            llm_response = result["choices"][0]["message"]["content"]
+            return parse_questions_from_llm(llm_response)
+    except (httpx.RemoteProtocolError, httpx.ConnectError, Exception) as e:
+        error_msg = str(e)
+        if "disconnected" in error_msg.lower() or "connection" in error_msg.lower():
+            print(f"⚠️ OpenRouter connection error: {error_msg}")
+            # Fallback на Groq при проблемах соединения
             if GROQ_API_KEY:
-                print("⚠️ OpenRouter failed, falling back to Groq...")
+                print("🔄 OpenRouter disconnected, falling back to Groq...")
                 return await call_groq_api(prompt)
-            raise Exception(f"OpenRouter API error: {response.status_code}")
-        
-        result = response.json()
-        llm_response = result["choices"][0]["message"]["content"]
-        return parse_questions_from_llm(llm_response)
+        raise e
 
 
 async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
@@ -1923,50 +1933,19 @@ async def delete_question(question_id: int):
 
 @app.post("/api/admin/approve-questions", tags=["Admin"])
 async def approve_questions(data: Dict[str, List[int]]):
-    """Одобрить вопросы, объединяя семантические дубликаты с существующими одобренными"""
+    """Одобрить вопросы - дедупликация через кнопку 'Похожих'"""
     question_ids = data.get("question_ids", [])
     import asyncpg
-    from similarity_search import invalidate_similarity_cache, get_similar_questions
+    from similarity_search import invalidate_similarity_cache
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         approved_count = 0
-        merged_count = 0
 
         for question_id in question_ids:
-            # Получить текст вопроса
-            question_data = await conn.fetchrow("SELECT question, answer, topic, difficulty, source_url, video_title FROM questions WHERE id = $1", question_id)
-            if not question_data:
-                continue
-
-            question_text = question_data['question']
-
-            # Используем семантический поиск для поиска похожих одобренных вопросов
-            similar_questions = await get_similar_questions(question_text, question_id, limit=10)
-
-            # Фильтруем по порогу схожести (> 0.8 для объединения)
-            very_similar = [s for s in similar_questions if s['similarity_score'] > 0.8]
-
-            if very_similar:
-                # Найден очень похожий вопрос - объединяем
-                existing_id = very_similar[0]['id']  # Берем самый похожий
-
-                # Обновить существующий вопрос: добавить source_url и video_title (если разный)
-                if question_data['source_url'] and question_data['source_url'] != await conn.fetchval("SELECT source_url FROM questions WHERE id = $1", existing_id):
-                    # Для простоты, обновим на новый source_url
-                    await conn.execute("UPDATE questions SET source_url = $1, video_title = $2 WHERE id = $3",
-                                       question_data['source_url'], question_data['video_title'], existing_id)
-
-                # Объединить видео связи: перенести все связи с question_id на existing_id
-                await conn.execute("""
-                    UPDATE question_video SET question_id = $1 WHERE question_id = $2
-                """, existing_id, question_id)
-
-                # Удалить дубликат
-                await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
-                merged_count += 1
-            else:
-                # Нет очень похожих вопросов - одобряем как новый
+            # Проверить, что вопрос существует и не одобрен
+            question_exists = await conn.fetchval("SELECT 1 FROM questions WHERE id = $1 AND approved = FALSE", question_id)
+            if question_exists:
                 await conn.execute("UPDATE questions SET approved = TRUE WHERE id = $1", question_id)
                 approved_count += 1
 
@@ -1977,9 +1956,8 @@ async def approve_questions(data: Dict[str, List[int]]):
         await invalidate_similarity_cache()
 
         return {
-            "message": f"Одобрено {approved_count} вопросов, объединено {merged_count} дубликатов",
-            "approved_count": approved_count,
-            "merged_count": merged_count
+            "message": f"Одобрено {approved_count} вопросов",
+            "approved_count": approved_count
         }
     finally:
         await conn.close()
@@ -2010,38 +1988,46 @@ async def get_similar_questions(question_id: int):
 
 @app.put("/api/admin/replace-question/{question_id}", tags=["Admin"])
 async def replace_question(question_id: int, data: dict):
-    """Заменить вопрос на похожий"""
+    """Заменить вопрос на похожий - перенести связи и увеличить использование"""
     import asyncpg
     from similarity_search import invalidate_similarity_cache
-    
+
     new_question_id = data.get("similar_question_id")
     if not new_question_id:
         raise HTTPException(status_code=400, detail="similar_question_id required")
-    import asyncpg
-    from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        # Получить данные нового вопроса
-        new_data = await conn.fetchrow("""
-            SELECT question, answer, topic, difficulty
-            FROM questions WHERE id = $1
-        """, new_question_id)
-        
-        if not new_data:
-            raise HTTPException(status_code=404, detail="New question not found")
-        
-        # Обновить текущий вопрос
-        await conn.execute("""
-            UPDATE questions 
-            SET question = $1, answer = $2, topic = $3, difficulty = $4, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $5
-        """, new_data["question"], new_data["answer"], new_data["topic"], new_data["difficulty"], question_id)
-        
+        # Проверить, что новый вопрос существует и одобрен
+        new_question_exists = await conn.fetchval("SELECT 1 FROM questions WHERE id = $1 AND approved = TRUE", new_question_id)
+        if not new_question_exists:
+            raise HTTPException(status_code=404, detail="New question not found or not approved")
+
+        # Перенести видео-связи от старого вопроса к новому
+        duplicate_links = await conn.fetch("SELECT video_id FROM question_video WHERE question_id = $1", question_id)
+
+        for link in duplicate_links:
+            # Проверить, существует ли уже такая связь для нового вопроса
+            existing_link = await conn.fetchval("SELECT 1 FROM question_video WHERE question_id = $1 AND video_id = $2",
+                                               new_question_id, link['video_id'])
+            if not existing_link:
+                # Добавить связь, если её нет
+                await conn.execute("INSERT INTO question_video (question_id, video_id) VALUES ($1, $2)",
+                                 new_question_id, link['video_id'])
+
+        # Удалить старые связи
+        await conn.execute("DELETE FROM question_video WHERE question_id = $1", question_id)
+
+        # Удалить старый вопрос
+        await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
+
+        # Обновить вероятности для всех вопросов
+        await update_probabilities(conn)
+
         # Инвалидируем кэш поиска похожих вопросов
         await invalidate_similarity_cache()
-        
-        return {"message": "Question replaced"}
+
+        return {"message": "Question replaced successfully"}
     finally:
         await conn.close()
 
