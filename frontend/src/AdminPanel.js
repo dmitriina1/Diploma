@@ -164,6 +164,25 @@ function AdminPanel() {
   };
 
   const handleCreateQuestion = async () => {
+    // Если похожие вопросы еще не проверялись, проверим их сначала
+    if (!showSimilarNewQuestions && newQuestion.question.trim()) {
+      const similar = await checkSimilarQuestions();
+      // После проверки проверяем, нашлись ли похожие вопросы
+      if (similar.length > 0) {
+        return; // Не создаем вопрос, показываем предупреждение
+      }
+    }
+    
+    // Если есть похожие вопросы и пользователь все равно хочет создать, показываем подтверждение
+    if (showSimilarNewQuestions && similarNewQuestions.length > 0) {
+      const confirmed = window.confirm(
+        `Найдено ${similarNewQuestions.length} похожих вопросов. Вы уверены, что хотите создать новый вопрос?`
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     try {
       const response = await fetch(`${API_URL}/api/admin/questions`, {
         method: 'POST',
@@ -183,7 +202,7 @@ function AdminPanel() {
   };
 
   const checkSimilarQuestions = async () => {
-    if (!newQuestion.question.trim()) return;
+    if (!newQuestion.question.trim()) return [];
     
     try {
       const response = await fetch(`${API_URL}/api/questions/similar?query=${encodeURIComponent(newQuestion.question)}&limit=5`);
@@ -191,10 +210,12 @@ function AdminPanel() {
         const data = await response.json();
         setSimilarNewQuestions(data);
         setShowSimilarNewQuestions(data.length > 0);
+        return data;
       }
     } catch (error) {
       console.error('Error checking similar questions:', error);
     }
+    return [];
   };
 
   const getUnapprovedQuestions = () => {
