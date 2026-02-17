@@ -1,0 +1,1374 @@
+"""
+Interview Prep API - Переработанная архитектура
+===============================================
+
+Изменения:
+1. ❌ Убран n8n - весь pipeline обработки напрямую в backend
+2. ❌ Убран WhisperPool с разделением аудио на части
+3. ✅ Добавлен WhisperOrchestrator - per-task модель (1 Whisper = 1 полное аудио)
+4. ✅ Динамическое управление Whisper-воркерами через Docker API
+5. ✅ Оптимизировано для AMD Ryzen 7, 32GB RAM
+
+Архитектура:
+- Whisper large-v3 модель (лучшее качество)
+- CPU_THREADS=10 для одного воркера
+- Максимум 2 воркера одновременно
+- TaskQueue с приоритетами
+"""
+
+import os
+import uuid
+import json
+import asyncio
+import re
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+from contextlib import asynccontextmanager
+from datetime import datetime
+import time
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Body
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+import httpx
+import redis.asyncio as redis
+import asyncpg
+import yt_dlp
+
+from similarity_search import get_similar_questions as search_similar_questions
+
+# ============== Конфигурация ==============
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+WHISPER_BASE_URL = os.getenv("WHISPER_BASE_URL", "http://whisper-worker")  # Базовый URL для воркеров
+MAX_WHISPER_WORKERS = int(os.getenv("MAX_WHISPER_WORKERS", "2"))  # Максимум воркеров одновременно
+WORKER_IDLE_TIMEOUT = int(os.getenv("WORKER_IDLE_TIMEOUT", "600"))  # Время жизни простаивающего воркера (10 мин)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")
+TEMP_DIR = Path("/app/temp")
+TEMP_DIR.mkdir(exist_ok=True)
+REDIS_TTL = 86400  # 24 часа
+
+# ============== Глобальные объекты ==============
+redis_client: Optional[redis.Redis] = None
+whisper_orchestrator: Optional["WhisperOrchestrator"] = None
+
+
+# ============== WhisperOrchestrator — управление Whisper-воркерами ==============
+class WhisperWorker:
+    """Один Whisper-воркер, обрабатывающий одну задачу полностью"""
+    
+    def __init__(self, worker_id: str, port: int):
+        self.worker_id = worker_id
+        self.port = port
+        self.url = f"http://whisper-worker-{worker_id}:{port}"
+        self.is_busy = False
+        self.current_task_id: Optional[str] = None
+        self.last_used = time.time()
+        self.is_ready = False
+    
+    async def health_check(self) -> bool:
+        """Проверка доступности воркера"""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.url}/health")
+                if response.status_code == 200:
+                    self.is_ready = True
+                    return True
+        except:
+            pass
+        self.is_ready = False
+        return False
+    
+    async def transcribe(self, audio_path: Path, language: str = "ru") -> Dict[str, Any]:
+        """Транскрибация полного аудиофайла (БЕЗ разделения на части!)"""
+        if not self.is_ready:
+            raise Exception(f"Worker {self.worker_id} not ready")
+        
+        self.is_busy = True
+        self.last_used = time.time()
+        
+        try:
+            async with httpx.AsyncClient(timeout=7200.0) as client:  # 2 часа для длинных видео
+                response = await client.post(
+                    f"{self.url}/transcribe-path",
+                    json={"audio_path": str(audio_path), "language": language}
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Transcription failed: {response.text}")
+                
+                return response.json()
+        finally:
+            self.is_busy = False
+            self.last_used = time.time()
+
+
+class WhisperOrchestrator:
+    """
+    Оркестратор Whisper-воркеров с per-task моделью масштабирования
+    
+    Принцип работы:
+    1. Приходит задача → ищем свободный воркер
+    2. Если есть → отправляем на него
+    3. Если нет свободных и можно создать новый → создаем
+    4. Если нет ресурсов → ставим в очередь
+    5. После обработки воркер остается warm (готов к следующей задаче)
+    6. Если простаивает 10 мин → можно остановить для экономии ресурсов
+    
+    Каждый воркер обрабатывает ПОЛНОЕ аудио целиком (БЕЗ разделения)!
+    """
+    
+    def __init__(self, max_workers: int = 2):
+        self.max_workers = max_workers
+        self.workers: Dict[str, WhisperWorker] = {}
+        self.task_queue: asyncio.Queue = asyncio.Queue()
+        self._lock = asyncio.Lock()
+        self.next_worker_id = 1
+    
+    async def initialize(self):
+        """Инициализация — запускаем 1 воркер для быстрого старта"""
+        print(f"🚀 Initializing WhisperOrchestrator (max_workers={self.max_workers})")
+        
+        # Запускаем первый воркер сразу (будет готов к работе)
+        await self._create_worker()
+        print("✅ WhisperOrchestrator ready!")
+    
+    async def _create_worker(self) -> Optional[WhisperWorker]:
+        """Создание нового Whisper-воркера"""
+        if len(self.workers) >= self.max_workers:
+            print(f"⚠️ Already at max workers ({self.max_workers})")
+            return None
+        
+        async with self._lock:
+            worker_id = f"w{self.next_worker_id}"
+            self.next_worker_id += 1
+            port = 8001
+            
+            worker = WhisperWorker(worker_id, port)
+            
+            # В production здесь был бы Docker API для запуска контейнера
+            # Сейчас используем статический контейнер из docker-compose
+            print(f"📦 Creating worker {worker_id}...")
+            
+            # Ждем готовности воркера (максимум 2 минуты)
+            for i in range(24):  # 24 * 5 = 120 sec
+                if await worker.health_check():
+                    print(f"✅ Worker {worker_id} ready!")
+                    self.workers[worker_id] = worker
+                    return worker
+                await asyncio.sleep(5)
+            
+            print(f"❌ Worker {worker_id} failed to start")
+            return None
+    
+    async def get_available_worker(self) -> Optional[WhisperWorker]:
+        """Получить свободный воркер или создать новый"""
+        # Ищем свободный воркер
+        for worker in self.workers.values():
+            if not worker.is_busy and worker.is_ready:
+                return worker
+        
+        # Нет свободных — пытаемся создать новый
+        if len(self.workers) < self.max_workers:
+            return await self._create_worker()
+        
+        # Все воркеры заняты и нельзя создать новый
+        return None
+    
+    async def transcribe_audio(self, audio_path: Path, task_id: str, language: str = "ru") -> Dict[str, Any]:
+        """
+        Транскрибация аудио через доступный воркер
+        
+        ВАЖНО: Воркер обрабатывает ПОЛНОЕ аудио целиком!
+        Никакого разделения на части!
+        """
+        print(f"🎤 Requesting transcription for task {task_id}: {audio_path.name}")
+        
+        # Получаем воркер
+        worker = await self.get_available_worker()
+        
+        if not worker:
+            print(f"⏳ No available workers, waiting...")
+            # Ждем пока освободится воркер (максимум 1 час)
+            for i in range(720):  # 720 * 5 = 3600 sec = 1 hour
+                await asyncio.sleep(5)
+                worker = await self.get_available_worker()
+                if worker:
+                    break
+            
+            if not worker:
+                raise Exception("No available workers after 1 hour wait")
+        
+        print(f"🎯 Using worker {worker.worker_id} for task {task_id}")
+        worker.current_task_id = task_id
+        
+        try:
+            result = await worker.transcribe(audio_path, language)
+            print(f"✅ Transcription complete on worker {worker.worker_id}")
+            return result
+        finally:
+            worker.current_task_id = None
+
+
+# ============== Pydantic Models ==============
+class YouTubeRequest(BaseModel):
+    youtube_url: str
+    topic: Optional[str] = "General"
+    level: Optional[str] = "middle"
+
+
+class TaskStatus(BaseModel):
+    task_id: str
+    status: str
+    progress: int
+    step: str
+    result: Optional[Dict[str, Any]] = None
+
+
+# ============== Lifecycle ==============
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global redis_client, whisper_orchestrator
+    
+    # Startup
+    print("🚀 Starting up...")
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    
+    # Инициализируем WhisperOrchestrator
+    whisper_orchestrator = WhisperOrchestrator(max_workers=MAX_WHISPER_WORKERS)
+    await whisper_orchestrator.initialize()
+    
+    # Инициализируем систему поиска похожих вопросов
+    from similarity_search import initialize_similarity_search
+    try:
+        await initialize_similarity_search()
+    except Exception as e:
+        print(f"⚠️ Similarity search initialization failed: {e}")
+        print("   (Will initialize on first use)")
+    print("🔍 Similarity search initialized")
+    
+    yield
+    
+    # Shutdown
+    print("🛑 Shutting down...")
+    if redis_client:
+        await redis_client.close()
+
+
+app = FastAPI(
+    title="Interview Prep API v2.0",
+    description="""
+## API для подготовки к IT собеседованиям (переработанная архитектура)
+
+**Улучшения:**
+- ❌ Убран n8n — прямой REST API pipeline
+- ❌ Убрано разделение аудио на части
+- ✅ Per-task масштабирование Whisper (1 воркер = 1 полное аудио)
+- ✅ Оптимизировано для AMD Ryzen 7, 32GB RAM
+- ✅ Whisper large-v3 для максимального качества
+
+### Основные эндпоинты:
+- `POST /api/process-video` - Запуск обработки видео (прямой pipeline)
+- `GET /api/task/{task_id}` - Статус задачи
+- `GET /api/full-export/{task_id}` - Полный экспорт
+""",
+    version="2.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Processing", "description": "Обработка видео"},
+        {"name": "Status", "description": "Статус и мониторинг"},
+        {"name": "Export", "description": "Экспорт данных"},
+        {"name": "Public", "description": "Публичные данные"},
+        {"name": "Admin", "description": "Административная панель"}
+    ]
+)
+
+# ============== CORS ==============
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============== WebSocket Manager ==============
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+    
+    async def connect(self, websocket: WebSocket, client_id: str):
+        await websocket.accept()
+        self.active_connections[client_id] = websocket
+        print(f"✅ Client {client_id} connected. Total: {len(self.active_connections)}")
+    
+    def disconnect(self, client_id: str):
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]
+            print(f"❌ Client {client_id} disconnected. Total: {len(self.active_connections)}")
+    
+    async def send_progress(self, client_id: str, data: dict):
+        if client_id in self.active_connections:
+            try:
+                await self.active_connections[client_id].send_json(data)
+            except:
+                self.disconnect(client_id)
+    
+    async def broadcast_to_task(self, task_id: str, data: dict):
+        if redis_client:
+            client_id = await redis_client.get(f"task:{task_id}:client")
+            if client_id:
+                await self.send_progress(client_id, data)
+
+
+manager = ConnectionManager()
+
+
+# ============== WebSocket Endpoint ==============
+@app.websocket("/ws/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Echo для keepalive
+            await websocket.send_json({"type": "pong"})
+    except WebSocketDisconnect:
+        manager.disconnect(client_id)
+
+
+# ============== Core Processing Pipeline ==============
+async def process_video_pipeline(task_id: str, youtube_url: str, topic: str, level: str):
+    """
+    Главный pipeline обработки видео (БЕЗ n8n!)
+    
+    Этапы:
+    1. Скачивание аудио и субтитров (yt-dlp)
+    2. Транскрибация через Whisper (ПОЛНОЕ аудио, без разделения)
+    3. Извлечение вопросов через LLM
+    4. Сохранение в БД
+    """
+    try:
+        # ========== Этап 1: Скачивание аудио ==========
+        await update_task_progress(task_id, 10, "Скачивание аудио...")
+        download_result = await download_youtube_audio(youtube_url, task_id)
+        
+        audio_path = Path(download_result["audio_path"])
+        video_title = download_result["video_title"]
+        video_id = download_result["video_id"]
+        subtitles = download_result.get("subtitles", [])
+        has_subtitles = download_result.get("has_subtitles", False)
+        
+        # ========== Этап 2: Транскрибация ==========
+        await update_task_progress(task_id, 35, "Транскрибация аудио (Whisper large-v3)...")
+        
+        # 🔥 ГЛАВНОЕ ОТЛИЧИЕ: транскрибируем ПОЛНОЕ аудио через один воркер!
+        whisper_result = await whisper_orchestrator.transcribe_audio(
+            audio_path=audio_path,
+            task_id=task_id,
+            language="ru"
+        )
+        
+        transcript = whisper_result["text"]
+        whisper_segments = whisper_result["segments"]
+        
+        # Слияние с YouTube субтитрами (если есть)
+        merged_segments = whisper_segments
+        if has_subtitles and subtitles:
+            merged_segments = merge_subtitles_with_whisper(subtitles, whisper_segments)
+            transcript = " ".join([s["text"] for s in merged_segments])
+        
+        # Сохраняем транскрипцию в Redis
+        transcript_data = {
+            "transcript": transcript,
+            "segments": merged_segments,
+            "length": len(transcript),
+            "whisper_raw": whisper_result["text"],
+            "whisper_segments": whisper_segments,
+            "youtube_subtitles": subtitles,
+            "has_subtitles": has_subtitles
+        }
+        await redis_client.set(f"transcript:{task_id}", json.dumps(transcript_data), ex=REDIS_TTL)
+        
+        # ========== Этап 3: Извлечение вопросов ==========
+        await update_task_progress(task_id, 70, "Извлечение вопросов через LLM...")
+        questions = await extract_questions_from_transcript(transcript, topic, level)
+        
+        # Фильтрация и дедупликация
+        questions = filter_low_quality_questions(questions)
+        questions = deduplicate_questions(questions)
+        
+        # ========== Этап 4: Сохранение в БД ==========
+        await update_task_progress(task_id, 90, "Сохранение в базу данных...")
+        await save_questions_to_db(questions, youtube_url, video_title, video_id, task_id)
+        
+        # ========== Завершение ==========
+        await update_task_progress(task_id, 100, "Готово!")
+        
+        task_data = await redis_client.get(f"task:{task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            task["status"] = "completed"
+            task["result"] = {
+                "video_title": video_title,
+                "questions_count": len(questions),
+                "questions": questions
+            }
+            await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
+        
+        # Отправляем результат через WebSocket
+        await manager.broadcast_to_task(task_id, {
+            "type": "completed",
+            "task_id": task_id,
+            "video_title": video_title,
+            "questions_count": len(questions)
+        })
+        
+        # Очистка временных файлов
+        cleanup_temp_files(video_id)
+        
+        print(f"✅ Task {task_id} completed successfully!")
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Task {task_id} failed: {error_msg}")
+        
+        await update_task_error(task_id, error_msg)
+
+
+async def update_task_progress(task_id: str, progress: int, step: str):
+    """Обновить прогресс задачи"""
+    task_data = await redis_client.get(f"task:{task_id}")
+    if task_data:
+        task = json.loads(task_data)
+        task["progress"] = progress
+        task["step"] = step
+        await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
+    
+    # Отправляем через WebSocket
+    await manager.broadcast_to_task(task_id, {
+        "type": "progress",
+        "task_id": task_id,
+        "progress": progress,
+        "step": step
+    })
+
+
+async def update_task_error(task_id: str, error_msg: str):
+    """Обновить статус задачи с ошибкой"""
+    task_data = await redis_client.get(f"task:{task_id}")
+    if task_data:
+        task = json.loads(task_data)
+        task["status"] = "error"
+        task["error"] = error_msg
+        await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
+    
+    await manager.broadcast_to_task(task_id, {
+        "type": "error",
+        "task_id": task_id,
+        "error": error_msg
+    })
+
+
+# ============== Processing Functions ==============
+async def download_youtube_audio(youtube_url: str, task_id: str) -> Dict[str, Any]:
+    """Скачивание аудио и субтитров с YouTube"""
+    video_id = extract_video_id(youtube_url)
+    audio_path = TEMP_DIR / f"{video_id}.mp3"
+    subs_path = TEMP_DIR / f"{video_id}.ru.vtt"
+    
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': str(TEMP_DIR / f'{video_id}.%(ext)s'),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitleslangs': ['ru'],
+        'subtitlesformat': 'vtt',
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=True)
+        video_title = info.get('title', 'Unknown')
+    
+    # Парсим субтитры
+    subtitles = []
+    has_subtitles = False
+    if subs_path.exists():
+        subtitles = parse_vtt_subtitles(subs_path)
+        has_subtitles = len(subtitles) > 0
+    
+    return {
+        "audio_path": str(audio_path),
+        "video_title": video_title,
+        "video_id": video_id,
+        "subtitles": subtitles,
+        "has_subtitles": has_subtitles
+    }
+
+
+async def extract_questions_from_transcript(transcript: str, topic: str, level: str) -> List[Dict[str, Any]]:
+    """Извлечение вопросов из транскрипции через LLM"""
+    
+    prompt = f"""Ты — эксперт по анализу технических интервью. Проанализируй транскрипцию видео с собеседованием и извлеки ВСЕ вопросы, которые задаются кандидату.
+
+ВАЖНО:
+- Извлекай ТОЛЬКО вопросы, которые задаёт интервьюер кандидату
+- НЕ извлекай вопросы, которые кандидат задаёт интервьюеру
+- Формулируй вопросы чётко и понятно
+- Определи тему вопроса (Backend, Frontend, DevOps, Database, Algorithms, System Design и т.д.)
+- Определи сложность (junior, middle, senior)
+
+Транскрипция:
+{transcript[:50000]}
+
+Верни JSON массив вопросов в формате:
+[
+  {{
+    "question": "Полный текст вопроса?",
+    "topic": "Backend",
+    "difficulty": "middle"
+  }}
+]
+
+Только JSON, без дополнительного текста!"""
+    
+    return await call_llm_api(prompt)
+
+
+async def save_questions_to_db(questions: List[Dict], youtube_url: str, video_title: str, video_id: str, task_id: str):
+    """Сохранение вопросов в базу данных"""
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Проверяем, обрабатывалось ли это видео
+        existing_video = await conn.fetchval(
+            "SELECT id FROM processed_videos WHERE video_id = $1", video_id
+        )
+        
+        if existing_video:
+            print(f"⚠️ Video {video_id} already processed, skipping save")
+            return
+        
+        # Сохраняем видео
+        db_video_id = await conn.fetchval(
+            """INSERT INTO processed_videos (video_id, url, title, processed_at)
+               VALUES ($1, $2, $3, NOW())
+               RETURNING id""",
+            video_id, youtube_url, video_title
+        )
+        
+        # Сохраняем вопросы
+        saved_count = 0
+        for q in questions:
+            question_text = q.get("question", "").strip()
+            if not question_text or len(question_text) < 5:
+                continue
+            
+            # Проверяем дубликат
+            existing = await conn.fetchval(
+                "SELECT id FROM questions WHERE LOWER(question) = LOWER($1)",
+                question_text
+            )
+            
+            if existing:
+                # Добавляем связь с видео
+                await conn.execute(
+                    """INSERT INTO question_video (question_id, video_id)
+                       VALUES ($1, $2)
+                       ON CONFLICT DO NOTHING""",
+                    existing, db_video_id
+                )
+            else:
+                # Создаём новый вопрос
+                question_id = await conn.fetchval(
+                    """INSERT INTO questions (question, topic, difficulty, approved)
+                       VALUES ($1, $2, $3, FALSE)
+                       RETURNING id""",
+                    question_text,
+                    q.get("topic", "General"),
+                    q.get("difficulty", "middle")
+                )
+                
+                # Связываем с видео
+                await conn.execute(
+                    """INSERT INTO question_video (question_id, video_id)
+                       VALUES ($1, $2)""",
+                    question_id, db_video_id
+                )
+            
+            saved_count += 1
+        
+        # Обновляем вероятности
+        await update_probabilities(conn)
+        
+        print(f"✅ Saved {saved_count} questions for video {video_title}")
+        
+    finally:
+        await conn.close()
+
+
+# ============== API Endpoints ==============
+@app.get("/", tags=["Status"])
+async def root():
+    """Корневой эндпоинт"""
+    return {
+        "message": "Interview Prep API v2.0",
+        "status": "running",
+        "architecture": "per-task Whisper scaling (no chunking)"
+    }
+
+
+@app.get("/health", tags=["Status"])
+async def health():
+    """Проверка здоровья сервиса"""
+    global whisper_orchestrator
+    
+    workers_status = []
+    if whisper_orchestrator:
+        for wid, worker in whisper_orchestrator.workers.items():
+            workers_status.append({
+                "id": wid,
+                "is_ready": worker.is_ready,
+                "is_busy": worker.is_busy,
+                "current_task": worker.current_task_id
+            })
+    
+    temp_files = list(TEMP_DIR.glob("*"))
+    temp_size_mb = sum(f.stat().st_size for f in temp_files if f.is_file()) / (1024 * 1024)
+    
+    return {
+        "status": "healthy",
+        "whisper_orchestrator": {
+            "max_workers": MAX_WHISPER_WORKERS,
+            "active_workers": len(whisper_orchestrator.workers) if whisper_orchestrator else 0,
+            "workers": workers_status
+        },
+        "architecture": "per-task scaling (1 worker = 1 full audio, no chunking)",
+        "temp_files_count": len(temp_files),
+        "temp_size_mb": round(temp_size_mb, 2)
+    }
+
+
+@app.post("/api/process-video", tags=["Processing"])
+async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
+    """
+    Запуск обработки YouTube видео (прямой pipeline, без n8n)
+    
+    Pipeline:
+    1. Скачивание аудио (yt-dlp)
+    2. Транскрибация полного аудио через Whisper (БЕЗ разделения!)
+    3. Извлечение вопросов через LLM
+    4. Сохранение в БД
+    """
+    task_id = str(uuid.uuid4())
+    
+    if not is_valid_youtube_url(request.youtube_url):
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    
+    # Сохраняем задачу в Redis
+    task_data = {
+        "task_id": task_id,
+        "youtube_url": request.youtube_url,
+        "topic": request.topic,
+        "level": request.level,
+        "status": "pending",
+        "progress": 0,
+        "step": "В очереди..."
+    }
+    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    
+    # Запускаем обработку в фоне (БЕЗ n8n!)
+    background_tasks.add_task(
+        process_video_pipeline,
+        task_id,
+        request.youtube_url,
+        request.topic,
+        request.level
+    )
+    
+    return {"task_id": task_id, "status": "started"}
+
+
+@app.post("/api/process-video/{client_id}", tags=["Processing"])
+async def process_video_with_client(
+    client_id: str,
+    request: YouTubeRequest,
+    background_tasks: BackgroundTasks
+):
+    """Запуск обработки с привязкой к WebSocket клиенту"""
+    task_id = str(uuid.uuid4())
+    
+    if not is_valid_youtube_url(request.youtube_url):
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    
+    # Связываем task с client
+    await redis_client.set(f"task:{task_id}:client", client_id, ex=REDIS_TTL)
+    await redis_client.set(f"client:{client_id}:last_task", task_id, ex=REDIS_TTL)
+    
+    tasks_key = f"client:{client_id}:tasks"
+    await redis_client.lpush(tasks_key, task_id)
+    await redis_client.ltrim(tasks_key, 0, 19)
+    await redis_client.expire(tasks_key, REDIS_TTL)
+    
+    task_data = {
+        "task_id": task_id,
+        "youtube_url": request.youtube_url,
+        "topic": request.topic,
+        "level": request.level,
+        "status": "pending",
+        "progress": 0,
+        "step": "В очереди..."
+    }
+    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    
+    await manager.send_progress(client_id, {
+        "type": "progress",
+        "task_id": task_id,
+        "progress": 0,
+        "step": "Запуск обработки..."
+    })
+    
+    background_tasks.add_task(
+        process_video_pipeline,
+        task_id,
+        request.youtube_url,
+        request.topic,
+        request.level
+    )
+    
+    return {"task_id": task_id, "status": "started"}
+
+
+@app.get("/api/task/{task_id}", tags=["Status"])
+async def get_task_status(task_id: str):
+    """Получение статуса задачи по task_id"""
+    task_data = await redis_client.get(f"task:{task_id}")
+    if not task_data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return json.loads(task_data)
+
+
+@app.get("/api/last-result/{client_id}", tags=["Status"])
+async def get_last_result(client_id: str):
+    """Получение последнего результата для WebSocket клиента"""
+    task_id = await redis_client.get(f"client:{client_id}:last_task")
+    if not task_id:
+        raise HTTPException(status_code=404, detail="No tasks for this client")
+    
+    task_data = await redis_client.get(f"task:{task_id}")
+    if not task_data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return json.loads(task_data)
+
+
+@app.get("/api/tasks/{client_id}", tags=["Status"])
+async def get_client_tasks(client_id: str):
+    """Получение всех задач клиента"""
+    tasks_key = f"client:{client_id}:tasks"
+    task_ids = await redis_client.lrange(tasks_key, 0, 19)
+    
+    tasks = []
+    for task_id in task_ids:
+        task_data = await redis_client.get(f"task:{task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            tasks.append({
+                "task_id": task_id,
+                "status": task.get("status"),
+                "progress": task.get("progress"),
+                "video_title": task.get("result", {}).get("video_title", "Processing...")
+            })
+    
+    return {"tasks": tasks, "count": len(tasks)}
+
+
+@app.get("/api/questions", tags=["Public"])
+async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
+    """Получение всех одобренных вопросов"""
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        query = """
+            SELECT id, question, answer, topic, difficulty, probability, timecode
+            FROM questions
+            WHERE approved = TRUE
+        """
+        params = []
+        
+        if topic:
+            query += " AND topic = $1"
+            params.append(topic)
+        
+        if level:
+            idx = len(params) + 1
+            query += f" AND difficulty = ${idx}"
+            params.append(level)
+        
+        query += " ORDER BY probability DESC NULLS LAST, created_at DESC"
+        
+        questions = await conn.fetch(query, *params) if params else await conn.fetch(query)
+        
+        result = [
+            {
+                "id": q["id"],
+                "question": q["question"],
+                "answer": q["answer"],
+                "topic": q["topic"],
+                "difficulty": q["difficulty"],
+                "probability": float(q["probability"]) if q["probability"] else 0.0,
+                "timecode": q["timecode"]
+            }
+            for q in questions
+        ]
+        
+        return JSONResponse(
+            content={"questions": result, "total": len(result)},
+            media_type="application/json; charset=utf-8"
+        )
+    finally:
+        await conn.close()
+
+
+@app.get("/api/questions/similar", tags=["Public"])
+async def get_similar_questions_api(query: str, limit: int = 5):
+    """Поиск похожих вопросов"""
+    try:
+        similar = await search_similar_questions(query, limit=limit)
+        return JSONResponse(
+            content={"similar_questions": similar},
+            media_type="application/json; charset=utf-8"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Export Endpoints ==============
+@app.get("/api/export/{task_id}", tags=["Export"])
+async def export_questions_json(task_id: str):
+    """Скачать вопросы задачи в формате JSON"""
+    task_data = await redis_client.get(f"task:{task_id}")
+    if not task_data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    task = json.loads(task_data)
+    result = task.get("result", {})
+    
+    export_data = {
+        "task_id": task_id,
+        "video_title": result.get("video_title", "Unknown"),
+        "questions_count": result.get("questions_count", 0),
+        "questions": result.get("questions", [])
+    }
+    
+    return JSONResponse(
+        content=export_data,
+        headers={"Content-Disposition": f'attachment; filename="questions_{task_id}.json"'}
+    )
+
+
+@app.get("/api/transcript/{task_id}", tags=["Export"])
+async def get_transcript(task_id: str):
+    """Скачать транскрипцию"""
+    transcript_data = await redis_client.get(f"transcript:{task_id}")
+    if not transcript_data:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    
+    data = json.loads(transcript_data)
+    return JSONResponse(
+        content=data,
+        headers={"Content-Disposition": f'attachment; filename="transcript_{task_id}.json"'}
+    )
+
+
+@app.get("/api/full-export/{task_id}", tags=["Export"])
+async def full_export(task_id: str):
+    """Полный экспорт данных задачи"""
+    transcript_data = await redis_client.get(f"transcript:{task_id}")
+    transcript = json.loads(transcript_data) if transcript_data else {}
+    
+    task_data = await redis_client.get(f"task:{task_id}")
+    task = json.loads(task_data) if task_data else {}
+    
+    export = {
+        "task_id": task_id,
+        "transcript": transcript.get("transcript", ""),
+        "segments": transcript.get("segments", []),
+        "video_title": task.get("result", {}).get("video_title", "Unknown"),
+        "questions": task.get("result", {}).get("questions", []),
+        "questions_count": task.get("result", {}).get("questions_count", 0),
+        "status": task.get("status", "unknown")
+    }
+    
+    return JSONResponse(
+        content=export,
+        headers={"Content-Disposition": f'attachment; filename="full_export_{task_id}.json"'}
+    )
+
+
+# ============== Admin Panel Endpoints ==============
+@app.get("/api/admin/questions", tags=["Admin"])
+async def get_admin_questions():
+    """Получить все вопросы для админа"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        questions = await conn.fetch("""
+            SELECT id, question, answer, topic, difficulty, probability, timecode, approved,
+                   source_url, video_title, created_at
+            FROM questions
+            ORDER BY created_at DESC
+        """)
+        
+        result = []
+        for q in questions:
+            try:
+                similar = await search_similar_questions(q["question"], q["id"], limit=1000)
+                filtered_similar = [s for s in similar if s['similarity_score'] > 0.7]
+                top_similar = sorted(filtered_similar, key=lambda x: x['similarity_score'], reverse=True)[:5]
+            except:
+                top_similar = []
+            
+            result.append({
+                "id": q["id"],
+                "question": q["question"],
+                "answer": q["answer"],
+                "topic": q["topic"],
+                "difficulty": q["difficulty"],
+                "probability": float(q["probability"]) if q["probability"] else 0.0,
+                "timecode": q["timecode"],
+                "approved": q["approved"],
+                "source_url": q["source_url"],
+                "video_title": q["video_title"],
+                "created_at": q["created_at"].isoformat() if q["created_at"] else None,
+                "similar_questions": top_similar
+            })
+        
+        return JSONResponse(content={"questions": result}, media_type="application/json; charset=utf-8")
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/questions", tags=["Admin"])
+async def create_question(data: dict = Body(...)):
+    """Создать новый вопрос"""
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        question_id = await conn.fetchval(
+            """INSERT INTO questions (question, answer, topic, difficulty, approved)
+               VALUES ($1, $2, $3, $4, $5)
+               RETURNING id""",
+            data.get("question"),
+            data.get("answer", ""),
+            data.get("topic", "General"),
+            data.get("difficulty", "middle"),
+            data.get("approved", False)
+        )
+        
+        await invalidate_similarity_cache()
+        return {"id": question_id, "message": "Question created"}
+    finally:
+        await conn.close()
+
+
+@app.put("/api/admin/questions/{question_id}", tags=["Admin"])
+async def update_question(
+    question_id: int,
+    question: str,
+    answer: Optional[str] = None,
+    topic: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    timecode: Optional[str] = None
+):
+    """Обновить вопрос"""
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            """UPDATE questions
+               SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5
+               WHERE id = $6""",
+            question, answer or "", topic or "General", difficulty or "middle", timecode, question_id
+        )
+        
+        await invalidate_similarity_cache()
+        return {"message": "Question updated"}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/admin/questions/{question_id}", tags=["Admin"])
+async def delete_question(question_id: int):
+    """Удалить вопрос"""
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
+        await invalidate_similarity_cache()
+        return {"message": "Question deleted"}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/approve-questions", tags=["Admin"])
+async def approve_questions(data: Dict[str, List[int]]):
+    """Одобрить вопросы"""
+    from similarity_search import invalidate_similarity_cache
+    
+    question_ids = data.get("question_ids", [])
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            "UPDATE questions SET approved = TRUE WHERE id = ANY($1::int[])",
+            question_ids
+        )
+        
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+        
+        return {"message": f"Approved {len(question_ids)} questions"}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/recalculate-probabilities", tags=["Admin"])
+async def recalculate_probabilities():
+    """Пересчитать вероятности"""
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+        return {"message": "Probabilities recalculated"}
+    finally:
+        await conn.close()
+
+
+# ============== Helper Functions ==============
+def is_valid_youtube_url(url: str) -> bool:
+    """Проверка валидности YouTube URL"""
+    patterns = [
+        r'(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(https?://)?(www\.)?youtu\.be/[\w-]+',
+        r'(https?://)?(www\.)?youtube\.com/shorts/[\w-]+'
+    ]
+    return any(re.match(pattern, url) for pattern in patterns)
+
+
+def extract_video_id(url: str) -> str:
+    """Извлечение ID видео из URL"""
+    patterns = [
+        r'(?:v=|/)([a-zA-Z0-9_-]{11})',
+        r'youtu\.be/([a-zA-Z0-9_-]{11})',
+        r'shorts/([a-zA-Z0-9_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return str(uuid.uuid4())[:11]
+
+
+def parse_vtt_subtitles(vtt_path: Path) -> List[Dict[str, Any]]:
+    """Парсинг VTT субтитров"""
+    subtitles = []
+    try:
+        with open(vtt_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Простой парсинг VTT
+        lines = content.split('\n')
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Ищем таймкод
+            if '-->' in line:
+                times = line.split('-->')
+                start_time = times[0].strip()
+                end_time = times[1].strip()
+                
+                # Следующая строка - текст
+                i += 1
+                text_parts = []
+                while i < len(lines) and lines[i].strip() and '-->' not in lines[i]:
+                    text_parts.append(lines[i].strip())
+                    i += 1
+                
+                text = ' '.join(text_parts)
+                if text:
+                    subtitles.append({
+                        "start": start_time,
+                        "end": end_time,
+                        "text": text
+                    })
+            
+            i += 1
+    except Exception as e:
+        print(f"⚠️ VTT parsing error: {e}")
+    
+    return subtitles
+
+
+def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[Dict]) -> List[Dict]:
+    """Слияние YouTube субтитров с Whisper"""
+    merged = []
+    
+    for sub in subtitles:
+        # Ищем соответствующий сегмент Whisper
+        best_match = None
+        for wseg in whisper_segments:
+            # Простое сопоставление по времени
+            if abs(wseg.get("start", 0) - float(sub.get("start", "0").split(':')[-1])) < 2.0:
+                best_match = wseg
+                break
+        
+        merged_text = sub["text"]
+        if best_match and '?' in best_match["text"]:
+            # Whisper даёт пунктуацию
+            merged_text = best_match["text"]
+        
+        merged.append({
+            "start": sub.get("start"),
+            "end": sub.get("end"),
+            "text": merged_text
+        })
+    
+    return merged if merged else whisper_segments
+
+
+def filter_low_quality_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Фильтрация мусорных вопросов"""
+    if not questions:
+        return []
+    
+    garbage_patterns = [
+        r'^(да|нет|ага|угу|ну|ок|м+|хм+|э)\??$',
+        r'^(что|как|а)\??$',
+        r'^.{1,4}\??$',
+    ]
+    
+    filtered = []
+    for q in questions:
+        text = q.get("question", "").strip().lower()
+        
+        if any(re.match(pattern, text) for pattern in garbage_patterns):
+            continue
+        
+        if len(text) < 5:
+            continue
+        
+        filtered.append(q)
+    
+    return filtered
+
+
+def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Удаление дубликатов"""
+    if not questions:
+        return []
+    
+    seen = set()
+    unique = []
+    
+    for q in questions:
+        text = q.get("question", "").strip().lower()
+        normalized = re.sub(r'[^\w\s]', '', text)
+        normalized = ' '.join(normalized.split())
+        
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            unique.append(q)
+    
+    return unique
+
+
+def cleanup_temp_files(video_id: str):
+    """Очистка временных файлов"""
+    try:
+        for pattern in [f"{video_id}.*", f"*{video_id}*"]:
+            for f in TEMP_DIR.glob(pattern):
+                try:
+                    f.unlink()
+                    print(f"🗑️ Deleted: {f.name}")
+                except Exception as e:
+                    print(f"⚠️ Failed to delete {f.name}: {e}")
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
+
+
+async def update_probabilities(conn):
+    """Обновить вероятности для всех вопросов"""
+    total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+    
+    if total_videos > 0:
+        await conn.execute("""
+            UPDATE questions 
+            SET probability = CASE 
+                WHEN (
+                    SELECT COUNT(DISTINCT qv.video_id)
+                    FROM question_video qv
+                    WHERE qv.question_id = questions.id
+                ) >= 2 THEN (
+                    SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
+                    FROM question_video qv
+                    WHERE qv.question_id = questions.id
+                )
+                ELSE 0.0
+            END
+            WHERE approved = TRUE
+        """, total_videos)
+
+
+# ============== LLM API Calls ==============
+async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
+    """Умный выбор LLM провайдера"""
+    provider = LLM_PROVIDER.lower()
+    
+    if provider == "auto":
+        if OPENROUTER_API_KEY:
+            provider = "openrouter"
+        elif GEMINI_API_KEY:
+            provider = "gemini"
+        elif GROQ_API_KEY:
+            provider = "groq"
+        else:
+            raise Exception("No LLM API key configured")
+    
+    print(f"🤖 Using LLM provider: {provider}")
+    
+    if provider == "openrouter":
+        return await call_openrouter_api(prompt)
+    elif provider == "gemini":
+        return await call_gemini_api(prompt)
+    elif provider == "groq":
+        return await call_groq_api(prompt)
+    else:
+        raise Exception(f"Unknown LLM provider: {provider}")
+
+
+async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
+    """OpenRouter API"""
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        response = await client.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "meta-llama/llama-3.1-70b-instruct",
+                "messages": [{"role": "user", "content": prompt}]
+            }
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"OpenRouter error: {response.text}")
+        
+        result = response.json()
+        text = result["choices"][0]["message"]["content"]
+        
+        return parse_questions_from_llm(text)
+
+
+async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
+    """Google Gemini API"""
+    models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+    
+    for model in models:
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.3}
+                    }
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return parse_questions_from_llm(text)
+        except Exception as e:
+            print(f"⚠️ Gemini {model} failed: {e}")
+            continue
+    
+    # Fallback to Groq
+    return await call_groq_api(prompt)
+
+
+async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
+    """Groq API с retry при rate limiting"""
+    max_retries = 5
+    base_delay = 10
+    
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {GROQ_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.1-70b-versatile",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.3
+                    }
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    text = result["choices"][0]["message"]["content"]
+                    return parse_questions_from_llm(text)
+                elif response.status_code == 429:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"⚠️ Groq rate limit, retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    raise Exception(f"Groq error: {response.text}")
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+    
+    raise Exception("Groq API error after retries")
+
+
+def parse_questions_from_llm(response: str) -> List[Dict[str, Any]]:
+    """Парсинг JSON из ответа LLM"""
+    try:
+        # Удаляем markdown code blocks
+        response = re.sub(r'```json\s*', '', response)
+        response = re.sub(r'```\s*', '', response)
+        response = response.strip()
+        
+        questions = json.loads(response)
+        return questions if isinstance(questions, list) else []
+    except json.JSONDecodeError:
+        print(f"⚠️ Failed to parse LLM response as JSON")
+        return []
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

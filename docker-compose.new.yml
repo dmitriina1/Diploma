@@ -1,0 +1,153 @@
+services:
+  # ============== PostgreSQL ==============
+  postgres:
+    image: postgres:15-alpine
+    container_name: diploma-postgres
+    environment:
+      POSTGRES_USER: diploma
+      POSTGRES_PASSWORD: diploma123
+      POSTGRES_DB: interview_prep
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diploma -d interview_prep"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diploma-network
+
+  # ============== Redis (для очередей и кэша) ==============
+  redis:
+    image: redis:7-alpine
+    container_name: diploma-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diploma-network
+
+  # ============== Whisper Worker (оптимизировано для R7 32GB) ==============
+  # 
+  # Архитектура: Per-Task Scaling
+  # - 1 воркер обрабатывает 1 ПОЛНОЕ аудио (БЕЗ разделения на части!)
+  # - Если приходит еще задача → поднимается еще воркер
+  # - Модель: large-v3 (лучшее качество)
+  # - CPU_THREADS=10 для оптимальной производительности на R7
+  # - Память: до 14GB на воркер
+  # - Максимум: 2 воркера одновременно (2 * 14GB = 28GB, оставляя 4GB для системы)
+  #
+  whisper-worker:
+    build:
+      context: ./whisper-service
+      dockerfile: Dockerfile
+    container_name: diploma-whisper-worker
+    environment:
+      - WHISPER_MODEL=large-v3  # Лучшая модель для максимального качества
+      - CPU_THREADS=10          # Оптимально для AMD Ryzen 7 (8 ядер / 16 потоков)
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      - HF_HUB_DISABLE_XET=1
+    volumes:
+      - whisper_cache:/root/.cache/whisper  # Кэш модели (один раз загружается)
+      - shared_temp:/app/temp                # Общая папка для аудио файлов
+    ports:
+      - "8001:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s  # 3 минуты для загрузки large-v3
+    networks:
+      - diploma-network
+    deploy:
+      resources:
+        limits:
+          memory: 14G  # Лимит памяти на воркер (large-v3 требует ~12-14GB)
+        reservations:
+          memory: 10G  # Резервируем минимум 10GB
+
+  # ============== Backend (FastAPI) ==============
+  # Переработанная архитектура:
+  # - ❌ Убран n8n — весь pipeline обработки напрямую в backend
+  # - ✅ WhisperOrchestrator управляет воркерами
+  # - ✅ Прямой REST API без прослоек
+  #
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: diploma-backend
+    environment:
+      - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
+      - REDIS_URL=redis://redis:6379
+      - WHISPER_BASE_URL=http://whisper-worker:8001
+      - MAX_WHISPER_WORKERS=2          # Максимум 2 воркера одновременно (28GB total)
+      - WORKER_IDLE_TIMEOUT=600        # 10 мин простоя перед остановкой воркера
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-auto}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - shared_temp:/app/temp  # Общая папка для обмена файлами с Whisper
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diploma-network
+
+  # ============== Frontend (React) ==============
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: diploma-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_WS_URL=ws://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - diploma-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  whisper_cache:  # Кэш модели Whisper large-v3 (~6GB, загружается один раз)
+  shared_temp:    # Общая папка для временных файлов (аудио)
+
+networks:
+  diploma-network:
+    driver: bridge
+
+
+# ============== Масштабирование ==============
+#
+# Для обработки нескольких задач одновременно:
+#   docker-compose up -d --scale whisper-worker=2
+#
+# Примечания:
+# - Каждый воркер требует 12-14GB RAM
+# - На R7 32GB можно запустить максимум 2 воркера комфортно
+# - Каждый воркер обрабатывает ПОЛНОЕ аудио (БЕЗ разделения!)
+# - Backend автоматически распределяет задачи между воркерами
+#
