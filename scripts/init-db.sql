@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS processed_videos (
     id SERIAL PRIMARY KEY,
     youtube_url VARCHAR(500) UNIQUE NOT NULL,
     video_id VARCHAR(50) NOT NULL,
+    platform VARCHAR(50) DEFAULT 'youtube',  -- Платформа: youtube, vk, rutube, ok, etc.
     title VARCHAR(500),
     transcript TEXT,
     questions_count INTEGER DEFAULT 0,
@@ -61,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON processing_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_client ON processing_tasks(client_id);
 CREATE INDEX IF NOT EXISTS idx_question_video_question ON question_video(question_id);
 CREATE INDEX IF NOT EXISTS idx_question_video_video ON question_video(video_id);
+CREATE INDEX IF NOT EXISTS idx_processed_videos_platform ON processed_videos(platform);
 
 -- Функция обновления времени
 CREATE OR REPLACE FUNCTION update_updated_at_column()

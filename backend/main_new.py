@@ -37,6 +37,7 @@ import asyncpg
 import yt_dlp
 
 from similarity_search import get_similar_questions as search_similar_questions
+from video_downloader import VideoDownloader
 
 # ============== Конфигурация ==============
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
@@ -55,6 +56,7 @@ REDIS_TTL = 86400  # 24 часа
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
 whisper_orchestrator: Optional["WhisperOrchestrator"] = None
+video_downloader: Optional[VideoDownloader] = None
 
 
 # ============== WhisperOrchestrator — управление Whisper-воркерами ==============
@@ -64,7 +66,8 @@ class WhisperWorker:
     def __init__(self, worker_id: str, port: int):
         self.worker_id = worker_id
         self.port = port
-        self.url = f"http://whisper-worker-{worker_id}:{port}"
+        # Используем WHISPER_BASE_URL для подключения к единственному worker контейнеру
+        self.url = f"{WHISPER_BASE_URL}:{port}" if ":" not in WHISPER_BASE_URL else WHISPER_BASE_URL
         self.is_busy = False
         self.current_task_id: Optional[str] = None
         self.last_used = time.time()
@@ -95,7 +98,7 @@ class WhisperWorker:
             async with httpx.AsyncClient(timeout=7200.0) as client:  # 2 часа для длинных видео
                 response = await client.post(
                     f"{self.url}/transcribe-path",
-                    json={"audio_path": str(audio_path), "language": language}
+                    params={"audio_path": str(audio_path), "language": language}
                 )
                 
                 if response.status_code != 200:
@@ -232,11 +235,15 @@ class TaskStatus(BaseModel):
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_orchestrator
+    global redis_client, whisper_orchestrator, video_downloader
     
     # Startup
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    
+    # Инициализируем VideoDownloader
+    video_downloader = VideoDownloader(TEMP_DIR)
+    print("📥 VideoDownloader initialized (supports YouTube, VK.video, Rutube, OK.ru, etc.)")
     
     # Инициализируем WhisperOrchestrator
     whisper_orchestrator = WhisperOrchestrator(max_workers=MAX_WHISPER_WORKERS)
@@ -344,9 +351,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 
 
 # ============== Core Processing Pipeline ==============
-async def process_video_pipeline(task_id: str, youtube_url: str, topic: str, level: str):
+async def process_video_pipeline(task_id: str, video_url: str, topic: str, level: str):
     """
     Главный pipeline обработки видео (БЕЗ n8n!)
+    
+    Поддерживаемые платформы:
+    - YouTube
+    - VK.video
+    - Rutube
+    - OK.ru
+    - Dailymotion
+    - Vimeo
+    - и другие
     
     Этапы:
     1. Скачивание аудио и субтитров (yt-dlp)
@@ -357,11 +373,12 @@ async def process_video_pipeline(task_id: str, youtube_url: str, topic: str, lev
     try:
         # ========== Этап 1: Скачивание аудио ==========
         await update_task_progress(task_id, 10, "Скачивание аудио...")
-        download_result = await download_youtube_audio(youtube_url, task_id)
+        download_result = await download_video_audio(video_url, task_id)
         
         audio_path = Path(download_result["audio_path"])
         video_title = download_result["video_title"]
         video_id = download_result["video_id"]
+        platform = download_result.get("platform", "unknown")
         subtitles = download_result.get("subtitles", [])
         has_subtitles = download_result.get("has_subtitles", False)
         
@@ -406,7 +423,7 @@ async def process_video_pipeline(task_id: str, youtube_url: str, topic: str, lev
         
         # ========== Этап 4: Сохранение в БД ==========
         await update_task_progress(task_id, 90, "Сохранение в базу данных...")
-        await save_questions_to_db(questions, youtube_url, video_title, video_id, task_id)
+        await save_questions_to_db(questions, video_url, video_title, video_id, task_id, platform)
         
         # ========== Завершение ==========
         await update_task_progress(task_id, 100, "Готово!")
@@ -477,46 +494,24 @@ async def update_task_error(task_id: str, error_msg: str):
 
 
 # ============== Processing Functions ==============
-async def download_youtube_audio(youtube_url: str, task_id: str) -> Dict[str, Any]:
-    """Скачивание аудио и субтитров с YouTube"""
-    video_id = extract_video_id(youtube_url)
-    audio_path = TEMP_DIR / f"{video_id}.mp3"
-    subs_path = TEMP_DIR / f"{video_id}.ru.vtt"
+async def download_video_audio(video_url: str, task_id: str) -> Dict[str, Any]:
+    """Скачивание аудио и субтитров с любой платформы (YouTube, VK.video, Rutube, и т.д.)"""
+    global video_downloader
     
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': str(TEMP_DIR / f'{video_id}.%(ext)s'),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'writesubtitles': True,
-        'writeautomaticsub': True,
-        'subtitleslangs': ['ru'],
-        'subtitlesformat': 'vtt',
-        'quiet': True,
-        'no_warnings': True,
-    }
+    if not video_downloader:
+        raise Exception("VideoDownloader not initialized")
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(youtube_url, download=True)
-        video_title = info.get('title', 'Unknown')
-    
-    # Парсим субтитры
-    subtitles = []
-    has_subtitles = False
-    if subs_path.exists():
-        subtitles = parse_vtt_subtitles(subs_path)
-        has_subtitles = len(subtitles) > 0
-    
-    return {
-        "audio_path": str(audio_path),
-        "video_title": video_title,
-        "video_id": video_id,
-        "subtitles": subtitles,
-        "has_subtitles": has_subtitles
-    }
+    try:
+        result = await video_downloader.download_video_audio(video_url)
+        
+        # Добавляем информацию о платформе (для логов)
+        platform_info = video_downloader.get_platform_info(video_url)
+        print(f"{platform_info['platform_icon']} Loaded from {platform_info['platform_name']}: {result['video_title']}")
+        
+        return result
+    except Exception as e:
+        print(f"❌ Download failed: {e}")
+        raise
 
 
 async def extract_questions_from_transcript(transcript: str, topic: str, level: str) -> List[Dict[str, Any]]:
@@ -548,7 +543,7 @@ async def extract_questions_from_transcript(transcript: str, topic: str, level: 
     return await call_llm_api(prompt)
 
 
-async def save_questions_to_db(questions: List[Dict], youtube_url: str, video_title: str, video_id: str, task_id: str):
+async def save_questions_to_db(questions: List[Dict], video_url: str, video_title: str, video_id: str, task_id: str, platform: str = "youtube"):
     """Сохранение вопросов в базу данных"""
     
     conn = await asyncpg.connect(DATABASE_URL)
@@ -562,12 +557,12 @@ async def save_questions_to_db(questions: List[Dict], youtube_url: str, video_ti
             print(f"⚠️ Video {video_id} already processed, skipping save")
             return
         
-        # Сохраняем видео
+        # Сохраняем видео с указанием платформы
         db_video_id = await conn.fetchval(
-            """INSERT INTO processed_videos (video_id, url, title, processed_at)
-               VALUES ($1, $2, $3, NOW())
+            """INSERT INTO processed_videos (video_id, youtube_url, title, platform, processed_at)
+               VALUES ($1, $2, $3, $4, NOW())
                RETURNING id""",
-            video_id, youtube_url, video_title
+            video_id, video_url, video_title, platform
         )
         
         # Сохраняем вопросы
@@ -665,7 +660,14 @@ async def health():
 @app.post("/api/process-video", tags=["Processing"])
 async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
     """
-    Запуск обработки YouTube видео (прямой pipeline, без n8n)
+    Запуск обработки видео (прямой pipeline, без n8n)
+    
+    Поддерживаемые платформы:
+    - YouTube (youtube.com, youtu.be)
+    - VK Video (vk.com/video, vkvideo.ru)
+    - Rutube (rutube.ru)
+    - OK.ru (ok.ru/video)
+    - Dailymotion, Vimeo и др.
     
     Pipeline:
     1. Скачивание аудио (yt-dlp)
@@ -675,8 +677,8 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     """
     task_id = str(uuid.uuid4())
     
-    if not is_valid_youtube_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    if not is_valid_video_url(request.youtube_url):
+        raise HTTPException(status_code=400, detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.")
     
     # Сохраняем задачу в Redis
     task_data = {
@@ -711,8 +713,8 @@ async def process_video_with_client(
     """Запуск обработки с привязкой к WebSocket клиенту"""
     task_id = str(uuid.uuid4())
     
-    if not is_valid_youtube_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+    if not is_valid_video_url(request.youtube_url):
+        raise HTTPException(status_code=400, detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.")
     
     # Связываем task с client
     await redis_client.set(f"task:{task_id}:client", client_id, ex=REDIS_TTL)
@@ -1048,6 +1050,68 @@ async def approve_questions(data: Dict[str, List[int]]):
         await conn.close()
 
 
+@app.post("/api/admin/generate-answer/{question_id}", tags=["Admin"])
+async def generate_answer_for_question(question_id: int):
+    """
+    Генерация ответа на вопрос через LLM
+    
+    Админ может использовать эту функцию для автоматической генерации
+    ответов на вопросы через LLM (OpenRouter, Gemini, Groq)
+    """
+    from similarity_search import invalidate_similarity_cache
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получаем вопрос
+        question_data = await conn.fetchrow(
+            "SELECT id, question, topic, difficulty FROM questions WHERE id = $1",
+            question_id
+        )
+        
+        if not question_data:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        question_text = question_data["question"]
+        topic = question_data["topic"]
+        difficulty = question_data["difficulty"]
+        
+        # Генерируем ответ через LLM
+        prompt = f"""Ты — эксперт в области IT и программирования. Дай развёрнутый, но лаконичный ответ на вопрос технического собеседования.
+
+Вопрос: {question_text}
+Тема: {topic}
+Уровень: {difficulty}
+
+Требования к ответу:
+- Ответь кратко, но полно (2-4 абзаца)
+- Приведи примеры, если уместно
+- Используй простой и понятный язык
+- Структурируй ответ логично
+
+Верни только текст ответа, без дополнительных пояснений."""
+        
+        # Вызываем LLM
+        llm_response = await call_llm_api_for_answer(prompt)
+        
+        # Обновляем вопрос с ответом
+        await conn.execute(
+            """UPDATE questions SET answer = $1 WHERE id = $2""",
+            llm_response, question_id
+        )
+        
+        await invalidate_similarity_cache()
+        
+        return {
+            "message": "Answer generated successfully",
+            "question_id": question_id,
+            "answer": llm_response
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate answer: {str(e)}")
+    finally:
+        await conn.close()
+
+
 @app.post("/api/admin/recalculate-probabilities", tags=["Admin"])
 async def recalculate_probabilities():
     """Пересчитать вероятности"""
@@ -1063,14 +1127,13 @@ async def recalculate_probabilities():
 
 
 # ============== Helper Functions ==============
-def is_valid_youtube_url(url: str) -> bool:
-    """Проверка валидности YouTube URL"""
-    patterns = [
-        r'(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+',
-        r'(https?://)?(www\.)?youtu\.be/[\w-]+',
-        r'(https?://)?(www\.)?youtube\.com/shorts/[\w-]+'
-    ]
-    return any(re.match(pattern, url) for pattern in patterns)
+def is_valid_video_url(url: str) -> bool:
+    """Проверка валидности URL видео (любая платформа)"""
+    global video_downloader
+    if video_downloader:
+        return video_downloader.is_valid_url(url)
+    # Fallback - базовая проверка
+    return bool(re.match(r'https?://[^\s<>"{}|\\^`\[\]]+', url))
 
 
 def extract_video_id(url: str) -> str:
@@ -1240,7 +1303,7 @@ async def update_probabilities(conn):
 
 # ============== LLM API Calls ==============
 async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
-    """Умный выбор LLM провайдера"""
+    """Умный выбор LLM провайдера для извлечения вопросов"""
     provider = LLM_PROVIDER.lower()
     
     if provider == "auto":
@@ -1263,6 +1326,92 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
         return await call_groq_api(prompt)
     else:
         raise Exception(f"Unknown LLM provider: {provider}")
+
+
+async def call_llm_api_for_answer(prompt: str) -> str:
+    """
+    Вызов LLM для генерации текстового ответа
+    (используется для генерации ответов на вопросы в админке)
+    """
+    provider = LLM_PROVIDER.lower()
+    
+    if provider == "auto":
+        if OPENROUTER_API_KEY:
+            provider = "openrouter"
+        elif GEMINI_API_KEY:
+            provider = "gemini"
+        elif GROQ_API_KEY:
+            provider = "groq"
+        else:
+            raise Exception("No LLM API key configured")
+    
+    print(f"🤖 Generating answer using: {provider}")
+    
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        if provider == "openrouter":
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "meta-llama/llama-3.1-70b-instruct",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7
+                }
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"OpenRouter error: {response.text}")
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        
+        elif provider == "gemini":
+            models = ["gemini-2.0-flash", "gemini-1.5-flash"]
+            
+            for model in models:
+                try:
+                    response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+                        json={
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {"temperature": 0.7}
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        return result["candidates"][0]["content"]["parts"][0]["text"]
+                except Exception as e:
+                    print(f"⚠️ Gemini {model} failed: {e}")
+                    continue
+            
+            raise Exception("All Gemini models failed")
+        
+        elif provider == "groq":
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.1-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7
+                }
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Groq error: {response.text}")
+            
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        
+        else:
+            raise Exception(f"Unknown provider: {provider}")
 
 
 async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
