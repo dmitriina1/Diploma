@@ -372,8 +372,13 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
     """
     try:
         # ========== Этап 1: Скачивание аудио ==========
-        await update_task_progress(task_id, 10, "Скачивание аудио...")
-        download_result = await download_video_audio(video_url, task_id)
+        await update_task_progress(task_id, 5, "downloading", "Начинаем скачивание видео...")
+        
+        try:
+            download_result = await download_video_audio(video_url, task_id)
+        except Exception as download_err:
+            await update_task_progress(task_id, 5, "error", f"Ошибка скачивания: {download_err}")
+            raise
         
         audio_path = Path(download_result["audio_path"])
         video_title = download_result["video_title"]
@@ -381,21 +386,29 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
         platform = download_result.get("platform", "unknown")
         subtitles = download_result.get("subtitles", [])
         has_subtitles = download_result.get("has_subtitles", False)
+        duration = download_result.get("duration", 0)
+        
+        await update_task_progress(task_id, 20, "downloaded", f"Скачано: {video_title} ({duration}с)")
         
         # ========== Этап 2: Транскрибация ==========
-        await update_task_progress(task_id, 35, "Транскрибация аудио (Whisper large-v3)...")
+        await update_task_progress(task_id, 25, "transcribing", "Транскрибация аудио через Whisper...")
         
-        # 🔥 ГЛАВНОЕ ОТЛИЧИЕ: транскрибируем ПОЛНОЕ аудио через один воркер!
-        whisper_result = await whisper_orchestrator.transcribe_audio(
-            audio_path=audio_path,
-            task_id=task_id,
-            language="ru"
-        )
+        try:
+            whisper_result = await whisper_orchestrator.transcribe_audio(
+                audio_path=audio_path,
+                task_id=task_id,
+                language="ru"
+            )
+        except Exception as whisper_err:
+            await update_task_progress(task_id, 30, "error", f"Ошибка транскрибации: {whisper_err}")
+            raise
         
         transcript = whisper_result["text"]
         whisper_segments = whisper_result["segments"]
         
-        # Слияние с YouTube субтитрами (если есть)
+        await update_task_progress(task_id, 60, "transcribed", f"Транскрибация завершена: {len(whisper_segments)} сегментов, {len(transcript)} символов")
+        
+        # Слияние с субтитрами (если есть)
         merged_segments = whisper_segments
         if has_subtitles and subtitles:
             merged_segments = merge_subtitles_with_whisper(subtitles, whisper_segments)
@@ -414,19 +427,31 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
         await redis_client.set(f"transcript:{task_id}", json.dumps(transcript_data), ex=REDIS_TTL)
         
         # ========== Этап 3: Извлечение вопросов ==========
-        await update_task_progress(task_id, 70, "Извлечение вопросов через LLM...")
-        questions = await extract_questions_from_transcript(transcript, topic, level)
+        await update_task_progress(task_id, 65, "extracting", "Извлечение вопросов через LLM...")
+        
+        try:
+            questions = await extract_questions_from_transcript(transcript, topic, level)
+        except Exception as llm_err:
+            await update_task_progress(task_id, 70, "error", f"Ошибка LLM: {llm_err}")
+            raise
         
         # Фильтрация и дедупликация
         questions = filter_low_quality_questions(questions)
         questions = deduplicate_questions(questions)
         
+        await update_task_progress(task_id, 85, "extracted", f"Извлечено {len(questions)} вопросов")
+        
         # ========== Этап 4: Сохранение в БД ==========
-        await update_task_progress(task_id, 90, "Сохранение в базу данных...")
-        await save_questions_to_db(questions, video_url, video_title, video_id, task_id, platform)
+        await update_task_progress(task_id, 90, "saving", "Сохранение в базу данных...")
+        
+        try:
+            await save_questions_to_db(questions, video_url, video_title, video_id, task_id, platform)
+        except Exception as db_err:
+            await update_task_progress(task_id, 90, "error", f"Ошибка БД: {db_err}")
+            raise
         
         # ========== Завершение ==========
-        await update_task_progress(task_id, 100, "Готово!")
+        await update_task_progress(task_id, 100, "completed", "Готово!")
         
         task_data = await redis_client.get(f"task:{task_id}")
         if task_data:
@@ -459,13 +484,26 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
         await update_task_error(task_id, error_msg)
 
 
-async def update_task_progress(task_id: str, progress: int, step: str):
-    """Обновить прогресс задачи"""
+async def update_task_progress(task_id: str, progress: int, status: str, step: str):
+    """Обновить прогресс задачи с детальным статусом"""
     task_data = await redis_client.get(f"task:{task_id}")
     if task_data:
         task = json.loads(task_data)
         task["progress"] = progress
+        task["status"] = status
         task["step"] = step
+        # Добавляем запись в лог
+        if "logs" not in task:
+            task["logs"] = []
+        task["logs"].append({
+            "time": datetime.now().isoformat(),
+            "progress": progress,
+            "status": status,
+            "message": step
+        })
+        # Ограничиваем размер лога
+        if len(task["logs"]) > 50:
+            task["logs"] = task["logs"][-50:]
         await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
     
     # Отправляем через WebSocket
@@ -473,8 +511,10 @@ async def update_task_progress(task_id: str, progress: int, step: str):
         "type": "progress",
         "task_id": task_id,
         "progress": progress,
+        "status": status,
         "step": step
     })
+    print(f"📊 Task {task_id}: [{status}] {progress}% — {step}")
 
 
 async def update_task_error(task_id: str, error_msg: str):
@@ -684,13 +724,21 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     task_data = {
         "task_id": task_id,
         "youtube_url": request.youtube_url,
+        "video_url": request.youtube_url,
         "topic": request.topic,
         "level": request.level,
         "status": "pending",
         "progress": 0,
-        "step": "В очереди..."
+        "step": "В очереди...",
+        "logs": [{"time": datetime.now().isoformat(), "progress": 0, "status": "pending", "message": "Задача создана"}],
+        "created_at": datetime.now().isoformat()
     }
     await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    
+    # Добавляем в глобальный список задач
+    await redis_client.lpush("global:tasks", task_id)
+    await redis_client.ltrim("global:tasks", 0, 99)
+    await redis_client.expire("global:tasks", REDIS_TTL)
     
     # Запускаем обработку в фоне (БЕЗ n8n!)
     background_tasks.add_task(
@@ -728,18 +776,27 @@ async def process_video_with_client(
     task_data = {
         "task_id": task_id,
         "youtube_url": request.youtube_url,
+        "video_url": request.youtube_url,
         "topic": request.topic,
         "level": request.level,
         "status": "pending",
         "progress": 0,
-        "step": "В очереди..."
+        "step": "В очереди...",
+        "logs": [{"time": datetime.now().isoformat(), "progress": 0, "status": "pending", "message": "Задача создана"}],
+        "created_at": datetime.now().isoformat()
     }
     await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    
+    # Добавляем в глобальный список задач
+    await redis_client.lpush("global:tasks", task_id)
+    await redis_client.ltrim("global:tasks", 0, 99)
+    await redis_client.expire("global:tasks", REDIS_TTL)
     
     await manager.send_progress(client_id, {
         "type": "progress",
         "task_id": task_id,
         "progress": 0,
+        "status": "pending",
         "step": "Запуск обработки..."
     })
     
@@ -798,6 +855,31 @@ async def get_client_tasks(client_id: str):
     return {"tasks": tasks, "count": len(tasks)}
 
 
+@app.get("/api/all-tasks", tags=["Status"])
+async def get_all_tasks():
+    """Получение всех задач (глобальный список для админки)"""
+    task_ids = await redis_client.lrange("global:tasks", 0, 99)
+    
+    tasks = []
+    for task_id in task_ids:
+        task_data = await redis_client.get(f"task:{task_id}")
+        if task_data:
+            task = json.loads(task_data)
+            tasks.append({
+                "task_id": task_id,
+                "video_url": task.get("video_url") or task.get("youtube_url", ""),
+                "status": task.get("status", "unknown"),
+                "progress": task.get("progress", 0),
+                "step": task.get("step", ""),
+                "logs": task.get("logs", []),
+                "created_at": task.get("created_at"),
+                "result": task.get("result"),
+                "error": task.get("error"),
+            })
+    
+    return {"tasks": tasks, "count": len(tasks)}
+
+
 @app.get("/api/questions", tags=["Public"])
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
     """Получение всех одобренных вопросов"""
@@ -841,6 +923,76 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
             content={"questions": result, "total": len(result)},
             media_type="application/json; charset=utf-8"
         )
+    finally:
+        await conn.close()
+
+
+@app.get("/api/questions/{question_id}", tags=["Public"])
+async def get_public_question_detail(question_id: int):
+    """Получить детали одобренного вопроса для публичной части (с видео)"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
+        
+        q = await conn.fetchrow("""
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability,
+                   q.timecode, q.source_url, q.video_title, q.created_at,
+                   COALESCE(vc.cnt, 0) AS video_count
+            FROM questions q
+            LEFT JOIN (
+                SELECT question_id, COUNT(DISTINCT video_id) AS cnt
+                FROM question_video GROUP BY question_id
+            ) vc ON vc.question_id = q.id
+            WHERE q.id = $1 AND q.approved = TRUE
+        """, question_id)
+        
+        if not q:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        # Видео, в которых встречался этот вопрос
+        videos = await conn.fetch("""
+            SELECT pv.id, pv.title, pv.youtube_url, pv.platform
+            FROM question_video qv
+            JOIN processed_videos pv ON pv.id = qv.video_id
+            WHERE qv.question_id = $1
+            ORDER BY pv.title
+        """, question_id)
+        
+        # Похожие вопросы
+        similar = []
+        try:
+            similar = await search_similar_questions(q["question"], limit=5)
+            # Исключаем текущий вопрос из похожих
+            similar = [s for s in similar if s.get("id") != question_id]
+        except Exception as e:
+            print(f"⚠️ Similar search failed: {e}")
+        
+        result = {
+            "id": q["id"],
+            "question": q["question"],
+            "answer": q["answer"],
+            "topic": q["topic"],
+            "difficulty": q["difficulty"],
+            "probability": float(q["probability"]) if q["probability"] else 0.0,
+            "video_count": q["video_count"],
+            "total_videos": total_videos,
+            "timecode": q["timecode"],
+            "source_url": q["source_url"],
+            "video_title": q["video_title"],
+            "created_at": q["created_at"].isoformat() if q["created_at"] else None,
+            "videos": [
+                {
+                    "id": v["id"],
+                    "title": v["title"],
+                    "url": v["youtube_url"],
+                    "platform": v["platform"] or "youtube",
+                }
+                for v in videos
+            ],
+            "similar_questions": similar,
+        }
+        
+        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
     finally:
         await conn.close()
 
@@ -924,41 +1076,47 @@ async def full_export(task_id: str):
 # ============== Admin Panel Endpoints ==============
 @app.get("/api/admin/questions", tags=["Admin"])
 async def get_admin_questions():
-    """Получить все вопросы для админа"""
+    """Получить все вопросы для админа с video_count и total_videos"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        # Общее число обработанных видео
+        total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
+        
         questions = await conn.fetch("""
-            SELECT id, question, answer, topic, difficulty, probability, timecode, approved,
-                   source_url, video_title, created_at
-            FROM questions
-            ORDER BY created_at DESC
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability, 
+                   q.timecode, q.approved, q.source_url, q.video_title, q.created_at,
+                   COALESCE(vc.cnt, 0) AS video_count
+            FROM questions q
+            LEFT JOIN (
+                SELECT question_id, COUNT(DISTINCT video_id) AS cnt
+                FROM question_video
+                GROUP BY question_id
+            ) vc ON vc.question_id = q.id
+            ORDER BY q.probability DESC NULLS LAST, q.created_at DESC
         """)
         
-        result = []
-        for q in questions:
-            try:
-                similar = await search_similar_questions(q["question"], q["id"], limit=1000)
-                filtered_similar = [s for s in similar if s['similarity_score'] > 0.7]
-                top_similar = sorted(filtered_similar, key=lambda x: x['similarity_score'], reverse=True)[:5]
-            except:
-                top_similar = []
-            
-            result.append({
+        result = [
+            {
                 "id": q["id"],
                 "question": q["question"],
                 "answer": q["answer"],
                 "topic": q["topic"],
                 "difficulty": q["difficulty"],
                 "probability": float(q["probability"]) if q["probability"] else 0.0,
+                "video_count": q["video_count"],
                 "timecode": q["timecode"],
                 "approved": q["approved"],
                 "source_url": q["source_url"],
                 "video_title": q["video_title"],
                 "created_at": q["created_at"].isoformat() if q["created_at"] else None,
-                "similar_questions": top_similar
-            })
+            }
+            for q in questions
+        ]
         
-        return JSONResponse(content={"questions": result}, media_type="application/json; charset=utf-8")
+        return JSONResponse(
+            content={"questions": result, "total_videos": total_videos},
+            media_type="application/json; charset=utf-8"
+        )
     finally:
         await conn.close()
 
@@ -988,24 +1146,23 @@ async def create_question(data: dict = Body(...)):
 
 
 @app.put("/api/admin/questions/{question_id}", tags=["Admin"])
-async def update_question(
-    question_id: int,
-    question: str,
-    answer: Optional[str] = None,
-    topic: Optional[str] = None,
-    difficulty: Optional[str] = None,
-    timecode: Optional[str] = None
-):
-    """Обновить вопрос"""
+async def update_question(question_id: int, data: dict = Body(...)):
+    """Обновить вопрос (body JSON)"""
     from similarity_search import invalidate_similarity_cache
     
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute(
             """UPDATE questions
-               SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5
-               WHERE id = $6""",
-            question, answer or "", topic or "General", difficulty or "middle", timecode, question_id
+               SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5, approved = $6
+               WHERE id = $7""",
+            data.get("question", ""),
+            data.get("answer", ""),
+            data.get("topic", "General"),
+            data.get("difficulty", "middle"),
+            data.get("timecode"),
+            data.get("approved", False),
+            question_id
         )
         
         await invalidate_similarity_cache()
@@ -1046,6 +1203,161 @@ async def approve_questions(data: Dict[str, List[int]]):
         await invalidate_similarity_cache()
         
         return {"message": f"Approved {len(question_ids)} questions"}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/revoke-questions", tags=["Admin"])
+async def revoke_questions(data: Dict[str, List[int]]):
+    """Отозвать утверждение вопросов (approved → false)"""
+    from similarity_search import invalidate_similarity_cache
+    
+    question_ids = data.get("question_ids", [])
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            "UPDATE questions SET approved = FALSE WHERE id = ANY($1::int[])",
+            question_ids
+        )
+        
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+        
+        return {"message": f"Revoked {len(question_ids)} questions"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/questions/{question_id}", tags=["Admin"])
+async def get_question_detail(question_id: int):
+    """Получить полную карточку вопроса: данные + video_count + похожие вопросы"""
+    from similarity_search import get_similar_questions as find_similar
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
+        
+        q = await conn.fetchrow("""
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability,
+                   q.timecode, q.approved, q.source_url, q.video_title, q.created_at,
+                   COALESCE(vc.cnt, 0) AS video_count
+            FROM questions q
+            LEFT JOIN (
+                SELECT question_id, COUNT(DISTINCT video_id) AS cnt
+                FROM question_video GROUP BY question_id
+            ) vc ON vc.question_id = q.id
+            WHERE q.id = $1
+        """, question_id)
+        
+        if not q:
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        # Видео, в которых встречался этот вопрос
+        videos = await conn.fetch("""
+            SELECT pv.id, pv.title, pv.youtube_url, pv.platform, pv.processed_at
+            FROM question_video qv
+            JOIN processed_videos pv ON pv.id = qv.video_id
+            WHERE qv.question_id = $1
+            ORDER BY pv.processed_at DESC
+        """, question_id)
+        
+        # Похожие вопросы (через FAISS embeddings)
+        similar = []
+        try:
+            similar = await find_similar(q["question"], question_id=question_id, limit=5)
+        except Exception as e:
+            print(f"⚠️ Similar search failed: {e}")
+        
+        result = {
+            "id": q["id"],
+            "question": q["question"],
+            "answer": q["answer"],
+            "topic": q["topic"],
+            "difficulty": q["difficulty"],
+            "probability": float(q["probability"]) if q["probability"] else 0.0,
+            "video_count": q["video_count"],
+            "total_videos": total_videos,
+            "timecode": q["timecode"],
+            "approved": q["approved"],
+            "source_url": q["source_url"],
+            "video_title": q["video_title"],
+            "created_at": q["created_at"].isoformat() if q["created_at"] else None,
+            "videos": [
+                {
+                    "id": v["id"],
+                    "title": v["title"],
+                    "url": v["youtube_url"],
+                    "platform": v["platform"],
+                    "processed_at": v["processed_at"].isoformat() if v["processed_at"] else None,
+                }
+                for v in videos
+            ],
+            "similar_questions": [
+                {
+                    "id": s.get("id"),
+                    "question": s.get("question"),
+                    "topic": s.get("topic"),
+                    "difficulty": s.get("difficulty"),
+                    "probability": s.get("probability", 0),
+                    "similarity_score": s.get("similarity_score", 0),
+                }
+                for s in similar
+            ],
+        }
+        
+        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/questions/merge", tags=["Admin"])
+async def merge_questions(data: dict = Body(...)):
+    """
+    Объединить вопрос source_id в target_id.
+    Все video-связи source переносятся на target, source удаляется.
+    Вероятность target пересчитывается.
+    """
+    from similarity_search import invalidate_similarity_cache
+    
+    source_id = data.get("source_id")
+    target_id = data.get("target_id")
+    
+    if not source_id or not target_id:
+        raise HTTPException(status_code=400, detail="source_id и target_id обязательны")
+    
+    if source_id == target_id:
+        raise HTTPException(status_code=400, detail="Нельзя объединить вопрос сам с собой")
+    
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Проверяем что оба существуют
+        source = await conn.fetchrow("SELECT id, question FROM questions WHERE id = $1", source_id)
+        target = await conn.fetchrow("SELECT id, question FROM questions WHERE id = $1", target_id)
+        
+        if not source:
+            raise HTTPException(status_code=404, detail=f"Вопрос source_id={source_id} не найден")
+        if not target:
+            raise HTTPException(status_code=404, detail=f"Вопрос target_id={target_id} не найден")
+        
+        # Переносим все video-связи с source на target (игнорируем конфликты)
+        await conn.execute("""
+            INSERT INTO question_video (question_id, video_id)
+            SELECT $1, video_id FROM question_video WHERE question_id = $2
+            ON CONFLICT DO NOTHING
+        """, target_id, source_id)
+        
+        # Удаляем source
+        await conn.execute("DELETE FROM questions WHERE id = $1", source_id)
+        
+        # Пересчитываем вероятности
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+        
+        return {
+            "message": f"Вопрос #{source_id} объединён с #{target_id}",
+            "target_id": target_id
+        }
     finally:
         await conn.close()
 
@@ -1279,25 +1591,19 @@ def cleanup_temp_files(video_id: str):
 
 
 async def update_probabilities(conn):
-    """Обновить вероятности для всех вопросов"""
+    """Обновить вероятности для всех вопросов (на основе % видео, в которых встречается вопрос)"""
     total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
     
     if total_videos > 0:
+        # Обновляем вероятность для ВСЕХ вопросов (не только approved)
+        # Вероятность = кол-во видео с этим вопросом / общее кол-во видео * 100
         await conn.execute("""
             UPDATE questions 
-            SET probability = CASE 
-                WHEN (
-                    SELECT COUNT(DISTINCT qv.video_id)
-                    FROM question_video qv
-                    WHERE qv.question_id = questions.id
-                ) >= 2 THEN (
-                    SELECT (COUNT(DISTINCT qv.video_id) * 100.0 / $1)
-                    FROM question_video qv
-                    WHERE qv.question_id = questions.id
-                )
-                ELSE 0.0
-            END
-            WHERE approved = TRUE
+            SET probability = (
+                SELECT COALESCE(COUNT(DISTINCT qv.video_id) * 100.0 / $1, 0)
+                FROM question_video qv
+                WHERE qv.question_id = questions.id
+            )
         """, total_videos)
 
 
