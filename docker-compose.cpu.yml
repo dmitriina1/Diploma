@@ -1,3 +1,13 @@
+# =============================================================
+# Docker Compose — CPU Optimized
+# =============================================================
+# Использование:
+#   docker-compose -f docker-compose.cpu.yml up -d --build
+#
+# Whisper: faster-whisper + int8 + large-v3-turbo + VAD
+# Ожидаемая скорость: 30 мин видео → ~10-15 мин обработки
+# =============================================================
+
 services:
   # ============== PostgreSQL ==============
   postgres:
@@ -36,22 +46,21 @@ services:
     networks:
       - diploma-network
 
-  # ============== Whisper Worker (Auto-detect CPU/GPU) ==============
+  # ============== Whisper Worker (CPU Optimized) ==============
   whisper-worker:
     build:
       context: ./whisper-service
       dockerfile: Dockerfile.cpu
-    container_name: diploma-whisper-worker
+    container_name: diploma-whisper-cpu
     environment:
       - WHISPER_MODEL=large-v3-turbo
-      - DEVICE=auto
-      - COMPUTE_TYPE=auto
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
       - CPU_THREADS=10
       - BEAM_SIZE=3
       - VAD_ENABLED=true
       - HF_HUB_ENABLE_HF_TRANSFER=0
       - HF_HUB_DISABLE_XET=1
-      - HF_HUB_DOWNLOAD_TIMEOUT=1800
     volumes:
       - whisper_cache:/root/.cache/whisper
       - shared_temp:/app/temp
@@ -82,7 +91,7 @@ services:
       - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
       - REDIS_URL=redis://redis:6379
       - WHISPER_BASE_URL=http://whisper-worker:8000
-      - MAX_WHISPER_WORKERS=2
+      - MAX_WHISPER_WORKERS=1
       - WORKER_IDLE_TIMEOUT=600
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}

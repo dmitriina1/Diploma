@@ -1,0 +1,65 @@
+# =============================================================
+# Whisper Service — CPU Optimized (faster-whisper + int8)
+# =============================================================
+# Оптимизирован для максимальной скорости на CPU:
+# - faster-whisper (CTranslate2) — в 4-6x быстрее OpenAI Whisper
+# - int8 квантизация — экономит RAM и ускоряет инференс
+# - VAD фильтр — пропускает тишину, ускоряет на 20-40%
+# - large-v3-turbo модель — баланс скорость/качество
+#
+# Ожидаемая производительность (AMD Ryzen 7, 10 потоков):
+# - 30 мин видео → ~10-15 мин обработки (large-v3-turbo)
+# - 30 мин видео → ~8-12 мин обработки (medium)
+# =============================================================
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Отключаем XET для надежной загрузки моделей через HTTP
+ENV HF_HUB_ENABLE_HF_TRANSFER=0
+ENV HF_HUB_DISABLE_XET=1
+ENV PYTHONUNBUFFERED=1
+
+# Модель и потоки (переопределяются в docker-compose)
+ENV WHISPER_MODEL=large-v3-turbo
+ENV CPU_THREADS=10
+ENV COMPUTE_TYPE=int8
+ENV BEAM_SIZE=3
+ENV VAD_ENABLED=true
+
+# Установка минимальных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Установка ffmpeg (статический бинарник)
+RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz \
+    && tar -xf /tmp/ffmpeg.tar.xz -C /tmp \
+    && mv /tmp/ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ \
+    && mv /tmp/ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ \
+    && rm -rf /tmp/ffmpeg* \
+    && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+
+# Увеличиваем таймаут скачивания моделей (по умолчанию 10 сек — мало для 1.5 ГБ)
+ENV HF_HUB_DOWNLOAD_TIMEOUT=1800
+ENV REQUESTS_TIMEOUT=1800
+
+# Установка Python зависимостей (CPU-only, без PyTorch!)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --timeout 300 -r requirements.txt
+
+COPY . .
+
+# Создаем директорию для temp файлов
+RUN mkdir -p /app/temp
+
+# Модель НЕ предзагружается при сборке — скачивается при первом запуске
+# и кэшируется в Docker volume (whisper_cache:/root/.cache/whisper).
+# При повторных запусках загружается мгновенно из кэша.
+
+EXPOSE 8000
+
+# Запуск с оптимальными настройками для CPU
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

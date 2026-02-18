@@ -19,9 +19,17 @@ export default {
     return apiClient.get(`/api/task/${taskId}`)
   },
   
+  getAllTasks() {
+    return apiClient.get('/api/all-tasks')
+  },
+  
   // Questions
   getQuestions(params = {}) {
     return apiClient.get('/api/questions', { params })
+  },
+  
+  getPublicQuestionDetail(questionId) {
+    return apiClient.get(`/api/questions/${questionId}`)
   },
   
   getSimilarQuestions(query, limit = 5) {
@@ -33,20 +41,32 @@ export default {
     return apiClient.get('/api/admin/questions')
   },
   
+  getQuestionDetail(questionId) {
+    return apiClient.get(`/api/admin/questions/${questionId}`)
+  },
+  
   createQuestion(data) {
     return apiClient.post('/api/admin/questions', data)
   },
   
   updateQuestion(questionId, data) {
-    return apiClient.put(`/api/admin/questions/${questionId}`, null, { params: data })
+    return apiClient.put(`/api/admin/questions/${questionId}`, data)
   },
   
   deleteQuestion(questionId) {
     return apiClient.delete(`/api/admin/questions/${questionId}`)
   },
   
+  mergeQuestions(sourceId, targetId) {
+    return apiClient.post('/api/admin/questions/merge', { source_id: sourceId, target_id: targetId })
+  },
+  
   approveQuestions(questionIds) {
     return apiClient.post('/api/admin/approve-questions', { question_ids: questionIds })
+  },
+  
+  revokeQuestions(questionIds) {
+    return apiClient.post('/api/admin/revoke-questions', { question_ids: questionIds })
   },
   
   generateAnswer(questionId) {
@@ -60,6 +80,14 @@ export default {
   // Export
   exportQuestions(taskId) {
     return apiClient.get(`/api/export/${taskId}`)
+  },
+  
+  exportJSON() {
+    return apiClient.get('/api/admin/questions')
+  },
+  
+  exportCSV() {
+    return apiClient.get('/api/admin/questions')
   },
   
   getTranscript(taskId) {

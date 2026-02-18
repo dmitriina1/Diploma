@@ -1,0 +1,78 @@
+# =============================================================
+# Whisper Service — NVIDIA GPU (faster-whisper + CUDA + float16)
+# =============================================================
+# Оптимизирован для NVIDIA GPU:
+# - faster-whisper с CUDA (CTranslate2 + cuDNN)
+# - float16 compute — максимальная скорость на GPU
+# - large-v3 модель — лучшее качество
+# - Batched inference для ускорения
+#
+# Ожидаемая производительность:
+# - RTX 3060 (12GB): 30 мин видео → ~2-3 мин
+# - RTX 3080 (10GB): 30 мин видео → ~1.5-2 мин
+# - RTX 4090 (24GB): 30 мин видео → ~1 мин
+#
+# Требования:
+# - NVIDIA GPU с CUDA ≥ 12.0
+# - nvidia-docker2 или NVIDIA Container Toolkit
+# - Минимум 6GB VRAM для large-v3
+# =============================================================
+
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Системные переменные
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV HF_HUB_ENABLE_HF_TRANSFER=0
+ENV HF_HUB_DISABLE_XET=1
+
+# Модель и настройки GPU
+ENV WHISPER_MODEL=large-v3
+ENV COMPUTE_TYPE=float16
+ENV DEVICE=cuda
+ENV BEAM_SIZE=5
+ENV VAD_ENABLED=true
+ENV BATCH_SIZE=16
+
+# Установка Python и системных зависимостей
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3-pip \
+    curl \
+    xz-utils \
+    ffmpeg \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
+# Увеличиваем таймаут скачивания моделей
+ENV HF_HUB_DOWNLOAD_TIMEOUT=1800
+ENV REQUESTS_TIMEOUT=1800
+
+# Обновляем pip
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Установка CUDA-совместимых зависимостей
+# faster-whisper автоматически подтягивает CTranslate2 с CUDA
+RUN pip install --no-cache-dir --timeout 300 \
+    "faster-whisper>=1.0.0" \
+    "fastapi>=0.104.0" \
+    "uvicorn[standard]>=0.24.0" \
+    "python-multipart>=0.0.6" \
+    "nvidia-cublas-cu12" \
+    "nvidia-cudnn-cu12"
+
+COPY . .
+
+RUN mkdir -p /app/temp
+
+# Модель НЕ предзагружается при сборке — скачивается при первом запуске
+# и кэшируется в Docker volume.
+
+EXPOSE 8000
+
+# Запуск
+CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

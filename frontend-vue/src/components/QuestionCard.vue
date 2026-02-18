@@ -5,8 +5,9 @@
         <div class="tags">
           <Tag :value="question.topic" severity="info" />
           <Tag :value="difficultyLabel" :severity="difficultySeverity" />
-          <Tag v-if="question.probability" :value="`${question.probability.toFixed(1)}%`" 
-               :severity="probabilitySeverity" icon="pi pi-chart-line" />
+          <Tag :value="`${(question.probability || 0).toFixed(0)}%`" 
+               :severity="probabilitySeverity" icon="pi pi-chart-line" 
+               v-tooltip.top="'Вероятность на собеседовании'" />
         </div>
       </div>
     </template>

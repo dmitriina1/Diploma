@@ -23,8 +23,7 @@
         <div class="tags">
           <Tag :value="question.topic" severity="info" />
           <Tag :value="difficultyLabel" :severity="difficultySeverity" />
-          <Tag v-if="question.probability" 
-               :value="`Вероятность: ${question.probability.toFixed(1)}%`" 
+          <Tag :value="`Вероятность: ${(question.probability || 0).toFixed(0)}%`" 
                :severity="probabilitySeverity" 
                icon="pi pi-chart-line" />
         </div>
@@ -49,23 +48,30 @@
           </div>
           
           <Divider />
+
+          <!-- Видео, в которых встречался вопрос -->
+          <div v-if="questionDetail?.videos?.length > 0" class="videos-section">
+            <h3>
+              <i class="pi pi-video"></i> 
+              Видео, в которых встречался вопрос 
+              <Tag :value="`${questionDetail.videos.length} из ${questionDetail.total_videos}`" severity="info" />
+            </h3>
+            <div class="videos-list">
+              <a v-for="v in questionDetail.videos" :key="v.id" 
+                 :href="v.url" target="_blank" rel="noopener" class="video-link-card">
+                <i class="pi pi-external-link"></i>
+                <span class="video-title">{{ v.title || 'Без названия' }}</span>
+                <Tag :value="v.platform" size="small" severity="secondary" />
+              </a>
+            </div>
+          </div>
+          
+          <Divider />
           
           <div class="metadata">
             <div class="metadata-item">
               <i class="pi pi-clock"></i>
               <span>Timecode: {{ question.timecode || 'Не указан' }}</span>
-            </div>
-            
-            <div v-if="question.video_url" class="metadata-item">
-              <i class="pi pi-video"></i>
-              <a :href="question.video_url" target="_blank" rel="noopener">
-                Смотреть видео на {{ platform }}
-              </a>
-            </div>
-            
-            <div v-if="question.platform" class="metadata-item">
-              <i class="pi pi-globe"></i>
-              <span>Платформа: {{ question.platform }}</span>
             </div>
             
             <div class="metadata-item">
@@ -104,7 +110,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuestionsStore } from '../store'
 import NavBar from '../components/NavBar.vue'
@@ -117,9 +123,11 @@ const questionsStore = useQuestionsStore()
 const questionId = computed(() => parseInt(route.params.id))
 const loading = ref(true)
 const similarQuestions = ref([])
+const questionDetail = ref(null)
 
 const question = computed(() => {
-  return questionsStore.questions.find(q => q.id === questionId.value)
+  // Приоритет - детальные данные из API, иначе из стора
+  return questionDetail.value || questionsStore.questions.find(q => q.id === questionId.value)
 })
 
 const difficultyLabel = computed(() => {
@@ -176,22 +184,28 @@ const navigateToQuestion = (id) => {
   router.push({ name: 'QuestionDetail', params: { id } })
 }
 
-onMounted(async () => {
+const loadQuestionDetail = async () => {
   loading.value = true
+  questionDetail.value = null
+  similarQuestions.value = []
   
-  await questionsStore.fetchQuestions()
-  
-  if (question.value) {
-    try {
-      const response = await api.getSimilarQuestions(questionId.value)
-      similarQuestions.value = response.data.similar_questions || []
-    } catch (error) {
-      console.error('Failed to load similar questions:', error)
-    }
+  try {
+    const response = await api.getPublicQuestionDetail(questionId.value)
+    questionDetail.value = response.data
+    similarQuestions.value = response.data.similar_questions || []
+  } catch (error) {
+    console.error('Failed to load question detail:', error)
+    // Fallback на данные из стора
+    await questionsStore.fetchQuestions()
   }
   
   loading.value = false
-})
+}
+
+onMounted(loadQuestionDetail)
+
+// При переходе на другой вопрос (клик по похожему)
+watch(questionId, loadQuestionDetail)
 </script>
 
 <style scoped>
@@ -249,11 +263,52 @@ onMounted(async () => {
 }
 
 .answer-section h3,
-.similar-section h3 {
+.similar-section h3,
+.videos-section h3 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
+  color: var(--primary-color);
+}
+
+.videos-section h3 .p-tag {
+  margin-left: 0.5rem;
+}
+
+.videos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.video-link-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.2s;
+}
+
+.video-link-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--primary-color);
+  transform: translateX(4px);
+}
+
+.video-link-card .video-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-link-card i {
   color: var(--primary-color);
 }
 

@@ -1,3 +1,21 @@
+# =============================================================
+# Docker Compose — NVIDIA GPU
+# =============================================================
+# Использование:
+#   docker-compose -f docker-compose.gpu.yml up -d --build
+#
+# Требования:
+#   - NVIDIA GPU с CUDA ≥ 12.0
+#   - nvidia-docker2 или NVIDIA Container Toolkit
+#   - Минимум 6GB VRAM
+#
+# Whisper: faster-whisper + CUDA + float16 + large-v3
+# Ожидаемая скорость:
+#   - RTX 3060: 30 мин видео → ~2-3 мин
+#   - RTX 3080: 30 мин видео → ~1.5-2 мин
+#   - RTX 4090: 30 мин видео → ~1 мин
+# =============================================================
+
 services:
   # ============== PostgreSQL ==============
   postgres:
@@ -36,22 +54,20 @@ services:
     networks:
       - diploma-network
 
-  # ============== Whisper Worker (Auto-detect CPU/GPU) ==============
+  # ============== Whisper Worker (NVIDIA GPU) ==============
   whisper-worker:
     build:
       context: ./whisper-service
-      dockerfile: Dockerfile.cpu
-    container_name: diploma-whisper-worker
+      dockerfile: Dockerfile.gpu
+    container_name: diploma-whisper-gpu
     environment:
-      - WHISPER_MODEL=large-v3-turbo
-      - DEVICE=auto
-      - COMPUTE_TYPE=auto
-      - CPU_THREADS=10
-      - BEAM_SIZE=3
+      - WHISPER_MODEL=large-v3
+      - DEVICE=cuda
+      - COMPUTE_TYPE=float16
+      - BEAM_SIZE=5
       - VAD_ENABLED=true
       - HF_HUB_ENABLE_HF_TRANSFER=0
       - HF_HUB_DISABLE_XET=1
-      - HF_HUB_DOWNLOAD_TIMEOUT=1800
     volumes:
       - whisper_cache:/root/.cache/whisper
       - shared_temp:/app/temp
@@ -62,15 +78,16 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 180s
+      start_period: 300s
     networks:
       - diploma-network
     deploy:
       resources:
-        limits:
-          memory: 8G
         reservations:
-          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============== Backend (FastAPI) ==============
   backend:
@@ -82,7 +99,7 @@ services:
       - DATABASE_URL=postgresql://diploma:diploma123@postgres:5432/interview_prep
       - REDIS_URL=redis://redis:6379
       - WHISPER_BASE_URL=http://whisper-worker:8000
-      - MAX_WHISPER_WORKERS=2
+      - MAX_WHISPER_WORKERS=1
       - WORKER_IDLE_TIMEOUT=600
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
