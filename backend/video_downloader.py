@@ -163,21 +163,64 @@ class VideoDownloader:
             'socket_timeout': 60,  # Увеличенный таймаут 60 сек
             'retries': 10,  # Количество попыток при ошибке
             'fragment_retries': 10,  # Попытки для фрагментов
+            'skip_unavailable_fragments': True,  # Пропускать недоступные фрагменты
             'http_chunk_size': 10485760,  # 10 МБ чанки
+            'concurrent_fragment_downloads': 1,  # По одному фрагменту для VK
+            'noprogress': False,
             # Для VK.video нужны куки (если видео приватное)
             # 'cookiefile': 'cookies.txt',
         }
         
+        # Специальные настройки для VK
+        if platform == 'vk':
+            logger.info("🔧 Applying VK-specific download settings...")
+            ydl_opts.update({
+                # Приоритет: низкое качество = быстрая загрузка
+                'format': 'worst[ext=m4a]/worstaudio/bestaudio[filesize<50M]/hls-240/hls-360/worst',
+                'extractor_args': {'vk': {'no_fragment_concatenation': True}},
+                'http_chunk_size': 0,  # Отключить chunked download
+                'concurrent_fragment_downloads': 1,
+                'socket_timeout': 60,  # Уменьшенный таймаут
+                'retries': 3,  # Меньше попыток
+                'fragment_retries': 3,
+                'skip_unavailable_fragments': True,
+                'ignoreerrors': True,
+                'noprogress': True,
+                'keepvideo': False,
+                'prefer_free_formats': True,
+                'max_filesize': 100 * 1024 * 1024,  # Макс 100MB
+                'abort_on_error': False,
+                'continue_dl': True,  # Продолжить прерванную загрузку
+            })
+            logger.warning("⚠️ VK downloads may be slow. Consider using YouTube for better performance.")
+        
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 logger.info(f"🔍 Extracting info from {platform}...")
-                info = ydl.extract_info(url, download=True)
+                
+                # Сначала получаем инфо БЕЗ загрузки для проверки длительности
+                info = ydl.extract_info(url, download=False)
                 
                 video_title = info.get('title', 'Unknown')
                 duration = info.get('duration', 0)
                 thumbnail = info.get('thumbnail', '')
                 
-                logger.info(f"✅ Downloaded: {video_title} ({duration}s)")
+                # Предупреждение для длинных VK видео
+                if platform == 'vk' and duration > 1800:  # > 30 минут
+                    logger.warning(f"⚠️ VK video is {duration//60} minutes long. This may take a VERY long time to download.")
+                    logger.warning(f"⚠️ Consider using shorter videos or YouTube for faster processing.")
+                
+                # Ограничение на макс длительность для VK
+                if platform == 'vk' and duration > 3600:  # > 60 минут
+                    raise Exception(f"VK videos longer than 60 minutes are not supported due to slow download speeds. Video duration: {duration//60} min. Please use YouTube instead.")
+                
+                logger.info(f"📹 Video: {video_title} ({duration}s)")
+                
+                # Теперь скачиваем
+                logger.info(f"⬇️ Downloading...")
+                info = ydl.extract_info(url, download=True)
+                
+                logger.info(f"✅ Downloaded: {video_title}")
         
         except Exception as e:
             logger.error(f"❌ Download failed: {e}")
