@@ -7,7 +7,7 @@
       <header class="admin-header">
         <div class="header-left">
           <h1><i class="pi pi-sliders-h"></i> Панель управления</h1>
-          <p class="subtitle">Обработка видео, утверждение вопросов и генерация ответов</p>
+          <p class="subtitle">Обработка видео, утверждение вопросов, генерация ответов и управление контентом</p>
         </div>
         <Button label="Загрузить видео" icon="pi pi-plus" @click="showUploadDialog = true" class="upload-btn" />
       </header>
@@ -71,16 +71,90 @@
       </section>
 
       <!-- Tabs -->
-      <TabView class="admin-tabs">
-        <TabPanel header="Утверждение вопросов">
+      <TabView class="admin-tabs" v-model:activeIndex="activeTab">
+        <TabPanel>
+          <template #header>
+            <i class="pi pi-check-square mr-2"></i> Вопросы
+          </template>
+          <div class="tab-toolbar">
+            <Button label="Массовая генерация ответов" icon="pi pi-sparkles" severity="help" size="small"
+                    @click="bulkGenerate" :loading="bulkGenerating" 
+                    v-tooltip="'Сгенерировать ответы для всех утверждённых вопросов без ответа'" />
+          </div>
           <QuestionApproval ref="approvalComponent" />
         </TabPanel>
-        
-        <TabPanel header="Генерация ответов">
-          <AnswerGenerator />
+
+        <TabPanel>
+          <template #header>
+            <i class="pi pi-lightbulb mr-2"></i> Предложения
+          </template>
+          <SuggestionsManager ref="suggestionsComponent" />
+        </TabPanel>
+
+        <TabPanel>
+          <template #header>
+            <i class="pi pi-comments mr-2"></i> Обратная связь
+          </template>
+          <FeedbackManager ref="feedbackComponent" />
+        </TabPanel>
+
+        <TabPanel>
+          <template #header>
+            <i class="pi pi-video mr-2"></i> Видео
+          </template>
+          <div class="videos-manager">
+            <div class="vm-toolbar">
+              <InputText v-model="videoSearch" placeholder="Поиск видео..." class="vm-search" />
+              <span class="vm-count">{{ filteredAdminVideos.length }} видео</span>
+            </div>
+            <div v-if="adminVideosLoading" class="vm-loading"><ProgressSpinner strokeWidth="3" /></div>
+            <div v-else-if="filteredAdminVideos.length === 0" class="vm-empty">
+              <i class="pi pi-video"></i>
+              <p>Видео не найдены</p>
+            </div>
+            <DataTable v-else :value="filteredAdminVideos" stripedRows :paginator="true" :rows="10"
+                       :rowsPerPageOptions="[10, 25, 50]" responsiveLayout="scroll">
+              <Column field="title" header="Название" style="min-width:200px">
+                <template #body="s">
+                  <div v-if="editingVideoId === s.data.id" class="vm-edit-title">
+                    <InputText v-model="editingVideoTitle" class="w-full" size="small" />
+                    <Button icon="pi pi-check" size="small" severity="success" text @click="saveVideoTitle(s.data)" />
+                    <Button icon="pi pi-times" size="small" severity="secondary" text @click="editingVideoId = null" />
+                  </div>
+                  <div v-else class="vm-title-cell">
+                    <span>{{ s.data.title || 'Без названия' }}</span>
+                    <Button icon="pi pi-pencil" size="small" text severity="secondary" 
+                            @click="startEditVideo(s.data)" v-tooltip="'Переименовать'" />
+                  </div>
+                </template>
+              </Column>
+              <Column field="platform" header="Платформа" style="width:110px">
+                <template #body="s"><Tag :value="s.data.platform" severity="info" /></template>
+              </Column>
+              <Column field="question_count" header="Вопросов" style="width:100px">
+                <template #body="s"><Badge :value="s.data.question_count || s.data.linked_questions || 0" severity="info" /></template>
+              </Column>
+              <Column field="processed_at" header="Обработано" style="width:130px">
+                <template #body="s">{{ formatTime(s.data.processed_at) }}</template>
+              </Column>
+              <Column header="" style="width:120px">
+                <template #body="s">
+                  <div class="vm-actions">
+                    <Button icon="pi pi-external-link" size="small" text severity="info"
+                            @click="openVideoUrl(s.data)" v-tooltip="'Открыть'" />
+                    <Button icon="pi pi-trash" size="small" text severity="danger"
+                            @click="deleteVideoConfirm(s.data)" v-tooltip="'Удалить'" />
+                  </div>
+                </template>
+              </Column>
+            </DataTable>
+          </div>
         </TabPanel>
         
-        <TabPanel header="Статистика">
+        <TabPanel>
+          <template #header>
+            <i class="pi pi-chart-bar mr-2"></i> Статистика
+          </template>
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2)">
@@ -170,6 +244,7 @@
           <div class="system-actions mt-3">
             <Button label="Пересчитать вероятности" icon="pi pi-refresh" @click="recalculateProbabilities" :loading="recalculating" />
             <Button label="Экспорт JSON" icon="pi pi-download" @click="exportJSON" severity="secondary" />
+            <Button label="Экспорт CSV" icon="pi pi-file" @click="exportCSV" severity="secondary" />
           </div>
         </TabPanel>
       </TabView>
@@ -185,7 +260,8 @@ import { useQuestionsStore, useTasksStore } from '../store'
 import NavBar from '../components/NavBar.vue'
 import VideoUpload from '../components/VideoUpload.vue'
 import QuestionApproval from '../components/QuestionApproval.vue'
-import AnswerGenerator from '../components/AnswerGenerator.vue'
+import SuggestionsManager from '../components/SuggestionsManager.vue'
+import FeedbackManager from '../components/FeedbackManager.vue'
 import api from '../api/client'
 
 const questionsStore = useQuestionsStore()
@@ -195,6 +271,58 @@ const showUploadDialog = ref(false)
 const recalculating = ref(false)
 const approvalComponent = ref(null)
 const expandedLogs = ref({})
+const suggestionsComponent = ref(null)
+const feedbackComponent = ref(null)
+const activeTab = ref(0)
+const bulkGenerating = ref(false)
+
+// Video management
+const adminVideos = ref([])
+const adminVideosLoading = ref(false)
+const videoSearch = ref('')
+const editingVideoId = ref(null)
+const editingVideoTitle = ref('')
+
+const filteredAdminVideos = computed(() => {
+  if (!videoSearch.value) return adminVideos.value
+  const s = videoSearch.value.toLowerCase()
+  return adminVideos.value.filter(v => (v.title || '').toLowerCase().includes(s) || (v.youtube_url || '').toLowerCase().includes(s))
+})
+
+const loadAdminVideos = async () => {
+  adminVideosLoading.value = true
+  try {
+    const r = await api.getProcessedVideos()
+    adminVideos.value = r.data?.videos || r.data || []
+  } catch (e) { console.error(e) }
+  adminVideosLoading.value = false
+}
+
+const startEditVideo = (video) => {
+  editingVideoId.value = video.id
+  editingVideoTitle.value = video.title || ''
+}
+
+const saveVideoTitle = async (video) => {
+  try {
+    await api.updateVideo(video.id, { title: editingVideoTitle.value })
+    video.title = editingVideoTitle.value
+    editingVideoId.value = null
+  } catch (e) { alert('Ошибка сохранения: ' + e.message) }
+}
+
+const openVideoUrl = (video) => {
+  const url = video.youtube_url || video.url
+  if (url) window.open(url, '_blank')
+}
+
+const deleteVideoConfirm = async (video) => {
+  if (!confirm(`Удалить видео «${video.title || video.youtube_url}»? Связи с вопросами будут удалены.`)) return
+  try {
+    await api.deleteVideo(video.id)
+    adminVideos.value = adminVideos.value.filter(v => v.id !== video.id)
+  } catch (e) { alert('Ошибка удаления: ' + e.message) }
+}
 
 // Task getters
 const allTasks = computed(() => tasksStore.tasks)
@@ -273,6 +401,26 @@ const toggleLogs = (taskId) => {
 }
 
 // Actions
+const bulkGenerate = async () => {
+  const toGenerate = questionsStore.approvedQuestions.filter(q => !q.answer)
+  if (toGenerate.length === 0) {
+    alert('Все утверждённые вопросы уже имеют ответы!')
+    return
+  }
+  if (!confirm(`Сгенерировать ответы для ${toGenerate.length} вопросов? Это может занять некоторое время.`)) return
+  bulkGenerating.value = true
+  let success = 0, fail = 0
+  for (const q of toGenerate) {
+    try {
+      await questionsStore.generateAnswer(q.id)
+      success++
+    } catch { fail++ }
+  }
+  bulkGenerating.value = false
+  alert(`Готово! Успешно: ${success}, ошибки: ${fail}`)
+  await questionsStore.fetchQuestions()
+}
+
 const onVideoSubmitted = async (taskId) => {
   // Task is already added to the store — just refresh UI
   if (approvalComponent.value) {
@@ -304,11 +452,23 @@ const exportJSON = async () => {
   } catch (e) { alert('Ошибка экспорта') }
 }
 
+const exportCSV = async () => {
+  try {
+    const r = await api.exportCSV()
+    const blob = new Blob([r.data], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `questions-${Date.now()}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) { alert('Ошибка экспорта CSV') }
+}
+
 onMounted(async () => {
   await Promise.all([
     questionsStore.fetchQuestions(),
     questionsStore.fetchAdminQuestions(),
-    tasksStore.fetchAllTasks()
+    tasksStore.fetchAllTasks(),
+    loadAdminVideos()
   ])
   tasksStore.startGlobalPolling()
   
@@ -601,4 +761,47 @@ onUnmounted(() => {
   background: transparent;
   border-color: rgba(255,255,255,0.08);
 }
+
+.admin-tabs :deep(.p-tabview-nav li .p-tabview-nav-link) {
+  padding: 0.85rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Fix Paginator dropdown alignment */
+.admin-page :deep(.p-paginator .p-dropdown) {
+  display: inline-flex;
+  align-items: center;
+}
+.admin-page :deep(.p-paginator .p-dropdown .p-dropdown-label) {
+  display: flex;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.tab-toolbar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+}
+
+.mr-2 { margin-right: 0.5rem; }
+
+/* Video Manager */
+.videos-manager { padding: 0.5rem 0; }
+.vm-toolbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.vm-search { min-width: 250px; }
+.vm-count { color: rgba(255,255,255,0.45); font-size: 0.85rem; margin-left: auto; }
+.vm-loading { display: flex; justify-content: center; padding: 2rem; }
+.vm-empty { text-align: center; padding: 3rem; color: rgba(255,255,255,0.4); }
+.vm-empty i { font-size: 2.5rem; display: block; margin-bottom: 0.5rem; }
+.vm-title-cell { display: flex; align-items: center; gap: 0.25rem; }
+.vm-edit-title { display: flex; align-items: center; gap: 0.25rem; }
+.vm-actions { display: flex; gap: 0.25rem; }
 </style>

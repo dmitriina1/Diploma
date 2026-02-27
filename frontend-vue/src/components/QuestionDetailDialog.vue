@@ -79,7 +79,15 @@
                   icon="pi pi-sparkles" text size="small" class="gen-btn"
                   @click="generateAnswer" :loading="generating" />
         </label>
-        <Textarea v-if="editing" v-model="form.answer" rows="8" autoResize class="w-full answer-edit" />
+        <div v-if="editing" class="answer-edit-wrapper">
+          <div class="answer-edit-toolbar">
+            <Button label="Сгенерировать ответ" icon="pi pi-sparkles" size="small" severity="help"
+                    @click="generateAnswerInEdit" :loading="generating" 
+                    v-tooltip="'Сгенерировать ответ с помощью LLM и вставить в поле'" />
+          </div>
+          <Textarea v-model="form.answer" rows="8" autoResize class="w-full answer-edit" 
+                    placeholder="Напишите ответ вручную или сгенерируйте с помощью кнопки выше..." />
+        </div>
         <div v-else-if="detail.answer" class="field-value answer-text">{{ detail.answer }}</div>
         <div v-else class="no-answer">
           <i class="pi pi-info-circle"></i> Ответ пока не сгенерирован
@@ -332,6 +340,21 @@ const generateAnswer = async () => {
   }
 }
 
+// Generate answer while in edit mode — inserts generated text into the form
+const generateAnswerInEdit = async () => {
+  generating.value = true
+  try {
+    await questionsStore.generateAnswer(detail.value.id)
+    const res = await api.getQuestionDetail(detail.value.id)
+    form.value.answer = res.data.answer || form.value.answer
+    detail.value = res.data
+  } catch (e) {
+    alert('Ошибка генерации ответа: ' + e.message)
+  } finally {
+    generating.value = false
+  }
+}
+
 // Merge
 const confirmMerge = (similar) => {
   mergeTarget.value = similar
@@ -495,6 +518,17 @@ const openSimilar = (id) => {
 .answer-edit {
   font-size: 0.95rem;
   line-height: 1.7;
+}
+
+.answer-edit-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.answer-edit-toolbar {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .no-answer {

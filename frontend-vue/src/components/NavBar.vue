@@ -7,12 +7,27 @@
       </router-link>
       
       <div class="navbar-menu">
-        <router-link to="/" class="navbar-link">
+        <router-link to="/" class="navbar-link" exact>
           <i class="pi pi-home"></i>
           <span>Главная</span>
         </router-link>
+
+        <router-link to="/trainer" class="navbar-link">
+          <i class="pi pi-bolt"></i>
+          <span>Тренажёр</span>
+        </router-link>
+
+        <router-link to="/recordings" class="navbar-link">
+          <i class="pi pi-video"></i>
+          <span>Записи собеседований</span>
+        </router-link>
+
+        <router-link to="/interview-questions" class="navbar-link">
+          <i class="pi pi-list"></i>
+          <span>Вопросы с собеседований</span>
+        </router-link>
         
-        <router-link to="/admin" class="navbar-link">
+        <router-link to="/admin" class="navbar-link admin-link">
           <i class="pi pi-cog"></i>
           <span>Админка</span>
         </router-link>

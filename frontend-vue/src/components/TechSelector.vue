@@ -67,7 +67,7 @@ const technologies = computed(() => {
 })
 
 const selectTech = (techName) => {
-  router.push({ name: 'Questions', params: { topic: techName } })
+  router.push({ path: '/interview-questions', query: { topic: techName } })
 }
 </script>
 

@@ -37,9 +37,31 @@
       </div>
     </section>
     
+    <section class="features">
+      <div class="features-container">
+        <div class="feature-card" @click="$router.push('/trainer')">
+          <div class="feature-icon trainer-icon"><i class="pi pi-bolt"></i></div>
+          <h3>Тренажёр</h3>
+          <p>Карточки с интервальным повторением и режим реального собеседования</p>
+        </div>
+        <div class="feature-card" @click="$router.push('/recordings')">
+          <div class="feature-icon recordings-icon"><i class="pi pi-video"></i></div>
+          <h3>Записи собеседований</h3>
+          <p>Видео реальных собеседований с извлечёнными вопросами и таймкодами</p>
+        </div>
+        <div class="feature-card" @click="$router.push('/interview-questions')">
+          <div class="feature-icon questions-icon"><i class="pi pi-list"></i></div>
+          <h3>Вопросы с собеседований</h3>
+          <p>Полная база вопросов с фильтрацией по технологии, сложности, вероятности</p>
+        </div>
+      </div>
+    </section>
+
     <section class="content">
       <TechSelector />
     </section>
+
+    <AppFooter />
   </div>
 </template>
 
@@ -48,6 +70,7 @@ import { computed, onMounted } from 'vue'
 import { useQuestionsStore } from '../store'
 import NavBar from '../components/NavBar.vue'
 import TechSelector from '../components/TechSelector.vue'
+import AppFooter from '../components/AppFooter.vue'
 
 const questionsStore = useQuestionsStore()
 
@@ -180,27 +203,39 @@ onMounted(async () => {
   transform: scale(1.2) rotate(10deg);
 }
 
-.stat-content {
-  text-align: left;
+.stat-content { text-align: left; }
+.stat-value { font-size: 2.5rem; font-weight: 800; color: white; line-height: 1; margin-bottom: 0.3rem; }
+.stat-label { font-size: 0.95rem; color: rgba(255, 255, 255, 0.9); font-weight: 500; }
+
+.content { padding: 4rem 0; position: relative; z-index: 1; }
+
+.features { padding: 3rem 2rem; position: relative; z-index: 1; }
+
+.features-container {
+  max-width: 1200px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;
 }
 
-.stat-value {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: white;
-  line-height: 1;
-  margin-bottom: 0.3rem;
+.feature-card {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.stat-label {
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 500;
+.feature-card:hover {
+  background: rgba(255, 255, 255, 0.08); border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-4px); box-shadow: 0 12px 40px rgba(102, 126, 234, 0.2);
 }
 
-.content {
-  padding: 4rem 0;
-  position: relative;
-  z-index: 1;
+.feature-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 1rem; font-size: 1.5rem; color: white;
 }
+.trainer-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
+.recordings-icon { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.questions-icon { background: linear-gradient(135deg, #22c55e, #14b8a6); }
+
+.feature-card h3 { color: rgba(255, 255, 255, 0.9); margin-bottom: 0.5rem; font-size: 1.2rem; }
+.feature-card p { color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; line-height: 1.5; }
 </style>

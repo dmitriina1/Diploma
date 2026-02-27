@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="question-detail-page">
     <NavBar />
     
@@ -27,6 +27,11 @@
                :severity="probabilitySeverity" 
                icon="pi pi-chart-line" />
         </div>
+
+        <div class="header-actions">
+          <Button icon="pi pi-comment" label="Отзыв" size="small" severity="help"
+                  @click="showFeedback = true" />
+        </div>
       </div>
       
       <Card class="question-card">
@@ -39,7 +44,7 @@
           
           <div v-if="question.answer" class="answer-section">
             <h3><i class="pi pi-book"></i> Ответ</h3>
-            <div class="answer-content">{{ question.answer }}</div>
+            <div class="answer-content" v-html="formatAnswer(question.answer)"></div>
           </div>
           
           <div v-else class="no-answer">
@@ -53,15 +58,18 @@
           <div v-if="questionDetail?.videos?.length > 0" class="videos-section">
             <h3>
               <i class="pi pi-video"></i> 
-              Видео, в которых встречался вопрос 
-              <Tag :value="`${questionDetail.videos.length} из ${questionDetail.total_videos}`" severity="info" />
+              Видео с этим вопросом
+              <Tag :value="`${questionDetail.videos.length}`" severity="info" />
             </h3>
             <div class="videos-list">
               <a v-for="v in questionDetail.videos" :key="v.id" 
-                 :href="v.url" target="_blank" rel="noopener" class="video-link-card">
-                <i class="pi pi-external-link"></i>
+                 :href="buildVideoUrl(v.url, question.timecode)" target="_blank" rel="noopener" class="video-link-card">
+                <i class="pi pi-play"></i>
                 <span class="video-title">{{ v.title || 'Без названия' }}</span>
                 <Tag :value="v.platform" size="small" severity="secondary" />
+                <span v-if="question.timecode" class="timecode-badge">
+                  <i class="pi pi-clock"></i> {{ question.timecode }}
+                </span>
               </a>
             </div>
           </div>
@@ -69,11 +77,6 @@
           <Divider />
           
           <div class="metadata">
-            <div class="metadata-item">
-              <i class="pi pi-clock"></i>
-              <span>Timecode: {{ question.timecode || 'Не указан' }}</span>
-            </div>
-            
             <div class="metadata-item">
               <i class="pi pi-calendar"></i>
               <span>Добавлено: {{ formatDate(question.created_at) }}</span>
@@ -105,7 +108,10 @@
           </div>
         </template>
       </Card>
+
+      <FeedbackDialog v-model:visible="showFeedback" :questionId="questionId" />
     </div>
+    <AppFooter />
   </div>
 </template>
 
@@ -114,6 +120,8 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuestionsStore } from '../store'
 import NavBar from '../components/NavBar.vue'
+import AppFooter from '../components/AppFooter.vue'
+import FeedbackDialog from '../components/FeedbackDialog.vue'
 import api from '../api/client'
 
 const route = useRoute()
@@ -124,30 +132,21 @@ const questionId = computed(() => parseInt(route.params.id))
 const loading = ref(true)
 const similarQuestions = ref([])
 const questionDetail = ref(null)
+const showFeedback = ref(false)
 
 const question = computed(() => {
-  // Приоритет - детальные данные из API, иначе из стора
   return questionDetail.value || questionsStore.questions.find(q => q.id === questionId.value)
 })
 
 const difficultyLabel = computed(() => {
   if (!question.value) return ''
-  const labels = {
-    junior: 'Junior',
-    middle: 'Middle',
-    senior: 'Senior'
-  }
+  const labels = { junior: 'Junior', middle: 'Middle', senior: 'Senior' }
   return labels[question.value.difficulty] || question.value.difficulty
 })
 
 const difficultySeverity = computed(() => {
   if (!question.value) return 'info'
-  const severities = {
-    junior: 'success',
-    middle: 'warning',
-    senior: 'danger'
-  }
-  return severities[question.value.difficulty] || 'info'
+  return { junior: 'success', middle: 'warning', senior: 'danger' }[question.value.difficulty] || 'info'
 })
 
 const probabilitySeverity = computed(() => {
@@ -158,25 +157,62 @@ const probabilitySeverity = computed(() => {
   return 'success'
 })
 
-const platform = computed(() => {
-  if (!question.value?.platform) return 'Unknown'
-  return question.value.platform
-})
-
 const formatDate = (dateString) => {
   if (!dateString) return 'Неизвестно'
-  return new Date(dateString).toLocaleDateString('ru-RU', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
+  return new Date(dateString).toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
+const formatAnswer = (text) => {
+  if (!text) return ''
+  return text.replace(/\n/g, '<br>')
+}
+
+/** Embed timecode into video URL for direct playback at the right moment */
+const buildVideoUrl = (url, timecode) => {
+  if (!url || !timecode) return url || '#'
+  const seconds = parseTimecodeToSeconds(timecode)
+  if (seconds <= 0) return url
+  try {
+    const u = new URL(url)
+    // YouTube
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+      u.searchParams.set('t', seconds + 's')
+      return u.toString()
+    }
+    // Rutube
+    if (u.hostname.includes('rutube.ru')) {
+      u.searchParams.set('t', seconds)
+      return u.toString()
+    }
+    // VK
+    if (u.hostname.includes('vk.com') || u.hostname.includes('vkvideo.ru')) {
+      u.searchParams.set('t', seconds + 's')
+      return u.toString()
+    }
+    // Vimeo
+    if (u.hostname.includes('vimeo.com')) {
+      u.hash = `t=${seconds}s`
+      return u.toString()
+    }
+    return url
+  } catch { return url }
+}
+
+const parseTimecodeToSeconds = (tc) => {
+  if (!tc) return 0
+  // Handle HH:MM:SS or MM:SS or SS
+  const parts = tc.toString().split(':').map(Number)
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  return parseInt(tc) || 0
 }
 
 const goBack = () => {
-  if (question.value?.topic) {
-    router.push({ name: 'Questions', params: { topic: question.value.topic } })
+  // Use browser history to go back to whichever page the user came from
+  if (window.history.length > 1) {
+    router.back()
   } else {
-    router.push('/')
+    router.push('/interview-questions')
   }
 }
 
@@ -195,7 +231,6 @@ const loadQuestionDetail = async () => {
     similarQuestions.value = response.data.similar_questions || []
   } catch (error) {
     console.error('Failed to load question detail:', error)
-    // Fallback на данные из стора
     await questionsStore.fetchQuestions()
   }
   
@@ -203,8 +238,6 @@ const loadQuestionDetail = async () => {
 }
 
 onMounted(loadQuestionDetail)
-
-// При переходе на другой вопрос (клик по похожему)
 watch(questionId, loadQuestionDetail)
 </script>
 
@@ -213,167 +246,52 @@ watch(questionId, loadQuestionDetail)
   min-height: 100vh;
   background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
 }
-
 .loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem;
-  gap: 1rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; gap: 1rem;
 }
-
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem;
-  gap: 1rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; gap: 1rem;
 }
-
-.empty-state i {
-  font-size: 4rem;
-  color: var(--text-color-secondary);
-}
-
-.detail-container {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
+.empty-state i { font-size: 4rem; color: var(--text-color-secondary); }
+.detail-container { max-width: 1000px; margin: 0 auto; padding: 2rem; }
 .detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;
 }
+.tags { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.header-actions { display: flex; gap: 0.5rem; }
+.question-card h1 { font-size: 1.8rem; line-height: 1.4; margin: 0; }
 
-.tags {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+.answer-section h3, .similar-section h3, .videos-section h3 {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-color);
 }
-
-.question-card h1 {
-  font-size: 1.8rem;
-  line-height: 1.4;
-  margin: 0;
-}
-
-.answer-section h3,
-.similar-section h3,
-.videos-section h3 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  color: var(--primary-color);
-}
-
-.videos-section h3 .p-tag {
-  margin-left: 0.5rem;
-}
-
-.videos-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
+.videos-list { display: flex; flex-direction: column; gap: 0.5rem; }
 .video-link-card {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  display: flex; align-items: center; gap: 0.75rem;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  text-decoration: none;
-  color: rgba(255, 255, 255, 0.8);
-  transition: all 0.2s;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px; text-decoration: none; color: rgba(255, 255, 255, 0.8); transition: all 0.2s;
 }
-
 .video-link-card:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--primary-color);
-  transform: translateX(4px);
+  background: rgba(255, 255, 255, 0.08); border-color: var(--primary-color); transform: translateX(4px);
 }
-
-.video-link-card .video-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.video-link-card .video-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-link-card i.pi-play { color: var(--primary-color); }
+.timecode-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: rgba(102, 126, 234, 0.15); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px;
+  padding: 0.2rem 0.6rem; font-size: 0.8rem; color: #667eea; font-weight: 600; white-space: nowrap;
 }
-
-.video-link-card i {
-  color: var(--primary-color);
-}
-
 .answer-content {
-  background: rgba(255, 255, 255, 0.05);
-  padding: 1.5rem;
-  border-radius: 8px;
-  line-height: 1.8;
-  white-space: pre-wrap;
+  background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; line-height: 1.8;
 }
-
 .no-answer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-color-secondary);
-  padding: 1rem;
+  display: flex; align-items: center; gap: 0.5rem; color: var(--text-color-secondary); padding: 1rem;
 }
-
-.metadata {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.metadata-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-color-secondary);
-}
-
-.metadata-item a {
-  color: var(--primary-color);
-  text-decoration: none;
-}
-
-.metadata-item a:hover {
-  text-decoration: underline;
-}
-
-.similar-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.similar-card {
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.similar-card:hover {
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.similar-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.similarity-score {
-  font-size: 0.85rem;
-  color: var(--text-color-secondary);
-}
+.metadata { display: flex; flex-direction: column; gap: 1rem; }
+.metadata-item { display: flex; align-items: center; gap: 0.5rem; color: var(--text-color-secondary); }
+.similar-list { display: flex; flex-direction: column; gap: 1rem; }
+.similar-card { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+.similar-card:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
+.similar-meta { display: flex; align-items: center; gap: 1rem; }
+.similarity-score { font-size: 0.85rem; color: var(--text-color-secondary); }
 </style>

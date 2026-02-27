@@ -1,96 +1,9 @@
--- Включить расширение для поиска по схожести (триграммы)
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
--- Таблица для хранения вопросов
-CREATE TABLE IF NOT EXISTS questions (
-    id SERIAL PRIMARY KEY,
-    question TEXT NOT NULL,
-    answer TEXT,
-    topic VARCHAR(100),
-    difficulty VARCHAR(20) CHECK (difficulty IN ('junior', 'middle', 'senior')),
-    source_url VARCHAR(500),
-    video_title VARCHAR(500),
-    timecode VARCHAR(20),  -- Время в видео (например, "10:30")
-    probability FLOAT DEFAULT 0.0,  -- Вероятность выпадения вопроса (%)
-    approved BOOLEAN DEFAULT FALSE,  -- Одобрен ли вопрос админом
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Таблица для хранения задач обработки
-CREATE TABLE IF NOT EXISTS processing_tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    youtube_url VARCHAR(500) NOT NULL,
-    status VARCHAR(50) DEFAULT 'pending',
-    progress INTEGER DEFAULT 0,
-    current_step VARCHAR(200),
-    result JSONB,
-    error_message TEXT,
-    client_id VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Таблица для хранения обработанных видео
-CREATE TABLE IF NOT EXISTS processed_videos (
-    id SERIAL PRIMARY KEY,
-    youtube_url VARCHAR(500) UNIQUE NOT NULL,
-    video_id VARCHAR(50) NOT NULL,
-    platform VARCHAR(50) DEFAULT 'youtube',  -- Платформа: youtube, vk, rutube, ok, etc.
-    title VARCHAR(500),
-    transcript TEXT,
-    questions_count INTEGER DEFAULT 0,
-    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Таблица для связи вопросов и видео (для расчёта вероятности)
-CREATE TABLE IF NOT EXISTS question_video (
-    id SERIAL PRIMARY KEY,
-    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-    video_id INTEGER REFERENCES processed_videos(id) ON DELETE CASCADE,
-    UNIQUE(question_id, video_id)
-);
-
--- Добавить столбец timecode, если он не существует (для обратной совместимости)
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS timecode VARCHAR(20);
-
--- Индексы для быстрого поиска
-CREATE INDEX IF NOT EXISTS idx_questions_topic ON questions(topic);
-CREATE INDEX IF NOT EXISTS idx_questions_difficulty ON questions(difficulty);
-CREATE INDEX IF NOT EXISTS idx_questions_approved ON questions(approved);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON processing_tasks(status);
-CREATE INDEX IF NOT EXISTS idx_tasks_client ON processing_tasks(client_id);
-CREATE INDEX IF NOT EXISTS idx_question_video_question ON question_video(question_id);
-CREATE INDEX IF NOT EXISTS idx_question_video_video ON question_video(video_id);
-CREATE INDEX IF NOT EXISTS idx_processed_videos_platform ON processed_videos(platform);
-
--- Функция обновления времени
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Триггеры для автообновления updated_at
-DROP TRIGGER IF EXISTS update_questions_updated_at ON questions;
-CREATE TRIGGER update_questions_updated_at
-    BEFORE UPDATE ON questions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS update_tasks_updated_at ON processing_tasks;
-CREATE TRIGGER update_tasks_updated_at
-    BEFORE UPDATE ON processing_tasks
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
 -- ============================================
--- v2: Таблицы расширенной функциональности
+-- Migration v2: Расширение функциональности
 -- ============================================
+-- Новые таблицы: предложения видео, обратная связь, закладки, теги, аналитика
 
--- Предложения видео от пользователей
+-- 1. Таблица предложений видео от пользователей
 CREATE TABLE IF NOT EXISTS video_suggestions (
     id SERIAL PRIMARY KEY,
     url VARCHAR(500) NOT NULL,
@@ -107,7 +20,7 @@ CREATE TABLE IF NOT EXISTS video_suggestions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Обратная связь
+-- 2. Таблица обратной связи
 CREATE TABLE IF NOT EXISTS feedback (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE SET NULL,
@@ -122,7 +35,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Закладки (избранное)
+-- 3. Таблица закладок (избранное)
 CREATE TABLE IF NOT EXISTS bookmarks (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
@@ -132,7 +45,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     UNIQUE(question_id, user_session)
 );
 
--- Теги для вопросов
+-- 4. Таблица тегов для вопросов
 CREATE TABLE IF NOT EXISTS question_tags (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
@@ -140,7 +53,7 @@ CREATE TABLE IF NOT EXISTS question_tags (
     UNIQUE(question_id, tag)
 );
 
--- Результаты мок-интервью
+-- 5. Таблица результатов мок-интервью
 CREATE TABLE IF NOT EXISTS mock_interviews (
     id SERIAL PRIMARY KEY,
     user_session VARCHAR(100) NOT NULL,
@@ -155,7 +68,7 @@ CREATE TABLE IF NOT EXISTS mock_interviews (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Локально загруженные видео
+-- 6. Таблица локально загруженных видео
 CREATE TABLE IF NOT EXISTS uploaded_videos (
     id SERIAL PRIMARY KEY,
     filename VARCHAR(500) NOT NULL,
@@ -171,7 +84,7 @@ CREATE TABLE IF NOT EXISTS uploaded_videos (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Аналитика просмотров вопросов
+-- 7. Таблица аналитики просмотров вопросов
 CREATE TABLE IF NOT EXISTS question_views (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
@@ -179,7 +92,7 @@ CREATE TABLE IF NOT EXISTS question_views (
     viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Заметки пользователя к вопросам
+-- 8. Таблица заметок пользователя к вопросам
 CREATE TABLE IF NOT EXISTS user_notes (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
@@ -190,7 +103,7 @@ CREATE TABLE IF NOT EXISTS user_notes (
     UNIQUE(question_id, user_session)
 );
 
--- Индексы v2
+-- Индексы
 CREATE INDEX IF NOT EXISTS idx_suggestions_status ON video_suggestions(status);
 CREATE INDEX IF NOT EXISTS idx_suggestions_platform ON video_suggestions(platform);
 CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(feedback_type);
@@ -206,16 +119,22 @@ CREATE INDEX IF NOT EXISTS idx_views_question ON question_views(question_id);
 CREATE INDEX IF NOT EXISTS idx_views_session ON question_views(user_session);
 CREATE INDEX IF NOT EXISTS idx_notes_session ON user_notes(user_session);
 
--- Триггер для video_suggestions
+-- Триггеры обновления updated_at
 DROP TRIGGER IF EXISTS update_suggestions_updated_at ON video_suggestions;
 CREATE TRIGGER update_suggestions_updated_at
     BEFORE UPDATE ON video_suggestions
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- Триггер для user_notes
 DROP TRIGGER IF EXISTS update_notes_updated_at ON user_notes;
 CREATE TRIGGER update_notes_updated_at
     BEFORE UPDATE ON user_notes
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Добавить столбец platform в processed_videos если его нет
+ALTER TABLE processed_videos ADD COLUMN IF NOT EXISTS platform VARCHAR(50) DEFAULT 'youtube';
+-- Добавить столбец thumbnail
+ALTER TABLE processed_videos ADD COLUMN IF NOT EXISTS thumbnail VARCHAR(500);
+-- Добавить столбец duration
+ALTER TABLE processed_videos ADD COLUMN IF NOT EXISTS duration INTEGER DEFAULT 0;

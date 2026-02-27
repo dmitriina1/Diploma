@@ -16,6 +16,7 @@ import redis.asyncio as redis
 import yt_dlp
 
 from similarity_search import get_similar_questions as search_similar_questions
+from video_downloader import VideoDownloader
 
 # ============== Конфигурация ==============
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
@@ -43,6 +44,7 @@ REDIS_TTL = 86400  # 24 часа
 redis_client: Optional[redis.Redis] = None
 connected_clients: Dict[str, WebSocket] = {}
 whisper_pool: Optional["WhisperPool"] = None  # Инициализируется при старте
+video_downloader: Optional[VideoDownloader] = None  # Универсальный загрузчик
 
 
 # ============== WhisperPool — пул транскрибации с балансировкой ==============
@@ -296,11 +298,15 @@ class TaskStatus(BaseModel):
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_pool
+    global redis_client, whisper_pool, video_downloader
     
     # Startup
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    
+    # Инициализируем универсальный загрузчик видео
+    video_downloader = VideoDownloader(TEMP_DIR)
+    print(f"📥 VideoDownloader initialized (supports: YouTube, VK, Rutube, OK.ru, Dailymotion, Vimeo)")
     
     # Инициализируем WhisperPool
     whisper_pool = WhisperPool(
@@ -482,12 +488,16 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     
     # Валидация URL
     if not is_valid_youtube_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        raise HTTPException(status_code=400, detail="Неподдерживаемая ссылка. Поддерживаются: YouTube, VK, Rutube, OK.ru, Dailymotion, Vimeo")
+    
+    # Определяем платформу
+    platform = video_downloader.detect_platform(request.youtube_url) if video_downloader else 'youtube'
     
     # Сохраняем задачу в Redis
     task_data = {
         "task_id": task_id,
         "youtube_url": request.youtube_url,
+        "platform": platform,
         "topic": request.topic,
         "level": request.level,
         "status": "pending",
@@ -499,7 +509,7 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     # Запускаем обработку в фоне
     background_tasks.add_task(trigger_n8n_workflow, task_id, request)
     
-    return {"task_id": task_id, "status": "started"}
+    return {"task_id": task_id, "status": "started", "platform": platform}
 
 @app.post("/api/process-video/{client_id}", tags=["Processing"])
 async def process_video_with_client(client_id: str, request: YouTubeRequest, background_tasks: BackgroundTasks):
@@ -507,7 +517,10 @@ async def process_video_with_client(client_id: str, request: YouTubeRequest, bac
     task_id = str(uuid.uuid4())
     
     if not is_valid_youtube_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        raise HTTPException(status_code=400, detail="Неподдерживаемая ссылка. Поддерживаются: YouTube, VK, Rutube, OK.ru, Dailymotion, Vimeo")
+    
+    # Определяем платформу
+    platform = video_downloader.detect_platform(request.youtube_url) if video_downloader else 'youtube'
     
     # Связываем task с client
     await redis_client.set(f"task:{task_id}:client", client_id, ex=REDIS_TTL)
@@ -837,17 +850,69 @@ async def update_progress(update: ProgressUpdate):
 
 @app.post("/internal/download-audio", tags=["Internal"])
 async def download_audio(request: DownloadRequest):
-    """Скачивание аудио и субтитров с YouTube"""
+    """Скачивание аудио и субтитров — универсальный загрузчик (YouTube, Rutube, VK, OK.ru и др.)"""
     import time
+    global video_downloader
     
     try:
-        video_id = extract_video_id(request.youtube_url)
+        # Определяем платформу
+        platform = video_downloader.detect_platform(request.youtube_url) if video_downloader else 'youtube'
+        video_id = video_downloader.extract_video_id(request.youtube_url, platform) if video_downloader else extract_video_id(request.youtube_url)
+        
         audio_path = TEMP_DIR / f"{video_id}.mp3"
         
-        # Пробуем скачать субтитры (5 попыток, 3 сек между ними) — оптимизировано
+        # Используем универсальный загрузчик для всех платформ
+        if video_downloader and platform != 'youtube':
+            # Для не-YouTube используем VideoDownloader напрямую
+            print(f"📥 Using universal downloader for {platform}...")
+            result = await video_downloader.download_video_audio(request.youtube_url, video_id)
+            
+            title = result.get('video_title', 'Unknown')
+            subtitles = result.get('subtitles', [])
+            duration = result.get('duration', 0)
+            
+            # Конвертируем формат субтитров если нужно (VideoDownloader может вернуть строковые времена)
+            converted_subs = []
+            for sub in subtitles:
+                start = sub.get('start', 0)
+                end = sub.get('end', 0)
+                # Если start/end — строки вида "00:01:23.456", конвертируем в секунды
+                if isinstance(start, str):
+                    start = _parse_time_str(start)
+                if isinstance(end, str):
+                    end = _parse_time_str(end)
+                converted_subs.append({
+                    'start': round(float(start), 1),
+                    'end': round(float(end), 1),
+                    'text': sub.get('text', '')
+                })
+            subtitles = converted_subs
+            
+            # Сохраняем platform в Redis
+            await redis_client.set(f"platform:{request.task_id}", platform, ex=REDIS_TTL)
+            await redis_client.set(f"video_id:{request.task_id}", video_id, ex=REDIS_TTL)
+            
+            if subtitles:
+                await redis_client.set(
+                    f"subtitles:{request.task_id}",
+                    json.dumps(subtitles),
+                    ex=REDIS_TTL
+                )
+            
+            return {
+                "audio_path": str(audio_path),
+                "title": title,
+                "video_id": video_id,
+                "platform": platform,
+                "has_subtitles": len(subtitles) > 0,
+                "subtitles_count": len(subtitles),
+                "duration": duration
+            }
+        
+        # ===== YouTube — оригинальная логика с ретраями субтитров =====
         subtitles = []
         max_retries = 5
-        retry_delay = 3  # Быстрее, но достаточно для YouTube
+        retry_delay = 3
 
         # Ротация User-Agent для обхода блокировки
         user_agents = [
@@ -1635,11 +1700,20 @@ async def save_questions(request: SaveQuestionsRequest):
 
 # ============== Helper Functions ==============
 def is_valid_youtube_url(url: str) -> bool:
-    """Проверка валидности YouTube URL"""
+    """Проверка валидности URL видео (YouTube, VK, Rutube, OK.ru, Dailymotion, Vimeo)"""
+    global video_downloader
+    if video_downloader:
+        return video_downloader.is_valid_url(url)
+    # Fallback — базовые паттерны
     patterns = [
         r'(https?://)?(www\.)?youtube\.com/watch\?v=[\w-]+',
         r'(https?://)?(www\.)?youtu\.be/[\w-]+',
-        r'(https?://)?(www\.)?youtube\.com/shorts/[\w-]+'
+        r'(https?://)?(www\.)?youtube\.com/shorts/[\w-]+',
+        r'(https?://)?(www\.)?rutube\.ru/video/',
+        r'(https?://)?(www\.)?(vk\.com|vkvideo\.ru)/video',
+        r'(https?://)?(www\.)?ok\.ru/video/',
+        r'(https?://)?(www\.)?dailymotion\.com/video/',
+        r'(https?://)?(www\.)?vimeo\.com/\d+',
     ]
     return any(re.match(pattern, url) for pattern in patterns)
 
@@ -1729,6 +1803,22 @@ def cleanup_temp_files(video_id: str):
                 print(f"🧹 Cleaned up: {file_path.name}")
     except Exception as e:
         print(f"⚠️ Cleanup error: {e}")
+
+def _parse_time_str(time_str: str) -> float:
+    """Конвертация строки времени VTT '00:01:23.456' -> секунды"""
+    try:
+        # Убираем лишние пробелы и атрибуты
+        time_str = time_str.strip().split()[0]
+        parts = time_str.split(':')
+        if len(parts) == 3:
+            h, m, s = parts
+            return int(h) * 3600 + int(m) * 60 + float(s)
+        elif len(parts) == 2:
+            m, s = parts
+            return int(m) * 60 + float(s)
+        return float(time_str)
+    except Exception:
+        return 0.0
 
 def filter_low_quality_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Фильтрация только явного мусора (односложные междометия)"""
@@ -1902,30 +1992,6 @@ async def create_question(data: dict = Body(...)):
         await invalidate_similarity_cache()
         
         return {"id": question_id, "message": "Question created"}
-    finally:
-        await conn.close()
-
-@app.put("/api/admin/questions/{question_id}", tags=["Admin"])
-async def update_question(question_id: int, question: str, answer: Optional[str] = None, topic: Optional[str] = None, difficulty: Optional[str] = None, timecode: Optional[str] = None):
-    """Обновить вопрос"""
-    import asyncpg
-    from similarity_search import invalidate_similarity_cache
-    
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
-        await conn.execute("""
-            UPDATE questions 
-            SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6
-        """, question, answer, topic, difficulty, timecode, question_id)
-        
-        # Обновить вероятности
-        await update_probabilities(conn)
-        
-        # Инвалидируем кэш поиска похожих вопросов
-        await invalidate_similarity_cache()
-        
-        return {"message": "Question updated"}
     finally:
         await conn.close()
 
@@ -2123,6 +2189,1201 @@ async def trigger_n8n_workflow(task_id: str, request: YouTubeRequest):
             "task_id": task_id,
             "error": str(e)
         })
+
+
+# ============== Все задачи (для фронтенда) ==============
+@app.get("/api/all-tasks", tags=["Status"])
+async def get_all_tasks():
+    """Получение всех задач из Redis"""
+    try:
+        tasks = []
+        # Сканируем все ключи задач
+        cursor = 0
+        while True:
+            cursor, keys = await redis_client.scan(cursor, match="task:*", count=100)
+            for key in keys:
+                # Пропускаем служебные ключи
+                if ':client' in key or ':tasks' in key:
+                    continue
+                task_data = await redis_client.get(key)
+                if task_data:
+                    try:
+                        task = json.loads(task_data)
+                        if 'task_id' in task:
+                            tasks.append(task)
+                    except json.JSONDecodeError:
+                        pass
+            if cursor == 0:
+                break
+        
+        # Сортируем по времени создания (новые первые)
+        tasks.sort(key=lambda t: t.get('created_at', ''), reverse=True)
+        return {"tasks": tasks}
+    except Exception as e:
+        return {"tasks": [], "error": str(e)}
+
+
+# ============== Отзыв одобрения вопросов ==============
+@app.post("/api/admin/revoke-questions", tags=["Admin"])
+async def revoke_questions(data: Dict[str, List[int]]):
+    """Отозвать одобрение вопросов"""
+    question_ids = data.get("question_ids", [])
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        revoked_count = 0
+        for question_id in question_ids:
+            result = await conn.execute("UPDATE questions SET approved = FALSE WHERE id = $1 AND approved = TRUE", question_id)
+            if result == "UPDATE 1":
+                revoked_count += 1
+
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+
+        return {"message": f"Отозвано {revoked_count} вопросов", "revoked_count": revoked_count}
+    finally:
+        await conn.close()
+
+
+# ============== Получение деталей вопроса ==============
+@app.get("/api/questions/{question_id}", tags=["Public"])
+async def get_public_question_detail(question_id: int):
+    """Полная информация о вопросе для публичной части"""
+    import asyncpg
+    from fastapi.responses import JSONResponse
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        q = await conn.fetchrow("""
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability, q.timecode,
+                   q.source_url, q.video_title, q.created_at
+            FROM questions q
+            WHERE q.id = $1 AND q.approved = TRUE
+        """, question_id)
+
+        if not q:
+            raise HTTPException(status_code=404, detail="Вопрос не найден")
+
+        # Получаем видео-источники
+        sources = await conn.fetch("""
+            SELECT pv.id, pv.youtube_url as url, pv.title, pv.platform
+            FROM question_video qv
+            JOIN processed_videos pv ON qv.video_id = pv.id
+            WHERE qv.question_id = $1
+        """, question_id)
+
+        # Получаем теги
+        tags = await conn.fetch("SELECT tag FROM question_tags WHERE question_id = $1", question_id)
+
+        # Записываем просмотр
+        try:
+            await conn.execute(
+                "INSERT INTO question_views (question_id) VALUES ($1)", question_id
+            )
+        except Exception:
+            pass  # Таблица может не существовать
+
+        result = {
+            "id": q["id"],
+            "question": q["question"],
+            "answer": q["answer"],
+            "topic": q["topic"],
+            "difficulty": q["difficulty"],
+            "probability": q["probability"],
+            "timecode": q["timecode"],
+            "source_url": q["source_url"],
+            "video_title": q["video_title"],
+            "created_at": str(q["created_at"]) if q["created_at"] else None,
+            "sources": [dict(s) for s in sources],
+            "tags": [t["tag"] for t in tags]
+        }
+
+        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+    finally:
+        await conn.close()
+
+
+# ============== Детали вопроса для админа ==============
+@app.get("/api/admin/questions/{question_id}", tags=["Admin"])
+async def get_admin_question_detail(question_id: int):
+    """Полная информация о вопросе для админа"""
+    import asyncpg
+    from fastapi.responses import JSONResponse
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        q = await conn.fetchrow("""
+            SELECT * FROM questions WHERE id = $1
+        """, question_id)
+
+        if not q:
+            raise HTTPException(status_code=404, detail="Вопрос не найден")
+
+        sources = await conn.fetch("""
+            SELECT pv.id, pv.youtube_url as url, pv.title, pv.platform
+            FROM question_video qv JOIN processed_videos pv ON qv.video_id = pv.id
+            WHERE qv.question_id = $1
+        """, question_id)
+
+        tags = await conn.fetch("SELECT tag FROM question_tags WHERE question_id = $1", question_id)
+
+        # Количество просмотров
+        views_count = 0
+        try:
+            views_count = await conn.fetchval("SELECT COUNT(*) FROM question_views WHERE question_id = $1", question_id)
+        except Exception:
+            pass
+
+        # Обратная связь
+        feedbacks = []
+        try:
+            feedbacks_raw = await conn.fetch(
+                "SELECT * FROM feedback WHERE question_id = $1 ORDER BY created_at DESC LIMIT 10", question_id
+            )
+            feedbacks = [dict(f) for f in feedbacks_raw]
+        except Exception:
+            pass
+
+        result = dict(q)
+        result["sources"] = [dict(s) for s in sources]
+        result["tags"] = [t["tag"] for t in tags]
+        result["views_count"] = views_count
+        result["feedbacks"] = feedbacks
+        # Convert datetime objects to strings
+        for key in result:
+            if hasattr(result[key], 'isoformat'):
+                result[key] = result[key].isoformat()
+
+        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+    finally:
+        await conn.close()
+
+
+# ============== Объединение вопросов ==============
+@app.post("/api/admin/questions/merge", tags=["Admin"])
+async def merge_questions(data: dict = Body(...)):
+    """Объединить два вопроса (перенести связи с source_id на target_id, удалить source)"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+
+    source_id = data.get("source_id")
+    target_id = data.get("target_id")
+    if not source_id or not target_id:
+        raise HTTPException(status_code=400, detail="source_id and target_id required")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Перенести видео-связи
+        links = await conn.fetch("SELECT video_id FROM question_video WHERE question_id = $1", source_id)
+        for link in links:
+            await conn.execute("""
+                INSERT INTO question_video (question_id, video_id) VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+            """, target_id, link['video_id'])
+
+        # Удалить связи и сам исходный вопрос
+        await conn.execute("DELETE FROM question_video WHERE question_id = $1", source_id)
+        await conn.execute("DELETE FROM questions WHERE id = $1", source_id)
+
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+
+        return {"message": "Вопросы объединены", "kept_id": target_id, "deleted_id": source_id}
+    finally:
+        await conn.close()
+
+
+# ============== Генерация ответа через LLM ==============
+@app.post("/api/admin/generate-answer/{question_id}", tags=["Admin"])
+async def generate_answer(question_id: int):
+    """Генерация ответа на вопрос с помощью LLM"""
+    import asyncpg
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        q = await conn.fetchrow("SELECT id, question, topic, difficulty FROM questions WHERE id = $1", question_id)
+        if not q:
+            raise HTTPException(status_code=404, detail="Вопрос не найден")
+
+        prompt = f"""Ты опытный IT-специалист, который готовит кандидатов к собеседованиям.
+
+Дай подробный, структурированный ответ на вопрос для IT-собеседования.
+
+Тема: {q['topic']}
+Уровень: {q['difficulty']}
+Вопрос: {q['question']}
+
+Требования к ответу:
+1. Ответ должен быть на русском языке
+2. Начни с краткого определения (1-2 предложения)
+3. Раскрой тему подробнее (2-4 абзаца)
+4. Приведи пример кода, если это уместно (используй Markdown)
+5. Упомяни практическое применение
+6. Если есть подводные камни или edge cases, укажи их
+7. Формат: Markdown
+
+Ответ:"""
+
+        # Генерируем ответ через LLM
+        try:
+            result = await call_llm_for_answer(prompt)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Ошибка LLM: {str(e)}")
+
+        # Сохраняем ответ в БД
+        await conn.execute(
+            "UPDATE questions SET answer = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+            result, question_id
+        )
+
+        return {"answer": result, "question_id": question_id}
+    finally:
+        await conn.close()
+
+
+async def call_llm_for_answer(prompt: str) -> str:
+    """Получить текстовый ответ от LLM (не JSON)"""
+    provider = LLM_PROVIDER.lower()
+    if provider == "auto":
+        if OPENROUTER_API_KEY:
+            provider = "openrouter"
+        elif GROQ_API_KEY:
+            provider = "groq"
+        elif GEMINI_API_KEY:
+            provider = "gemini"
+        else:
+            provider = "ollama"
+
+    if provider == "openrouter":
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "mistralai/devstral-2512:free",
+                    "messages": [
+                        {"role": "system", "content": "Ты опытный IT-специалист. Отвечай подробно, структурированно, на русском языке."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.4,
+                    "max_tokens": 4000
+                }
+            )
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+    
+    if provider == "groq" or (provider == "openrouter" and GROQ_API_KEY):
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {"role": "system", "content": "Ты опытный IT-специалист. Отвечай подробно, структурированно, на русском языке."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.4,
+                    "max_tokens": 4000
+                }
+            )
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+    
+    if provider == "gemini" or GEMINI_API_KEY:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.4, "maxOutputTokens": 4000}
+                }
+            )
+            if response.status_code == 200:
+                return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    
+    raise Exception("Нет доступного LLM провайдера для генерации ответа")
+
+
+# ============== Массовая генерация ответов ==============
+@app.post("/api/admin/generate-answers-bulk", tags=["Admin"])
+async def generate_answers_bulk(data: dict = Body(...)):
+    """Массовая генерация ответов для вопросов без ответов"""
+    import asyncpg
+    question_ids = data.get("question_ids", [])
+    max_count = data.get("max_count", 10)  # Ограничение
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        if not question_ids:
+            # Генерируем для всех вопросов без ответов
+            rows = await conn.fetch(
+                "SELECT id FROM questions WHERE (answer IS NULL OR answer = '') AND approved = TRUE LIMIT $1",
+                max_count
+            )
+            question_ids = [r["id"] for r in rows]
+
+        generated = 0
+        errors = 0
+        for qid in question_ids[:max_count]:
+            try:
+                await generate_answer(qid)
+                generated += 1
+                await asyncio.sleep(1)  # Пауза между запросами
+            except Exception as e:
+                print(f"⚠️ Error generating answer for {qid}: {e}")
+                errors += 1
+
+        return {"generated": generated, "errors": errors, "total": len(question_ids)}
+    finally:
+        await conn.close()
+
+
+# ============== Предложения видео ==============
+@app.post("/api/suggestions", tags=["Public"])
+async def create_suggestion(data: dict = Body(...)):
+    """Пользователь предлагает видео для обработки"""
+    import asyncpg
+
+    url = data.get("url", "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL обязателен")
+
+    # Определяем платформу
+    platform = video_downloader.detect_platform(url) if video_downloader else 'unknown'
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        suggestion_id = await conn.fetchval("""
+            INSERT INTO video_suggestions (url, platform, topic, difficulty, comment, user_name, user_email)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """, url, platform,
+            data.get("topic", "General"),
+            data.get("difficulty", "middle"),
+            data.get("comment", ""),
+            data.get("user_name", ""),
+            data.get("user_email", ""))
+
+        return {"id": suggestion_id, "message": "Спасибо! Ваше предложение отправлено на рассмотрение."}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/suggestions", tags=["Public"])
+async def get_suggestions(status: Optional[str] = None):
+    """Список предложений видео (для публичной части — только одобренные)"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        if status:
+            suggestions = await conn.fetch(
+                "SELECT * FROM video_suggestions WHERE status = $1 ORDER BY created_at DESC", status)
+        else:
+            suggestions = await conn.fetch(
+                "SELECT * FROM video_suggestions ORDER BY created_at DESC LIMIT 50")
+        
+        result = []
+        for s in suggestions:
+            row = dict(s)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"suggestions": result}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/suggestions", tags=["Admin"])
+async def get_admin_suggestions():
+    """Все предложения видео для админа"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        suggestions = await conn.fetch("SELECT * FROM video_suggestions ORDER BY created_at DESC")
+        result = []
+        for s in suggestions:
+            row = dict(s)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"suggestions": result}
+    finally:
+        await conn.close()
+
+
+@app.put("/api/admin/suggestions/{suggestion_id}", tags=["Admin"])
+async def update_suggestion(suggestion_id: int, data: dict = Body(...)):
+    """Обновить статус предложения (approve, reject, processing)"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        status = data.get("status", "pending")
+        admin_comment = data.get("admin_comment", "")
+        await conn.execute(
+            "UPDATE video_suggestions SET status = $1, admin_comment = $2 WHERE id = $3",
+            status, admin_comment, suggestion_id)
+        return {"message": "Предложение обновлено"}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/suggestions/{suggestion_id}/process", tags=["Admin"])
+async def process_suggestion(suggestion_id: int, background_tasks: BackgroundTasks):
+    """Обработать предложенное видео (запустить pipeline)"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        suggestion = await conn.fetchrow("SELECT * FROM video_suggestions WHERE id = $1", suggestion_id)
+        if not suggestion:
+            raise HTTPException(status_code=404, detail="Предложение не найдено")
+
+        # Обновляем статус
+        await conn.execute("UPDATE video_suggestions SET status = 'processing' WHERE id = $1", suggestion_id)
+
+        # Запускаем обработку
+        task_id = str(uuid.uuid4())
+        request = YouTubeRequest(
+            youtube_url=suggestion["url"],
+            topic=suggestion.get("topic", "General"),
+            level=suggestion.get("difficulty", "middle")
+        )
+
+        task_data = {
+            "task_id": task_id,
+            "youtube_url": suggestion["url"],
+            "topic": suggestion.get("topic", "General"),
+            "level": suggestion.get("difficulty", "middle"),
+            "status": "pending",
+            "progress": 0,
+            "step": "Обработка предложенного видео...",
+            "suggestion_id": suggestion_id
+        }
+        await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+
+        background_tasks.add_task(trigger_n8n_workflow, task_id, request)
+
+        return {"task_id": task_id, "message": "Видео отправлено на обработку"}
+    finally:
+        await conn.close()
+
+
+# ============== Обратная связь ==============
+@app.post("/api/feedback", tags=["Public"])
+async def create_feedback(data: dict = Body(...)):
+    """Оставить обратную связь"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        feedback_id = await conn.fetchval("""
+            INSERT INTO feedback (question_id, feedback_type, rating, comment, user_name, user_email, user_session)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING id
+        """,
+            data.get("question_id"),
+            data.get("feedback_type", "suggestion"),
+            data.get("rating"),
+            data.get("comment", ""),
+            data.get("user_name", ""),
+            data.get("user_email", ""),
+            data.get("user_session", ""))
+
+        return {"id": feedback_id, "message": "Спасибо за обратную связь!"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/feedback", tags=["Admin"])
+async def get_admin_feedback(is_resolved: Optional[bool] = None):
+    """Вся обратная связь для админа"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        if is_resolved is not None:
+            feedbacks = await conn.fetch(
+                "SELECT f.*, q.question as question_text FROM feedback f LEFT JOIN questions q ON f.question_id = q.id WHERE f.is_resolved = $1 ORDER BY f.created_at DESC",
+                is_resolved)
+        else:
+            feedbacks = await conn.fetch(
+                "SELECT f.*, q.question as question_text FROM feedback f LEFT JOIN questions q ON f.question_id = q.id ORDER BY f.created_at DESC LIMIT 100")
+
+        result = []
+        for f in feedbacks:
+            row = dict(f)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"feedbacks": result}
+    finally:
+        await conn.close()
+
+
+@app.put("/api/admin/feedback/{feedback_id}", tags=["Admin"])
+async def resolve_feedback(feedback_id: int, data: dict = Body(...)):
+    """Разрешить/ответить на обратную связь"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            "UPDATE feedback SET is_resolved = $1, admin_response = $2 WHERE id = $3",
+            data.get("is_resolved", True),
+            data.get("admin_response", ""),
+            feedback_id)
+        return {"message": "Обратная связь обновлена"}
+    finally:
+        await conn.close()
+
+
+# ============== Закладки (избранное) ==============
+@app.post("/api/bookmarks", tags=["Public"])
+async def toggle_bookmark(data: dict = Body(...)):
+    """Добавить/удалить вопрос из закладок"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        question_id = data.get("question_id")
+        user_session = data.get("user_session", "")
+        if not question_id or not user_session:
+            raise HTTPException(status_code=400, detail="question_id и user_session обязательны")
+
+        # Проверяем, есть ли уже закладка
+        existing = await conn.fetchval(
+            "SELECT id FROM bookmarks WHERE question_id = $1 AND user_session = $2",
+            question_id, user_session)
+
+        if existing:
+            # Удаляем
+            await conn.execute("DELETE FROM bookmarks WHERE id = $1", existing)
+            return {"bookmarked": False, "message": "Закладка удалена"}
+        else:
+            # Добавляем
+            await conn.execute(
+                "INSERT INTO bookmarks (question_id, user_session, note) VALUES ($1, $2, $3)",
+                question_id, user_session, data.get("note", ""))
+            return {"bookmarked": True, "message": "Добавлено в закладки"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/bookmarks/{user_session}", tags=["Public"])
+async def get_bookmarks(user_session: str):
+    """Получить закладки пользователя"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        bookmarks = await conn.fetch("""
+            SELECT b.id, b.note, b.created_at,
+                   q.id as question_id, q.question, q.answer, q.topic, q.difficulty, q.probability
+            FROM bookmarks b
+            JOIN questions q ON b.question_id = q.id
+            WHERE b.user_session = $1
+            ORDER BY b.created_at DESC
+        """, user_session)
+
+        result = []
+        for b in bookmarks:
+            row = dict(b)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"bookmarks": result}
+    finally:
+        await conn.close()
+
+
+# ============== Заметки пользователя ==============
+@app.put("/api/notes/{question_id}", tags=["Public"])
+async def save_note(question_id: int, data: dict = Body(...)):
+    """Сохранить заметку пользователя к вопросу"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        user_session = data.get("user_session", "")
+        note = data.get("note", "")
+        if not user_session:
+            raise HTTPException(status_code=400, detail="user_session обязателен")
+
+        await conn.execute("""
+            INSERT INTO user_notes (question_id, user_session, note)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (question_id, user_session) DO UPDATE SET note = $3, updated_at = CURRENT_TIMESTAMP
+        """, question_id, user_session, note)
+        return {"message": "Заметка сохранена"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/notes/{user_session}", tags=["Public"])
+async def get_notes(user_session: str):
+    """Получить все заметки пользователя"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        notes = await conn.fetch("""
+            SELECT n.*, q.question, q.topic
+            FROM user_notes n
+            JOIN questions q ON n.question_id = q.id
+            WHERE n.user_session = $1
+            ORDER BY n.updated_at DESC
+        """, user_session)
+        result = []
+        for n in notes:
+            row = dict(n)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"notes": result}
+    finally:
+        await conn.close()
+
+
+# ============== Мок-интервью ==============
+@app.post("/api/mock-interview/start", tags=["Public"])
+async def start_mock_interview(data: dict = Body(...)):
+    """Начать мок-интервью — получить случайные вопросы"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        topic = data.get("topic", "")
+        difficulty = data.get("difficulty", "")
+        count = min(data.get("count", 10), 30)
+        user_session = data.get("user_session", "")
+
+        query = "SELECT id, question, answer, topic, difficulty, probability FROM questions WHERE approved = TRUE"
+        params = []
+        param_count = 0
+
+        if topic:
+            param_count += 1
+            query += f" AND LOWER(topic) = LOWER(${param_count})"
+            params.append(topic)
+        if difficulty:
+            param_count += 1
+            query += f" AND LOWER(difficulty) = LOWER(${param_count})"
+            params.append(difficulty)
+
+        query += " ORDER BY RANDOM()"
+        param_count += 1
+        query += f" LIMIT ${param_count}"
+        params.append(count)
+
+        questions = await conn.fetch(query, *params)
+        questions_list = [dict(q) for q in questions]
+
+        # Создаём запись интервью
+        interview_id = await conn.fetchval("""
+            INSERT INTO mock_interviews (user_session, topic, difficulty, total_questions)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """, user_session, topic, difficulty, len(questions_list))
+
+        return {
+            "interview_id": interview_id,
+            "questions": questions_list,
+            "total": len(questions_list)
+        }
+    finally:
+        await conn.close()
+
+
+@app.post("/api/mock-interview/{interview_id}/submit", tags=["Public"])
+async def submit_mock_interview(interview_id: int, data: dict = Body(...)):
+    """Завершить мок-интервью с результатами"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        answers = data.get("answers", [])
+        duration = data.get("duration_seconds", 0)
+        correct = sum(1 for a in answers if a.get("is_correct", False))
+        total = len(answers)
+        score = (correct / total * 100) if total > 0 else 0
+
+        await conn.execute("""
+            UPDATE mock_interviews
+            SET correct_answers = $1, score = $2, duration_seconds = $3, answers = $4::jsonb, completed_at = CURRENT_TIMESTAMP
+            WHERE id = $5
+        """, correct, score, duration, json.dumps(answers), interview_id)
+
+        return {"score": round(score, 1), "correct": correct, "total": total, "duration": duration}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/mock-interview/history/{user_session}", tags=["Public"])
+async def get_mock_interview_history(user_session: str):
+    """История мок-интервью пользователя"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        interviews = await conn.fetch("""
+            SELECT id, topic, difficulty, total_questions, correct_answers, score, duration_seconds, completed_at, created_at
+            FROM mock_interviews
+            WHERE user_session = $1
+            ORDER BY created_at DESC
+            LIMIT 20
+        """, user_session)
+        result = []
+        for i in interviews:
+            row = dict(i)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"interviews": result}
+    finally:
+        await conn.close()
+
+
+# ============== Загрузка локального видео ==============
+@app.post("/api/admin/upload-video", tags=["Admin"])
+async def upload_local_video(background_tasks: BackgroundTasks):
+    """Загрузить видео с локального ПК (multipart form)"""
+    from fastapi import UploadFile, File, Form
+    raise HTTPException(status_code=501, detail="Use /api/admin/upload-video-file endpoint with multipart/form-data")
+
+
+@app.post("/api/admin/upload-video-file", tags=["Admin"])
+async def upload_video_file(
+    background_tasks: BackgroundTasks,
+    file: bytes = Body(...),
+    filename: str = "video.mp4",
+    topic: str = "General",
+    difficulty: str = "middle"
+):
+    """Загрузить видео файл для обработки"""
+    import asyncpg
+
+    task_id = str(uuid.uuid4())
+    video_id = task_id[:16]
+
+    # Сохраняем файл
+    video_path = TEMP_DIR / f"{video_id}.mp4"
+    with open(video_path, "wb") as f:
+        f.write(file)
+
+    file_size = len(file)
+    print(f"📁 Uploaded video: {filename} ({file_size / 1024 / 1024:.1f} MB)")
+
+    # Конвертируем в mp3
+    import subprocess
+    audio_path = TEMP_DIR / f"{video_id}.mp3"
+
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", str(video_path),
+            "-vn", "-acodec", "libmp3lame", "-q:a", "2",
+            str(audio_path)
+        ], capture_output=True, timeout=300)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка конвертации: {str(e)}")
+    finally:
+        # Удаляем оригинальное видео для экономии места
+        if video_path.exists():
+            video_path.unlink()
+
+    # Сохраняем в БД
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("""
+            INSERT INTO uploaded_videos (filename, original_name, file_size, topic, difficulty, task_id, status)
+            VALUES ($1, $2, $3, $4, $5, $6, 'processing')
+        """, f"{video_id}.mp3", filename, file_size, topic, difficulty, task_id)
+    finally:
+        await conn.close()
+
+    # Сохраняем задачу
+    task_data = {
+        "task_id": task_id,
+        "youtube_url": f"local://{filename}",
+        "topic": topic,
+        "level": difficulty,
+        "status": "pending",
+        "progress": 0,
+        "step": "Загружено, начинаем обработку...",
+        "is_local_upload": True,
+        "filename": filename
+    }
+    await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    await redis_client.set(f"video_id:{task_id}", video_id, ex=REDIS_TTL)
+
+    # Запускаем транскрибацию напрямую (без yt-dlp)
+    background_tasks.add_task(process_local_video, task_id, str(audio_path), filename, topic, difficulty)
+
+    return {"task_id": task_id, "message": "Файл загружен, обработка начата"}
+
+
+async def process_local_video(task_id: str, audio_path: str, filename: str, topic: str, difficulty: str):
+    """Обработка локально загруженного видео"""
+    try:
+        # Обновляем статус
+        task_data = json.loads(await redis_client.get(f"task:{task_id}") or "{}")
+        task_data["status"] = "transcribing"
+        task_data["progress"] = 20
+        task_data["step"] = "Транскрибация аудио..."
+        await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+
+        # Транскрибация
+        request = TranscribeRequest(audio_path=audio_path, task_id=task_id)
+        transcribe_result = await transcribe_audio(request)
+
+        # Обновляем статус
+        task_data["status"] = "extracting"
+        task_data["progress"] = 60
+        task_data["step"] = "Извлечение вопросов..."
+        await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+
+        # Извлечение вопросов
+        extract_request = ExtractQuestionsRequest(
+            transcript=transcribe_result.get("transcript", ""),
+            task_id=task_id,
+            topic=topic,
+            level=difficulty
+        )
+        extract_result = await extract_questions(extract_request)
+        questions = extract_result.get("questions", [])
+
+        # Сохранение вопросов
+        save_request = SaveQuestionsRequest(
+            questions=questions,
+            youtube_url=f"local://{filename}",
+            video_title=filename,
+            task_id=task_id
+        )
+        await save_questions(save_request)
+
+        # Обновляем статус
+        task_data["status"] = "completed"
+        task_data["progress"] = 100
+        task_data["step"] = f"Готово! Извлечено {len(questions)} вопросов"
+        task_data["result"] = {
+            "questions": questions,
+            "video_title": filename,
+            "questions_count": len(questions)
+        }
+        await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+
+    except Exception as e:
+        print(f"❌ Local video processing error: {e}")
+        task_data = json.loads(await redis_client.get(f"task:{task_id}") or "{}")
+        task_data["status"] = "error"
+        task_data["error"] = str(e)
+        await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+
+
+# ============== Теги вопросов ==============
+@app.post("/api/admin/questions/{question_id}/tags", tags=["Admin"])
+async def add_question_tag(question_id: int, data: dict = Body(...)):
+    """Добавить тег к вопросу"""
+    import asyncpg
+    tag = data.get("tag", "").strip().lower()
+    if not tag:
+        raise HTTPException(status_code=400, detail="Тег обязателен")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            "INSERT INTO question_tags (question_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            question_id, tag)
+        return {"message": f"Тег '{tag}' добавлен"}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/admin/questions/{question_id}/tags/{tag}", tags=["Admin"])
+async def remove_question_tag(question_id: int, tag: str):
+    """Удалить тег у вопроса"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("DELETE FROM question_tags WHERE question_id = $1 AND tag = $2", question_id, tag)
+        return {"message": f"Тег '{tag}' удалён"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/tags", tags=["Public"])
+async def get_all_tags():
+    """Все используемые теги"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        tags = await conn.fetch("""
+            SELECT tag, COUNT(*) as count
+            FROM question_tags
+            GROUP BY tag
+            ORDER BY count DESC
+        """)
+        return {"tags": [{"tag": t["tag"], "count": t["count"]} for t in tags]}
+    finally:
+        await conn.close()
+
+
+# ============== Статистика (расширенная) ==============
+@app.get("/api/stats", tags=["Public"])
+async def get_public_stats():
+    """Публичная статистика для дашборда"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        total_questions = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = TRUE")
+        total_topics = await conn.fetchval("SELECT COUNT(DISTINCT topic) FROM questions WHERE approved = TRUE")
+        total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+        total_with_answers = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = TRUE AND answer IS NOT NULL AND answer != ''")
+
+        # Топ-5 тем
+        top_topics = await conn.fetch("""
+            SELECT topic, COUNT(*) as count
+            FROM questions WHERE approved = TRUE
+            GROUP BY topic ORDER BY count DESC LIMIT 5
+        """)
+
+        # Распределение по уровням
+        levels = await conn.fetch("""
+            SELECT difficulty, COUNT(*) as count
+            FROM questions WHERE approved = TRUE
+            GROUP BY difficulty
+        """)
+
+        # Платформы видео
+        platforms = await conn.fetch("""
+            SELECT COALESCE(platform, 'youtube') as platform, COUNT(*) as count
+            FROM processed_videos
+            GROUP BY platform
+        """)
+
+        return {
+            "total_questions": total_questions,
+            "total_topics": total_topics,
+            "total_videos": total_videos,
+            "total_with_answers": total_with_answers,
+            "top_topics": [{"topic": t["topic"], "count": t["count"]} for t in top_topics],
+            "difficulty_distribution": [{"difficulty": l["difficulty"], "count": l["count"]} for l in levels],
+            "platform_distribution": [{"platform": p["platform"], "count": p["count"]} for p in platforms]
+        }
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/stats", tags=["Admin"])
+async def get_admin_stats():
+    """Расширенная статистика для админа"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        stats = {}
+        stats["total_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions")
+        stats["approved_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = TRUE")
+        stats["pending_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = FALSE")
+        stats["with_answers"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL AND answer != ''")
+        stats["without_answers"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE answer IS NULL OR answer = ''")
+        stats["total_videos"] = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+        stats["total_suggestions"] = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions") if await _table_exists(conn, 'video_suggestions') else 0
+        stats["pending_suggestions"] = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'") if await _table_exists(conn, 'video_suggestions') else 0
+        stats["total_feedback"] = await conn.fetchval("SELECT COUNT(*) FROM feedback") if await _table_exists(conn, 'feedback') else 0
+        stats["unresolved_feedback"] = await conn.fetchval("SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE") if await _table_exists(conn, 'feedback') else 0
+
+        # Вопросы за последние 7 дней
+        stats["questions_last_week"] = await conn.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'")
+
+        # Топ вопросы по вероятности
+        top_questions = await conn.fetch("""
+            SELECT id, question, probability, topic FROM questions
+            WHERE approved = TRUE AND probability > 0
+            ORDER BY probability DESC LIMIT 10
+        """)
+        stats["top_questions"] = [dict(q) for q in top_questions]
+
+        return stats
+    finally:
+        await conn.close()
+
+
+async def _table_exists(conn, table_name: str) -> bool:
+    """Проверка существования таблицы"""
+    try:
+        result = await conn.fetchval(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)",
+            table_name)
+        return result
+    except Exception:
+        return False
+
+
+# ============== Экспорт CSV ==============
+@app.get("/api/admin/export-csv", tags=["Admin"])
+async def export_questions_csv():
+    """Экспорт вопросов в CSV"""
+    import asyncpg
+    from fastapi.responses import StreamingResponse
+    import io
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        questions = await conn.fetch("""
+            SELECT id, question, answer, topic, difficulty, probability, timecode, approved, source_url, video_title, created_at
+            FROM questions ORDER BY id
+        """)
+
+        output = io.StringIO()
+        # BOM для корректного отображения в Excel
+        output.write('\ufeff')
+        output.write("ID,Вопрос,Ответ,Тема,Уровень,Вероятность,Таймкод,Одобрен,Источник,Видео,Дата\n")
+
+        for q in questions:
+            row = [
+                str(q["id"]),
+                f'"{(q["question"] or "").replace(chr(34), chr(34)+chr(34))}"',
+                f'"{(q["answer"] or "").replace(chr(34), chr(34)+chr(34))}"',
+                q["topic"] or "",
+                q["difficulty"] or "",
+                str(round(q["probability"] or 0, 2)),
+                q["timecode"] or "",
+                "Да" if q["approved"] else "Нет",
+                q["source_url"] or "",
+                f'"{(q["video_title"] or "").replace(chr(34), chr(34)+chr(34))}"',
+                str(q["created_at"]) if q["created_at"] else ""
+            ]
+            output.write(",".join(row) + "\n")
+
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=questions_export.csv"}
+        )
+    finally:
+        await conn.close()
+
+
+# ============== Обработанные видео ==============
+@app.get("/api/admin/videos", tags=["Admin"])
+async def get_processed_videos():
+    """Список обработанных видео"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        videos = await conn.fetch("""
+            SELECT pv.*, 
+                   (SELECT COUNT(*) FROM question_video qv WHERE qv.video_id = pv.id) as linked_questions,
+                   (SELECT COUNT(*) FROM question_video qv WHERE qv.video_id = pv.id) as question_count
+            FROM processed_videos pv
+            ORDER BY pv.processed_at DESC
+        """)
+        result = []
+        for v in videos:
+            row = dict(v)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"videos": result}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/admin/videos/{video_id}/questions", tags=["Admin"])
+async def get_video_questions(video_id: int):
+    """Вопросы, извлечённые из конкретного видео"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        questions = await conn.fetch("""
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.timecode,
+                   q.probability, q.is_approved as approved, q.created_at
+            FROM questions q
+            JOIN question_video qv ON qv.question_id = q.id
+            WHERE qv.video_id = $1
+            ORDER BY q.timecode, q.id
+        """, video_id)
+        result = []
+        for q in questions:
+            row = dict(q)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"questions": result}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/admin/videos/{video_id}", tags=["Admin"])
+async def delete_processed_video(video_id: int):
+    """Удалить обработанное видео (связи question_video удалятся каскадно)"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        existing = await conn.fetchrow("SELECT id FROM processed_videos WHERE id = $1", video_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Видео не найдено")
+        await conn.execute("DELETE FROM processed_videos WHERE id = $1", video_id)
+        # Пересчитать вероятности после удаления видео
+        await update_probabilities(conn)
+        return {"message": "Видео удалено"}
+    finally:
+        await conn.close()
+
+
+@app.patch("/api/admin/videos/{video_id}", tags=["Admin"])
+async def update_processed_video(video_id: int, data: dict = Body(...)):
+    """Обновить заголовок обработанного видео"""
+    import asyncpg
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        existing = await conn.fetchrow("SELECT id FROM processed_videos WHERE id = $1", video_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Видео не найдено")
+        if "title" in data:
+            await conn.execute("UPDATE processed_videos SET title = $1 WHERE id = $2", data["title"], video_id)
+        return {"message": "Видео обновлено"}
+    finally:
+        await conn.close()
+
+
+# ============== Обновление вопроса (Body вместо query params) ==============
+@app.put("/api/admin/questions/{question_id}", tags=["Admin"])
+async def update_question_v2(question_id: int, data: dict = Body(...)):
+    """Обновить вопрос (принимает JSON body)"""
+    import asyncpg
+    from similarity_search import invalidate_similarity_cache
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получаем текущий вопрос
+        existing = await conn.fetchrow("SELECT * FROM questions WHERE id = $1", question_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Вопрос не найден")
+
+        # Обновляем только переданные поля
+        question_text = data.get("question", existing["question"])
+        answer = data.get("answer", existing["answer"])
+        topic = data.get("topic", existing["topic"])
+        difficulty = data.get("difficulty", existing["difficulty"])
+        timecode = data.get("timecode", existing["timecode"])
+
+        await conn.execute("""
+            UPDATE questions
+            SET question = $1, answer = $2, topic = $3, difficulty = $4, timecode = $5, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $6
+        """, question_text, answer, topic, difficulty, timecode, question_id)
+
+        await update_probabilities(conn)
+        await invalidate_similarity_cache()
+
+        return {"message": "Вопрос обновлён"}
+    finally:
+        await conn.close()
 
 if __name__ == "__main__":
     import uvicorn
