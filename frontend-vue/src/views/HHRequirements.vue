@@ -29,6 +29,7 @@
           <span class="total-vacancies" v-if="currentSkills[0]?.total_vacancies">
             Проанализировано ~{{ currentSkills[0].total_vacancies }} вакансий
           </span>
+          <span class="total-skills-count">{{ totalSkills }} навыков</span>
         </div>
 
         <div class="skills-chart">
@@ -48,6 +49,13 @@
             </div>
           </div>
         </div>
+
+        <!-- Pagination -->
+        <Paginator v-if="totalSkills > perPage"
+                   :rows="perPage" :totalRecords="totalSkills"
+                   :first="(currentPage - 1) * perPage"
+                   :rowsPerPageOptions="[15, 30, 50, 100]"
+                   @page="onPageChange" class="skills-paginator" />
 
         <!-- Summary cards -->
         <div class="summary-cards">
@@ -96,10 +104,14 @@ const professions = ref([])
 const allSkills = ref([])
 const selectedProfession = ref(null)
 
+// Pagination
+const currentPage = ref(1)
+const perPage = ref(30)
+const totalSkills = ref(0)
+const totalPages = ref(0)
+
 const currentSkills = computed(() => {
-  if (!selectedProfession.value) return []
   return allSkills.value
-    .filter(s => s.profession === selectedProfession.value)
     .sort((a, b) => b.percentage - a.percentage)
 })
 
@@ -116,14 +128,27 @@ const getBarColor = (pct) => {
 
 const selectProfession = async (prof) => {
   selectedProfession.value = prof
+  currentPage.value = 1
+  await loadSkills()
+}
+
+const loadSkills = async () => {
   loading.value = true
   try {
-    const r = await api.getHHSkills(prof)
+    const r = await api.getHHSkills(selectedProfession.value, currentPage.value, perPage.value)
     allSkills.value = r.data.skills || []
+    totalSkills.value = r.data.total || 0
+    totalPages.value = r.data.pages || 0
   } catch (e) {
     console.error('Failed to load HH skills:', e)
   }
   loading.value = false
+}
+
+const onPageChange = async (event) => {
+  currentPage.value = Math.floor(event.first / perPage.value) + 1
+  perPage.value = event.rows
+  await loadSkills()
 }
 
 onMounted(async () => {
@@ -267,6 +292,8 @@ onMounted(async () => {
 .summary-tag { font-size: 0.75rem !important; }
 
 .loading { display: flex; justify-content: center; padding: 4rem; }
+.total-skills-count { color: rgba(255,255,255,0.4); font-size: 0.85rem; }
+.skills-paginator { margin-top: 1.5rem; }
 .empty-state {
   text-align: center; padding: 4rem; color: rgba(255,255,255,0.4);
 }

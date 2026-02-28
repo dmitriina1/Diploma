@@ -117,4 +117,22 @@ code {
     transform: translateY(0);
   }
 }
+
+/* Global Paginator dropdown fix */
+.p-paginator .p-dropdown {
+  display: inline-flex;
+  align-items: center;
+}
+
+.p-paginator .p-dropdown .p-dropdown-label {
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+.p-paginator .p-dropdown .p-dropdown-trigger {
+  width: 2rem;
+}
 </style>

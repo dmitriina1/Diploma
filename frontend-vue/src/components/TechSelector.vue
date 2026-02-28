@@ -82,11 +82,27 @@ const profGradients = {
   'python-developer': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
   'java-developer': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
   'fullstack-developer': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'devops': 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+  'devops': 'linear-gradient(135deg, #ff6a00 0%, #ee0979 100%)',
   'qa-engineer': 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
   'data-scientist': 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)',
-  'mobile-developer': 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)',
-  'golang-developer': 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+  'golang-developer': 'linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%)',
+  'php-developer': 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)',
+  'csharp-developer': 'linear-gradient(135deg, #7C3AED 0%, #2563EB 100%)',
+  'cpp-developer': 'linear-gradient(135deg, #1e3a5f 0%, #4a90d9 100%)',
+  '1c-developer': 'linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%)',
+  'nodejs-developer': 'linear-gradient(135deg, #68A063 0%, #3C873A 100%)',
+  'ios-developer': 'linear-gradient(135deg, #FC5C7D 0%, #6A82FB 100%)',
+  'android-developer': 'linear-gradient(135deg, #3DDC84 0%, #2196F3 100%)',
+  'flutter-developer': 'linear-gradient(135deg, #02569B 0%, #13B9FD 100%)',
+  'unity-developer': 'linear-gradient(135deg, #222222 0%, #555555 100%)',
+  'data-engineer': 'linear-gradient(135deg, #0EA5E9 0%, #6366F1 100%)',
+  'aqa-engineer': 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+  'business-analyst': 'linear-gradient(135deg, #F472B6 0%, #EC4899 100%)',
+  'system-analyst': 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+  'data-analyst': 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)',
+  'product-analyst': 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+  'project-manager': 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+  'product-manager': 'linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%)'
 }
 
 const technologies = computed(() => {

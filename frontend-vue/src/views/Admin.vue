@@ -755,6 +755,7 @@ onUnmounted(() => {
 /* Admin tabs override */
 .admin-tabs :deep(.p-tabview-panels) {
   background: transparent;
+  padding: 1.5rem 0;
 }
 
 .admin-tabs :deep(.p-tabview-nav) {
@@ -767,18 +768,82 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 0.92rem;
   border-radius: 8px 8px 0 0;
+  font-family: 'Inter', sans-serif;
 }
 
-/* Fix Paginator dropdown alignment */
+/* Consistent fonts across all admin sub-components */
+.admin-page :deep(h3),
+.admin-page :deep(h4) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+}
+
+.admin-page :deep(.p-datatable .p-datatable-thead > tr > th) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.6);
+}
+
+.admin-page :deep(.p-datatable .p-datatable-tbody > tr > td) {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+}
+
+.admin-page :deep(.p-card .p-card-title) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.admin-page :deep(.p-tag) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+}
+
+.admin-page :deep(.p-button .p-button-label) {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+}
+
+.admin-page :deep(.p-dropdown .p-dropdown-label) {
+  font-family: 'Inter', sans-serif;
+}
+
+.admin-page :deep(.p-inputtext) {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Fix Paginator dropdown alignment & spacing */
+.admin-page :deep(.p-paginator) {
+  font-family: 'Inter', sans-serif;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 0;
+}
+
 .admin-page :deep(.p-paginator .p-dropdown) {
   display: inline-flex;
   align-items: center;
+  margin-left: 0.5rem;
 }
+
 .admin-page :deep(.p-paginator .p-dropdown .p-dropdown-label) {
   display: flex;
   align-items: center;
-  padding-top: 0;
-  padding-bottom: 0;
+  padding: 0.35rem 0.5rem;
+  min-width: 2.5rem;
+  text-align: center;
+}
+
+.admin-page :deep(.p-paginator .p-dropdown .p-dropdown-trigger) {
+  width: 2rem;
+}
+
+.admin-page :deep(.p-paginator .p-paginator-rpp-options) {
+  margin-left: 0.5rem;
 }
 
 .tab-toolbar {

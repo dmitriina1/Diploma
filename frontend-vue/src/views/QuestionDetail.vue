@@ -75,10 +75,10 @@
                 <i class="pi pi-play"></i>
                 <span class="video-title">{{ v.title || 'Без названия' }}</span>
                 <Tag :value="v.platform" size="small" severity="secondary" />
-                <span v-if="question.timecode" class="timecode-badge">
-                  <i class="pi pi-clock"></i> {{ question.timecode }}
+                <span v-if="getVideoTimecode(v)" class="timecode-badge">
+                  <i class="pi pi-clock"></i> {{ getVideoTimecode(v) }}
                 </span>
-                <a :href="buildVideoUrl(v.url, question.timecode)" target="_blank" rel="noopener"
+                <a :href="buildVideoUrl(v.url, getVideoTimecode(v))" target="_blank" rel="noopener"
                    @click.stop class="external-link">
                   <i class="pi pi-external-link"></i>
                 </a>
@@ -310,13 +310,19 @@ const buildEmbedUrl = (url, timecode) => {
   return null
 }
 
+/** Get the timecode for a specific video — prefer per-video timecode, fall back to question timecode */
+const getVideoTimecode = (video) => {
+  return video.timecode || question.value?.timecode || null
+}
+
 const playVideo = (video) => {
-  const embedUrl = buildEmbedUrl(video.url, question.value?.timecode)
+  const tc = getVideoTimecode(video)
+  const embedUrl = buildEmbedUrl(video.url, tc)
   if (embedUrl) {
     activeVideoEmbed.value = embedUrl
   } else {
     // Fallback: open in new tab
-    window.open(buildVideoUrl(video.url, question.value?.timecode), '_blank')
+    window.open(buildVideoUrl(video.url, tc), '_blank')
   }
 }
 

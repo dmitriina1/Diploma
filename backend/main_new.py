@@ -689,6 +689,7 @@ async def extract_questions_from_transcript(transcript: str, topic: str, level: 
 - Формулируй вопросы чётко и понятно
 - Определи тему вопроса (Backend, Frontend, DevOps, Database, Algorithms, System Design и т.д.)
 - Определи сложность (junior, middle, senior)
+- Если в транскрипции есть метки времени, укажи таймкод начала вопроса в формате MM:SS или HH:MM:SS
 
 Транскрипция:
 {transcript[:50000]}
@@ -698,10 +699,12 @@ async def extract_questions_from_transcript(transcript: str, topic: str, level: 
   {{
     "question": "Полный текст вопроса?",
     "topic": "Backend",
-    "difficulty": "middle"
+    "difficulty": "middle",
+    "timecode": "12:34"
   }}
 ]
 
+Если таймкод неизвестен, поставь null в поле timecode.
 Только JSON, без дополнительного текста!"""
     
     return await call_llm_api(prompt)
@@ -709,6 +712,21 @@ async def extract_questions_from_transcript(transcript: str, topic: str, level: 
 
 async def save_questions_to_db(questions: List[Dict], video_url: str, video_title: str, video_id: str, task_id: str, platform: str = "youtube"):
     """Сохранение вопросов в базу данных"""
+
+    def parse_timecode_to_seconds(tc):
+        """Parse timecode string like '12:34' or '1:02:03' to seconds"""
+        if not tc:
+            return 0
+        try:
+            parts = str(tc).split(':')
+            parts = [int(p) for p in parts]
+            if len(parts) == 3:
+                return parts[0] * 3600 + parts[1] * 60 + parts[2]
+            elif len(parts) == 2:
+                return parts[0] * 60 + parts[1]
+            return int(tc)
+        except (ValueError, TypeError):
+            return 0
     
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -750,15 +768,27 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
                        ON CONFLICT DO NOTHING""",
                     existing, db_video_id
                 )
+                # Сохраняем таймкод для этого видео
+                tc = q.get("timecode")
+                if tc:
+                    tc_seconds = parse_timecode_to_seconds(tc)
+                    await conn.execute(
+                        """INSERT INTO question_timecodes (question_id, video_id, timecode_start, timecode_seconds)
+                           VALUES ($1, $2, $3, $4) ON CONFLICT (question_id, video_id) DO UPDATE
+                           SET timecode_start = $3, timecode_seconds = $4""",
+                        existing, db_video_id, str(tc), tc_seconds
+                    )
             else:
                 # Создаём новый вопрос
+                tc = q.get("timecode")
                 question_id = await conn.fetchval(
-                    """INSERT INTO questions (question, topic, difficulty, approved)
-                       VALUES ($1, $2, $3, FALSE)
+                    """INSERT INTO questions (question, topic, difficulty, timecode, approved)
+                       VALUES ($1, $2, $3, $4, FALSE)
                        RETURNING id""",
                     question_text,
                     q.get("topic", "General"),
-                    q.get("difficulty", "middle")
+                    q.get("difficulty", "middle"),
+                    tc or None
                 )
                 
                 # Связываем с видео
@@ -767,6 +797,15 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
                        VALUES ($1, $2)""",
                     question_id, db_video_id
                 )
+
+                # Сохраняем таймкод для видео
+                if tc:
+                    tc_seconds = parse_timecode_to_seconds(tc)
+                    await conn.execute(
+                        """INSERT INTO question_timecodes (question_id, video_id, timecode_start, timecode_seconds)
+                           VALUES ($1, $2, $3, $4) ON CONFLICT (question_id, video_id) DO NOTHING""",
+                        question_id, db_video_id, str(tc), tc_seconds
+                    )
             
             saved_count += 1
         
@@ -1073,11 +1112,13 @@ async def get_public_question_detail(question_id: int):
         if not q:
             raise HTTPException(status_code=404, detail="Question not found")
         
-        # Видео, в которых встречался этот вопрос
+        # Видео, в которых встречался этот вопрос (с таймкодами)
         videos = await conn.fetch("""
-            SELECT pv.id, pv.title, pv.youtube_url, pv.platform
+            SELECT pv.id, pv.title, pv.youtube_url, pv.platform,
+                   qt.timecode_start, qt.timecode_seconds
             FROM question_video qv
             JOIN processed_videos pv ON pv.id = qv.video_id
+            LEFT JOIN question_timecodes qt ON qt.question_id = qv.question_id AND qt.video_id = qv.video_id
             WHERE qv.question_id = $1
             ORDER BY pv.title
         """, question_id)
@@ -1110,6 +1151,8 @@ async def get_public_question_detail(question_id: int):
                     "title": v["title"],
                     "url": v["youtube_url"],
                     "platform": v["platform"] or "youtube",
+                    "timecode": v["timecode_start"] or None,
+                    "timecode_seconds": v["timecode_seconds"] or 0,
                 }
                 for v in videos
             ],
@@ -3117,18 +3160,26 @@ async def delete_test_assignment(assignment_id: int):
 # ============================================
 
 @app.get("/api/hh-skills", tags=["Public"])
-async def get_hh_skills(profession: Optional[str] = None):
-    """Навыки/требования из вакансий HH"""
+async def get_hh_skills(profession: Optional[str] = None, page: int = 1, per_page: int = 30):
+    """Навыки/требования из вакансий HH с пагинацией"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        offset = (page - 1) * per_page
+        
         if profession:
+            total = await conn.fetchval(
+                "SELECT COUNT(*) FROM hh_skills WHERE profession ILIKE $1", f"%{profession}%"
+            )
             skills = await conn.fetch("""
                 SELECT * FROM hh_skills WHERE profession ILIKE $1 ORDER BY percentage DESC
-            """, f"%{profession}%")
+                LIMIT $2 OFFSET $3
+            """, f"%{profession}%", per_page, offset)
         else:
+            total = await conn.fetchval("SELECT COUNT(*) FROM hh_skills")
             skills = await conn.fetch("""
                 SELECT * FROM hh_skills ORDER BY profession, percentage DESC
-            """)
+                LIMIT $1 OFFSET $2
+            """, per_page, offset)
 
         result = []
         for s in skills:
@@ -3138,15 +3189,13 @@ async def get_hh_skills(profession: Optional[str] = None):
                     row[key] = row[key].isoformat()
             result.append(row)
 
-        # Группируем по профессиям
-        professions_data = {}
-        for s in result:
-            prof = s['profession']
-            if prof not in professions_data:
-                professions_data[prof] = []
-            professions_data[prof].append(s)
-
-        return {"skills": result, "by_profession": professions_data}
+        return {
+            "skills": result,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "pages": (total + per_page - 1) // per_page
+        }
     finally:
         await conn.close()
 

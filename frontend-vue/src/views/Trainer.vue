@@ -314,9 +314,13 @@ const formatAnswer = (text) => {
 // API calls
 const loadStats = async () => {
   try {
-    const r = await api.getQuestions({ status: 'approved', limit: 1 })
+    const r = await api.getQuestions()
     const data = r.data
-    totalQuestions.value = data.total || (data.questions || []).length
+    const qs = data.questions || []
+    totalQuestions.value = data.total || qs.length
+    // Populate topics for the setup dropdown
+    const topicSet = new Set(qs.map(q => q.topic).filter(Boolean))
+    topics.value = [...topicSet].sort()
   } catch (e) { console.error(e) }
 
   // Load SM-2 stats from server

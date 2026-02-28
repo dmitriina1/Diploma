@@ -317,8 +317,9 @@ export default {
   },
 
   // ============== v3: HH Skills ==============
-  getHHSkills(profession = null) {
-    const params = profession ? { profession } : {}
+  getHHSkills(profession = null, page = 1, perPage = 30) {
+    const params = { page, per_page: perPage }
+    if (profession) params.profession = profession
     return apiClient.get('/api/hh-skills', { params })
   },
 
