@@ -1,4 +1,4 @@
-"""
+﻿"""
 Interview Prep API v2.0
 =======================
 
@@ -290,6 +290,76 @@ async def lifespan(app: FastAPI):
                 );
             """)
             print("✅ Database v2 tables ensured")
+
+            # v3: Профессии, SM-2, UGC, тестовые задания, HH навыки
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS professions (
+                    id SERIAL PRIMARY KEY, slug VARCHAR(100) UNIQUE NOT NULL, title VARCHAR(200) NOT NULL,
+                    icon VARCHAR(50) DEFAULT 'pi pi-code', color VARCHAR(100) DEFAULT '#667eea',
+                    sort_order INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS profession_topics (
+                    id SERIAL PRIMARY KEY, profession_id INTEGER REFERENCES professions(id) ON DELETE CASCADE,
+                    topic VARCHAR(100) NOT NULL, UNIQUE(profession_id, topic)
+                );
+                CREATE TABLE IF NOT EXISTS sr_cards (
+                    id SERIAL PRIMARY KEY, user_session VARCHAR(100) NOT NULL,
+                    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+                    easiness_factor FLOAT DEFAULT 2.5, interval_days FLOAT DEFAULT 0,
+                    repetitions INTEGER DEFAULT 0, next_review TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_quality INTEGER DEFAULT 0, total_reviews INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(user_session, question_id)
+                );
+                CREATE TABLE IF NOT EXISTS user_answers (
+                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+                    user_session VARCHAR(100) NOT NULL, user_name VARCHAR(100) DEFAULT 'Аноним',
+                    answer_text TEXT NOT NULL, votes INTEGER DEFAULT 0, is_selected BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS answer_votes (
+                    id SERIAL PRIMARY KEY, answer_id INTEGER REFERENCES user_answers(id) ON DELETE CASCADE,
+                    user_session VARCHAR(100) NOT NULL, vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('up','down')),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(answer_id, user_session)
+                );
+                CREATE TABLE IF NOT EXISTS test_assignments (
+                    id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL, description TEXT,
+                    company VARCHAR(200), profession VARCHAR(200),
+                    difficulty VARCHAR(20) DEFAULT 'middle' CHECK (difficulty IN ('junior','middle','senior')),
+                    skills TEXT, link VARCHAR(500), source VARCHAR(200),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS hh_skills (
+                    id SERIAL PRIMARY KEY, profession VARCHAR(200) NOT NULL,
+                    skill VARCHAR(200) NOT NULL, vacancy_count INTEGER DEFAULT 0,
+                    total_vacancies INTEGER DEFAULT 0, percentage FLOAT DEFAULT 0.0,
+                    source VARCHAR(50) DEFAULT 'hh.ru', updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(profession, skill)
+                );
+                CREATE TABLE IF NOT EXISTS question_timecodes (
+                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
+                    video_id INTEGER REFERENCES processed_videos(id) ON DELETE CASCADE,
+                    timecode_start VARCHAR(20), timecode_seconds INTEGER DEFAULT 0,
+                    UNIQUE(question_id, video_id)
+                );
+            """)
+
+            # Наполнение профессий
+            await conn.execute("""
+                INSERT INTO professions (slug, title, icon, color, sort_order) VALUES
+                    ('frontend-developer', 'Frontend разработчик', 'pi pi-palette', '#f093fb', 1),
+                    ('backend-developer', 'Backend разработчик', 'pi pi-server', '#667eea', 2),
+                    ('python-developer', 'Python разработчик', 'pi pi-code', '#4facfe', 3),
+                    ('java-developer', 'Java разработчик', 'pi pi-code', '#fa709a', 4),
+                    ('fullstack-developer', 'Fullstack разработчик', 'pi pi-th-large', '#43e97b', 5),
+                    ('devops', 'DevOps инженер', 'pi pi-cloud', '#fcb69f', 6),
+                    ('qa-engineer', 'QA инженер', 'pi pi-check-circle', '#a8edea', 7),
+                    ('data-scientist', 'Data Scientist', 'pi pi-chart-bar', '#fbc2eb', 8),
+                    ('mobile-developer', 'Mobile разработчик', 'pi pi-mobile', '#84fab0', 9),
+                    ('golang-developer', 'Golang разработчик', 'pi pi-code', '#ffecd2', 10)
+                ON CONFLICT (slug) DO NOTHING
+            """)
+            print("✅ Database v3 tables ensured (professions, SM-2, UGC, assignments, HH)")
         finally:
             await conn.close()
     except Exception as e:
@@ -2581,6 +2651,533 @@ async def update_processed_video(video_id: int, data: dict = Body(...)):
         if "title" in data:
             await conn.execute("UPDATE processed_videos SET title = $1 WHERE id = $2", data["title"], video_id)
         return {"message": "Видео обновлено"}
+    finally:
+        await conn.close()
+
+
+# ============================================
+# v3: Профессии
+# ============================================
+
+@app.get("/api/professions", tags=["Public"])
+async def get_professions():
+    """Список профессий с привязанными технологиями"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        professions = await conn.fetch("""
+            SELECT p.*, 
+                   COALESCE(array_agg(pt.topic) FILTER (WHERE pt.topic IS NOT NULL), '{}') as topics
+            FROM professions p
+            LEFT JOIN profession_topics pt ON pt.profession_id = p.id
+            GROUP BY p.id
+            ORDER BY p.sort_order
+        """)
+        result = []
+        for p in professions:
+            row = dict(p)
+            row['topics'] = list(row.get('topics', []))
+            # Считаем количество вопросов по всем топикам профессии
+            if row['topics']:
+                count = await conn.fetchval("""
+                    SELECT COUNT(DISTINCT q.id) FROM questions q 
+                    WHERE q.approved = TRUE AND q.topic = ANY($1::text[])
+                """, row['topics'])
+                row['question_count'] = count or 0
+            else:
+                row['question_count'] = 0
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"professions": result}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/professions/{slug}/questions", tags=["Public"])
+async def get_profession_questions(
+    slug: str,
+    difficulty: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 20,
+    search: Optional[str] = None,
+    sort: Optional[str] = "probability"
+):
+    """Вопросы по профессии (все технологии, входящие в профессию)"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получаем топики профессии
+        topics = await conn.fetch(
+            "SELECT topic FROM profession_topics pt JOIN professions p ON p.id = pt.profession_id WHERE p.slug = $1",
+            slug)
+        if not topics:
+            raise HTTPException(status_code=404, detail="Профессия не найдена")
+        topic_list = [t['topic'] for t in topics]
+
+        # Формируем запрос
+        query = "SELECT q.* FROM questions q WHERE q.approved = TRUE AND q.topic = ANY($1::text[])"
+        count_query = "SELECT COUNT(*) FROM questions q WHERE q.approved = TRUE AND q.topic = ANY($1::text[])"
+        params = [topic_list]
+        param_idx = 2
+
+        if difficulty:
+            query += f" AND LOWER(q.difficulty) = LOWER(${param_idx})"
+            count_query += f" AND LOWER(q.difficulty) = LOWER(${param_idx})"
+            params.append(difficulty)
+            param_idx += 1
+        if search:
+            query += f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
+            count_query += f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
+            params.append(f"%{search}%")
+            param_idx += 1
+
+        total = await conn.fetchval(count_query, *params)
+
+        # Сортировка
+        if sort == "probability":
+            query += " ORDER BY q.probability DESC NULLS LAST"
+        elif sort == "date":
+            query += " ORDER BY q.created_at DESC"
+        else:
+            query += " ORDER BY q.question"
+
+        offset = (page - 1) * per_page
+        query += f" LIMIT ${param_idx} OFFSET ${param_idx + 1}"
+        params.extend([per_page, offset])
+
+        questions = await conn.fetch(query, *params)
+        result = []
+        for q in questions:
+            row = dict(q)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"questions": result, "total": total, "page": page, "per_page": per_page}
+    finally:
+        await conn.close()
+
+
+# ============================================
+# v3: SM-2 Spaced Repetition
+# ============================================
+
+@app.post("/api/trainer/sm2-review", tags=["Public"])
+async def sm2_review(data: dict = Body(...)):
+    """
+    Записать результат повторения по SM-2.
+    quality: 0-5 (0=забыл, 1=повтор, 3=сложно вспомнил, 5=идеально)
+    """
+    question_id = data.get("question_id")
+    user_session = data.get("user_session", "")
+    quality = data.get("quality", 0)  # 0-5
+
+    if not question_id or not user_session:
+        raise HTTPException(status_code=400, detail="question_id и user_session обязательны")
+    quality = max(0, min(5, quality))
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получаем текущую карточку или создаём
+        card = await conn.fetchrow(
+            "SELECT * FROM sr_cards WHERE user_session = $1 AND question_id = $2",
+            user_session, question_id)
+
+        if card:
+            ef = card['easiness_factor']
+            interval = card['interval_days']
+            reps = card['repetitions']
+        else:
+            ef = 2.5
+            interval = 0.0
+            reps = 0
+
+        # SM-2 алгоритм
+        ef = ef + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+        ef = max(1.3, ef)
+
+        if quality >= 3:
+            if reps == 0:
+                interval = 1.0
+            elif reps == 1:
+                interval = 6.0
+            else:
+                interval = interval * ef
+            reps += 1
+        else:
+            reps = 0
+            interval = 0.04  # ~1 час (в днях)
+
+        from datetime import timedelta
+        next_review = datetime.now() + timedelta(days=interval)
+
+        await conn.execute("""
+            INSERT INTO sr_cards (user_session, question_id, easiness_factor, interval_days, repetitions,
+                                  next_review, last_quality, total_reviews)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 1)
+            ON CONFLICT (user_session, question_id) DO UPDATE SET
+                easiness_factor = $3, interval_days = $4, repetitions = $5,
+                next_review = $6, last_quality = $7,
+                total_reviews = sr_cards.total_reviews + 1,
+                updated_at = CURRENT_TIMESTAMP
+        """, user_session, question_id, round(ef, 2), round(interval, 2), reps,
+             next_review, quality)
+
+        return {
+            "easiness_factor": round(ef, 2),
+            "interval_days": round(interval, 2),
+            "repetitions": reps,
+            "next_review": next_review.isoformat(),
+            "quality": quality
+        }
+    finally:
+        await conn.close()
+
+
+@app.get("/api/trainer/sm2-cards/{user_session}", tags=["Public"])
+async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficulty: Optional[str] = None):
+    """Получить карточки SM-2 для тренажёра (сортировка: нужные для повторения первые)"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Получаем вопросы с SM-2 данными
+        query = """
+            SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability,
+                   sc.easiness_factor, sc.interval_days, sc.repetitions, sc.next_review,
+                   sc.last_quality, sc.total_reviews
+            FROM questions q
+            LEFT JOIN sr_cards sc ON sc.question_id = q.id AND sc.user_session = $1
+            WHERE q.approved = TRUE
+        """
+        params = [user_session]
+        param_idx = 2
+
+        if topic:
+            query += f" AND LOWER(q.topic) = LOWER(${param_idx})"
+            params.append(topic)
+            param_idx += 1
+        if difficulty:
+            query += f" AND LOWER(q.difficulty) = LOWER(${param_idx})"
+            params.append(difficulty)
+            param_idx += 1
+
+        # Сортировка: сначала к повторению, затем новые, затем выученные
+        query += """
+            ORDER BY
+                CASE
+                    WHEN sc.id IS NULL THEN 1                         -- Новые (не начаты)
+                    WHEN sc.next_review <= CURRENT_TIMESTAMP THEN 0   -- Нужно повторить (просрочены)
+                    ELSE 2                                           -- Отложены (выучены, ещё рано)
+                END,
+                sc.next_review ASC NULLS FIRST
+        """
+
+        cards = await conn.fetch(query, *params)
+        result = []
+        now = datetime.now()
+        for c in cards:
+            row = dict(c)
+            if row.get('next_review'):
+                row['due'] = row['next_review'] <= now
+                row['next_review'] = row['next_review'].isoformat()
+            else:
+                row['due'] = True  # новые карточки — нужно начать
+            row['status'] = 'new' if row.get('total_reviews') is None else (
+                'review' if row['due'] else 'learned'
+            )
+            result.append(row)
+
+        stats = {
+            'total': len(result),
+            'new': sum(1 for r in result if r['status'] == 'new'),
+            'review': sum(1 for r in result if r['status'] == 'review'),
+            'learned': sum(1 for r in result if r['status'] == 'learned')
+        }
+        return {"cards": result, "stats": stats}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/trainer/sm2-reset/{user_session}", tags=["Public"])
+async def reset_sm2_progress(user_session: str):
+    """Сбросить весь прогресс SM-2"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        result = await conn.execute(
+            "DELETE FROM sr_cards WHERE user_session = $1", user_session)
+        # result is like 'DELETE 5'
+        count = int(result.split()[-1]) if result else 0
+        return {"message": f"Прогресс сброшен ({count} карточек)"}
+    finally:
+        await conn.close()
+
+
+# ============================================
+# v3: UGC — Пользовательские ответы
+# ============================================
+
+@app.get("/api/user-answers/{question_id}", tags=["Public"])
+async def get_user_answers(question_id: int, user_session: Optional[str] = None):
+    """Получить ответы пользователей на вопрос"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        answers = await conn.fetch("""
+            SELECT ua.*, 
+                   (SELECT vote_type FROM answer_votes av WHERE av.answer_id = ua.id AND av.user_session = $2) as my_vote
+            FROM user_answers ua
+            WHERE ua.question_id = $1
+            ORDER BY ua.is_selected DESC, ua.votes DESC, ua.created_at DESC
+        """, question_id, user_session or '')
+        result = []
+        for a in answers:
+            row = dict(a)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"answers": result, "total": len(result)}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/user-answers/{question_id}", tags=["Public"])
+async def create_user_answer(question_id: int, data: dict = Body(...)):
+    """Написать свой ответ на вопрос"""
+    user_session = data.get("user_session", "")
+    user_name = data.get("user_name", "Аноним")
+    answer_text = data.get("answer_text", "").strip()
+
+    if not answer_text or len(answer_text) < 10:
+        raise HTTPException(status_code=400, detail="Ответ должен быть не менее 10 символов")
+    if not user_session:
+        raise HTTPException(status_code=400, detail="user_session обязателен")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Проверяем лимит (макс 3 ответа от одного юзера на вопрос)
+        existing = await conn.fetchval(
+            "SELECT COUNT(*) FROM user_answers WHERE question_id = $1 AND user_session = $2",
+            question_id, user_session)
+        if existing >= 3:
+            raise HTTPException(status_code=429, detail="Максимум 3 ответа на один вопрос")
+
+        answer_id = await conn.fetchval("""
+            INSERT INTO user_answers (question_id, user_session, user_name, answer_text)
+            VALUES ($1, $2, $3, $4) RETURNING id
+        """, question_id, user_session, user_name, answer_text)
+        return {"id": answer_id, "message": "Ответ добавлен"}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/user-answers/{answer_id}/vote", tags=["Public"])
+async def vote_user_answer(answer_id: int, data: dict = Body(...)):
+    """Голосовать за/против ответа"""
+    user_session = data.get("user_session", "")
+    vote_type = data.get("vote_type", "up")  # 'up' или 'down'
+
+    if vote_type not in ('up', 'down'):
+        raise HTTPException(status_code=400, detail="vote_type должен быть 'up' или 'down'")
+    if not user_session:
+        raise HTTPException(status_code=400, detail="user_session обязателен")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Проверяем, не голосовал ли уже
+        existing = await conn.fetchrow(
+            "SELECT vote_type FROM answer_votes WHERE answer_id = $1 AND user_session = $2",
+            answer_id, user_session)
+
+        if existing:
+            if existing['vote_type'] == vote_type:
+                # Отмена голоса
+                await conn.execute(
+                    "DELETE FROM answer_votes WHERE answer_id = $1 AND user_session = $2",
+                    answer_id, user_session)
+                delta = -1 if vote_type == 'up' else 1
+            else:
+                # Смена голоса
+                await conn.execute(
+                    "UPDATE answer_votes SET vote_type = $1 WHERE answer_id = $2 AND user_session = $3",
+                    vote_type, answer_id, user_session)
+                delta = 2 if vote_type == 'up' else -2
+        else:
+            # Новый голос
+            await conn.execute(
+                "INSERT INTO answer_votes (answer_id, user_session, vote_type) VALUES ($1, $2, $3)",
+                answer_id, user_session, vote_type)
+            delta = 1 if vote_type == 'up' else -1
+
+        await conn.execute("UPDATE user_answers SET votes = votes + $1 WHERE id = $2", delta, answer_id)
+        new_votes = await conn.fetchval("SELECT votes FROM user_answers WHERE id = $1", answer_id)
+        return {"votes": new_votes}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/user-answers/{answer_id}", tags=["Public"])
+async def delete_user_answer(answer_id: int, user_session: str = ""):
+    """Удалить свой ответ"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        deleted = await conn.fetchval(
+            "DELETE FROM user_answers WHERE id = $1 AND user_session = $2 RETURNING id",
+            answer_id, user_session)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Ответ не найден или вы не автор")
+        return {"message": "Ответ удалён"}
+    finally:
+        await conn.close()
+
+
+# ============================================
+# v3: Тестовые задания от компаний
+# ============================================
+
+@app.get("/api/test-assignments", tags=["Public"])
+async def get_test_assignments(
+    profession: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    per_page: int = 20
+):
+    """Список тестовых заданий"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        query = "SELECT * FROM test_assignments WHERE 1=1"
+        count_query = "SELECT COUNT(*) FROM test_assignments WHERE 1=1"
+        params = []
+        param_idx = 1
+
+        if profession:
+            query += f" AND profession ILIKE ${param_idx}"
+            count_query += f" AND profession ILIKE ${param_idx}"
+            params.append(f"%{profession}%")
+            param_idx += 1
+        if difficulty:
+            query += f" AND difficulty = ${param_idx}"
+            count_query += f" AND difficulty = ${param_idx}"
+            params.append(difficulty)
+            param_idx += 1
+        if search:
+            query += f" AND (title ILIKE ${param_idx} OR description ILIKE ${param_idx} OR company ILIKE ${param_idx})"
+            count_query += f" AND (title ILIKE ${param_idx} OR description ILIKE ${param_idx} OR company ILIKE ${param_idx})"
+            params.append(f"%{search}%")
+            param_idx += 1
+
+        total = await conn.fetchval(count_query, *params)
+        offset = (page - 1) * per_page
+        query += f" ORDER BY created_at DESC LIMIT ${param_idx} OFFSET ${param_idx + 1}"
+        params.extend([per_page, offset])
+
+        assignments = await conn.fetch(query, *params)
+        result = []
+        for a in assignments:
+            row = dict(a)
+            if row.get('skills'):
+                row['skills_list'] = [s.strip() for s in row['skills'].split(',')]
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+        return {"assignments": result, "total": total, "page": page, "per_page": per_page}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/test-assignments", tags=["Admin"])
+async def create_test_assignment(data: dict = Body(...)):
+    """Создать тестовое задание"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        aid = await conn.fetchval("""
+            INSERT INTO test_assignments (title, description, company, profession, difficulty, skills, link, source)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
+        """, data.get('title'), data.get('description'), data.get('company'),
+             data.get('profession'), data.get('difficulty', 'middle'),
+             data.get('skills'), data.get('link'), data.get('source'))
+        return {"id": aid, "message": "Тестовое задание создано"}
+    finally:
+        await conn.close()
+
+
+@app.delete("/api/admin/test-assignments/{assignment_id}", tags=["Admin"])
+async def delete_test_assignment(assignment_id: int):
+    """Удалить тестовое задание"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("DELETE FROM test_assignments WHERE id = $1", assignment_id)
+        return {"message": "Удалено"}
+    finally:
+        await conn.close()
+
+
+# ============================================
+# v3: HH Навыки/Требования
+# ============================================
+
+@app.get("/api/hh-skills", tags=["Public"])
+async def get_hh_skills(profession: Optional[str] = None):
+    """Навыки/требования из вакансий HH"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        if profession:
+            skills = await conn.fetch("""
+                SELECT * FROM hh_skills WHERE profession ILIKE $1 ORDER BY percentage DESC
+            """, f"%{profession}%")
+        else:
+            skills = await conn.fetch("""
+                SELECT * FROM hh_skills ORDER BY profession, percentage DESC
+            """)
+
+        result = []
+        for s in skills:
+            row = dict(s)
+            for key in row:
+                if hasattr(row[key], 'isoformat'):
+                    row[key] = row[key].isoformat()
+            result.append(row)
+
+        # Группируем по профессиям
+        professions_data = {}
+        for s in result:
+            prof = s['profession']
+            if prof not in professions_data:
+                professions_data[prof] = []
+            professions_data[prof].append(s)
+
+        return {"skills": result, "by_profession": professions_data}
+    finally:
+        await conn.close()
+
+
+@app.post("/api/admin/hh-skills", tags=["Admin"])
+async def upsert_hh_skill(data: dict = Body(...)):
+    """Добавить/обновить HH навык"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("""
+            INSERT INTO hh_skills (profession, skill, vacancy_count, total_vacancies, percentage)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (profession, skill) DO UPDATE SET
+                vacancy_count = $3, total_vacancies = $4, percentage = $5, updated_at = CURRENT_TIMESTAMP
+        """, data['profession'], data['skill'],
+             data.get('vacancy_count', 0), data.get('total_vacancies', 0), data.get('percentage', 0))
+        return {"message": "Навык обновлён"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/hh-skills/professions", tags=["Public"])
+async def get_hh_professions():
+    """Список профессий с данными HH"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        professions = await conn.fetch("""
+            SELECT profession, COUNT(*) as skills_count, MAX(total_vacancies) as total_vacancies
+            FROM hh_skills GROUP BY profession ORDER BY profession
+        """)
+        return {"professions": [dict(p) for p in professions]}
     finally:
         await conn.close()
 

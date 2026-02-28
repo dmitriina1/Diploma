@@ -1,7 +1,14 @@
 <template>
   <div class="tech-selector">
-    <h2>Выберите технологию</h2>
-    <div class="tech-grid">
+    <h2>{{ mode === 'tech' ? 'Выберите технологию' : 'Выберите профессию' }}</h2>
+
+    <div class="mode-toggle">
+      <SelectButton v-model="mode" :options="modeOptions" optionLabel="label" optionValue="value"
+                    :allowEmpty="false" />
+    </div>
+
+    <!-- Режим технологий -->
+    <div v-if="mode === 'tech'" class="tech-grid">
       <Card v-for="tech in technologies" 
             :key="tech.name" 
             class="tech-card"
@@ -22,16 +29,65 @@
         </template>
       </Card>
     </div>
+
+    <!-- Режим профессий -->
+    <div v-else class="tech-grid">
+      <Card v-for="prof in professions" 
+            :key="prof.slug" 
+            class="tech-card"
+            @click="selectProfession(prof)">
+        <template #header>
+          <div class="tech-icon" :style="{ background: prof.gradient }">
+            <i :class="prof.icon"></i>
+          </div>
+        </template>
+        <template #title>
+          {{ prof.title }}
+        </template>
+        <template #content>
+          <div class="tech-stats">
+            <Badge :value="prof.question_count || 0" severity="info" />
+            <span>вопросов</span>
+          </div>
+          <div class="prof-topics" v-if="prof.topics && prof.topics.length">
+            <Tag v-for="t in prof.topics.slice(0, 4)" :key="t" :value="t" severity="secondary" rounded class="prof-tag" />
+            <Tag v-if="prof.topics.length > 4" :value="'+' + (prof.topics.length - 4)" severity="secondary" rounded class="prof-tag" />
+          </div>
+        </template>
+      </Card>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuestionsStore } from '../store'
+import api from '../api/client'
 
 const router = useRouter()
 const questionsStore = useQuestionsStore()
+
+const mode = ref('tech')
+const modeOptions = [
+  { label: 'По технологиям', value: 'tech' },
+  { label: 'По профессиям', value: 'prof' }
+]
+
+const professionsList = ref([])
+
+const profGradients = {
+  'frontend-developer': 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  'backend-developer': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  'python-developer': 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  'java-developer': 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+  'fullstack-developer': 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+  'devops': 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+  'qa-engineer': 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+  'data-scientist': 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)',
+  'mobile-developer': 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)',
+  'golang-developer': 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)'
+}
 
 const technologies = computed(() => {
   const techConfig = {
@@ -66,9 +122,33 @@ const technologies = computed(() => {
   }).sort((a, b) => b.count - a.count)
 })
 
+const professions = computed(() => {
+  return professionsList.value.map(p => ({
+    ...p,
+    gradient: profGradients[p.slug] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+  }))
+})
+
 const selectTech = (techName) => {
   router.push({ path: '/interview-questions', query: { topic: techName } })
 }
+
+const selectProfession = (prof) => {
+  router.push({ path: '/interview-questions', query: { profession: prof.slug, profTitle: prof.title } })
+}
+
+const loadProfessions = async () => {
+  try {
+    const res = await api.getProfessions()
+    professionsList.value = res.data.professions || []
+  } catch (e) {
+    console.error('Failed to load professions:', e)
+  }
+}
+
+onMounted(() => {
+  loadProfessions()
+})
 </script>
 
 <style scoped>
@@ -79,7 +159,7 @@ const selectTech = (techName) => {
 
 .tech-selector h2 {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 1.5rem;
   font-size: 2.5rem;
   font-weight: 800;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
@@ -101,6 +181,12 @@ const selectTech = (techName) => {
   height: 4px;
   background: linear-gradient(90deg, transparent, #667eea, transparent);
   border-radius: 2px;
+}
+
+.mode-toggle {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2.5rem;
 }
 
 .tech-grid {
@@ -188,5 +274,18 @@ const selectTech = (techName) => {
   font-weight: 600;
   color: var(--text-color-secondary);
   padding: 0.5rem 0;
+}
+
+.prof-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.prof-tag {
+  font-size: 0.7rem !important;
+  padding: 0.15rem 0.4rem !important;
 }
 </style>

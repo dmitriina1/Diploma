@@ -246,5 +246,87 @@ export default {
   // ============== Health ==============
   getHealth() {
     return apiClient.get('/health')
+  },
+
+  // ============== v3: Professions ==============
+  getProfessions() {
+    return apiClient.get('/api/professions')
+  },
+
+  getProfessionQuestions(slug, params = {}) {
+    return apiClient.get(`/api/professions/${slug}/questions`, { params })
+  },
+
+  // ============== v3: SM-2 Trainer ==============
+  getSM2Cards(params = {}) {
+    const session = getUserSession()
+    return apiClient.get(`/api/trainer/sm2-cards/${session}`, { params })
+  },
+
+  submitSM2Review(questionId, quality) {
+    return apiClient.post('/api/trainer/sm2-review', {
+      question_id: questionId,
+      user_session: getUserSession(),
+      quality
+    })
+  },
+
+  resetSM2Progress() {
+    return apiClient.delete(`/api/trainer/sm2-reset/${getUserSession()}`)
+  },
+
+  // ============== v3: UGC User Answers ==============
+  getUserAnswers(questionId) {
+    return apiClient.get(`/api/user-answers/${questionId}`, {
+      params: { user_session: getUserSession() }
+    })
+  },
+
+  createUserAnswer(questionId, answerText, userName = 'Аноним') {
+    return apiClient.post(`/api/user-answers/${questionId}`, {
+      user_session: getUserSession(),
+      user_name: userName,
+      answer_text: answerText
+    })
+  },
+
+  voteUserAnswer(answerId, voteType) {
+    return apiClient.post(`/api/user-answers/${answerId}/vote`, {
+      user_session: getUserSession(),
+      vote_type: voteType
+    })
+  },
+
+  deleteUserAnswer(answerId) {
+    return apiClient.delete(`/api/user-answers/${answerId}`, {
+      params: { user_session: getUserSession() }
+    })
+  },
+
+  // ============== v3: Test Assignments ==============
+  getTestAssignments(params = {}) {
+    return apiClient.get('/api/test-assignments', { params })
+  },
+
+  createTestAssignment(data) {
+    return apiClient.post('/api/admin/test-assignments', data)
+  },
+
+  deleteTestAssignment(id) {
+    return apiClient.delete(`/api/admin/test-assignments/${id}`)
+  },
+
+  // ============== v3: HH Skills ==============
+  getHHSkills(profession = null) {
+    const params = profession ? { profession } : {}
+    return apiClient.get('/api/hh-skills', { params })
+  },
+
+  getHHProfessions() {
+    return apiClient.get('/api/hh-skills/professions')
+  },
+
+  upsertHHSkill(data) {
+    return apiClient.post('/api/admin/hh-skills', data)
   }
 }

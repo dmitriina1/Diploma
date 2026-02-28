@@ -61,16 +61,79 @@
               Видео с этим вопросом
               <Tag :value="`${questionDetail.videos.length}`" severity="info" />
             </h3>
+
+            <!-- Embedded video player -->
+            <div v-if="activeVideoEmbed" class="video-embed">
+              <iframe :src="activeVideoEmbed" frameborder="0" allowfullscreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      class="embed-iframe"></iframe>
+            </div>
+
             <div class="videos-list">
-              <a v-for="v in questionDetail.videos" :key="v.id" 
-                 :href="buildVideoUrl(v.url, question.timecode)" target="_blank" rel="noopener" class="video-link-card">
+              <div v-for="v in questionDetail.videos" :key="v.id" class="video-link-card"
+                   @click="playVideo(v)">
                 <i class="pi pi-play"></i>
                 <span class="video-title">{{ v.title || 'Без названия' }}</span>
                 <Tag :value="v.platform" size="small" severity="secondary" />
                 <span v-if="question.timecode" class="timecode-badge">
                   <i class="pi pi-clock"></i> {{ question.timecode }}
                 </span>
-              </a>
+                <a :href="buildVideoUrl(v.url, question.timecode)" target="_blank" rel="noopener"
+                   @click.stop class="external-link">
+                  <i class="pi pi-external-link"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+          
+          <Divider />
+
+          <!-- UGC: Ответы пользователей -->
+          <div class="ugc-section">
+            <h3>
+              <i class="pi pi-users"></i> Ответы сообщества
+              <Tag :value="`${userAnswers.length}`" severity="secondary" />
+            </h3>
+
+            <!-- Форма нового ответа -->
+            <div class="ugc-form">
+              <Textarea v-model="newAnswerText" placeholder="Напишите свой вариант ответа..." 
+                        :autoResize="true" rows="3" class="w-full" />
+              <div class="ugc-form-actions">
+                <InputText v-model="userName" placeholder="Ваше имя (необязательно)" class="name-input" />
+                <Button label="Отправить" icon="pi pi-send" size="small"
+                        @click="submitAnswer" :loading="submittingAnswer"
+                        :disabled="!newAnswerText || newAnswerText.length < 10" />
+              </div>
+            </div>
+
+            <!-- Список ответов -->
+            <div v-if="userAnswers.length > 0" class="ugc-answers">
+              <div v-for="ans in userAnswers" :key="ans.id" class="ugc-answer-card">
+                <div class="ugc-vote">
+                  <Button icon="pi pi-chevron-up" text size="small" 
+                          :severity="ans.my_vote === 'up' ? 'success' : 'secondary'"
+                          @click="voteAnswer(ans.id, 'up')" />
+                  <span class="vote-count" :class="{ positive: ans.votes > 0, negative: ans.votes < 0 }">
+                    {{ ans.votes }}
+                  </span>
+                  <Button icon="pi pi-chevron-down" text size="small"
+                          :severity="ans.my_vote === 'down' ? 'danger' : 'secondary'"
+                          @click="voteAnswer(ans.id, 'down')" />
+                </div>
+                <div class="ugc-content">
+                  <div class="ugc-meta">
+                    <span class="ugc-author">{{ ans.user_name || 'Аноним' }}</span>
+                    <span class="ugc-date">{{ formatDate(ans.created_at) }}</span>
+                    <Tag v-if="ans.is_selected" value="Лучший" severity="success" size="small" />
+                  </div>
+                  <div class="ugc-text" v-html="formatAnswer(ans.answer_text)"></div>
+                </div>
+              </div>
+            </div>
+            <div v-else class="ugc-empty">
+              <i class="pi pi-comment"></i>
+              <p>Пока никто не оставил свой ответ. Будьте первым!</p>
             </div>
           </div>
           
@@ -133,6 +196,15 @@ const loading = ref(true)
 const similarQuestions = ref([])
 const questionDetail = ref(null)
 const showFeedback = ref(false)
+
+// UGC
+const userAnswers = ref([])
+const newAnswerText = ref('')
+const userName = ref('')
+const submittingAnswer = ref(false)
+
+// Video embed
+const activeVideoEmbed = ref(null)
 
 const question = computed(() => {
   return questionDetail.value || questionsStore.questions.find(q => q.id === questionId.value)
@@ -208,12 +280,72 @@ const parseTimecodeToSeconds = (tc) => {
 }
 
 const goBack = () => {
-  // Use browser history to go back to whichever page the user came from
   if (window.history.length > 1) {
     router.back()
   } else {
     router.push('/interview-questions')
   }
+}
+
+/** Build an embeddable video URL (YouTube/VK) with timecode */
+const buildEmbedUrl = (url, timecode) => {
+  if (!url) return null
+  const seconds = parseTimecodeToSeconds(timecode)
+  try {
+    const u = new URL(url)
+    // YouTube
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+      let videoId = ''
+      if (u.hostname.includes('youtu.be')) {
+        videoId = u.pathname.replace('/', '')
+      } else {
+        videoId = u.searchParams.get('v') || ''
+      }
+      if (videoId) {
+        const start = seconds > 0 ? `?start=${seconds}` : ''
+        return `https://www.youtube.com/embed/${videoId}${start}`
+      }
+    }
+  } catch {}
+  return null
+}
+
+const playVideo = (video) => {
+  const embedUrl = buildEmbedUrl(video.url, question.value?.timecode)
+  if (embedUrl) {
+    activeVideoEmbed.value = embedUrl
+  } else {
+    // Fallback: open in new tab
+    window.open(buildVideoUrl(video.url, question.value?.timecode), '_blank')
+  }
+}
+
+// UGC methods
+const loadUserAnswers = async () => {
+  try {
+    const r = await api.getUserAnswers(questionId.value)
+    userAnswers.value = r.data.answers || []
+  } catch (e) { console.error('Failed to load user answers:', e) }
+}
+
+const submitAnswer = async () => {
+  if (!newAnswerText.value || newAnswerText.value.length < 10) return
+  submittingAnswer.value = true
+  try {
+    await api.createUserAnswer(questionId.value, newAnswerText.value, userName.value || 'Аноним')
+    newAnswerText.value = ''
+    await loadUserAnswers()
+  } catch (e) {
+    console.error('Failed to submit answer:', e)
+  }
+  submittingAnswer.value = false
+}
+
+const voteAnswer = async (answerId, voteType) => {
+  try {
+    await api.voteUserAnswer(answerId, voteType)
+    await loadUserAnswers()
+  } catch (e) { console.error('Vote error:', e) }
 }
 
 const navigateToQuestion = (id) => {
@@ -224,6 +356,8 @@ const loadQuestionDetail = async () => {
   loading.value = true
   questionDetail.value = null
   similarQuestions.value = []
+  activeVideoEmbed.value = null
+  userAnswers.value = []
   
   try {
     const response = await api.getPublicQuestionDetail(questionId.value)
@@ -233,6 +367,9 @@ const loadQuestionDetail = async () => {
     console.error('Failed to load question detail:', error)
     await questionsStore.fetchQuestions()
   }
+  
+  // Load UGC answers
+  await loadUserAnswers()
   
   loading.value = false
 }
@@ -265,22 +402,6 @@ watch(questionId, loadQuestionDetail)
   display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-color);
 }
 .videos-list { display: flex; flex-direction: column; gap: 0.5rem; }
-.video-link-card {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px; text-decoration: none; color: rgba(255, 255, 255, 0.8); transition: all 0.2s;
-}
-.video-link-card:hover {
-  background: rgba(255, 255, 255, 0.08); border-color: var(--primary-color); transform: translateX(4px);
-}
-.video-link-card .video-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.video-link-card i.pi-play { color: var(--primary-color); }
-.timecode-badge {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  background: rgba(102, 126, 234, 0.15); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px;
-  padding: 0.2rem 0.6rem; font-size: 0.8rem; color: #667eea; font-weight: 600; white-space: nowrap;
-}
 .answer-content {
   background: rgba(255, 255, 255, 0.05); padding: 1.5rem; border-radius: 8px; line-height: 1.8;
 }
@@ -294,4 +415,70 @@ watch(questionId, loadQuestionDetail)
 .similar-card:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); }
 .similar-meta { display: flex; align-items: center; gap: 1rem; }
 .similarity-score { font-size: 0.85rem; color: var(--text-color-secondary); }
+
+/* Video embed */
+.video-embed {
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+  background: #000;
+}
+.embed-iframe { width: 100%; height: 100%; border: none; }
+.video-link-card {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px; color: rgba(255, 255, 255, 0.8); transition: all 0.2s; cursor: pointer;
+}
+.video-link-card:hover {
+  background: rgba(255, 255, 255, 0.08); border-color: var(--primary-color); transform: translateX(4px);
+}
+.video-link-card .video-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.video-link-card i.pi-play { color: var(--primary-color); }
+.timecode-badge {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  background: rgba(102, 126, 234, 0.15); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 6px;
+  padding: 0.2rem 0.6rem; font-size: 0.8rem; color: #667eea; font-weight: 600; white-space: nowrap;
+}
+.external-link { color: rgba(255,255,255,0.4); transition: color 0.2s; }
+.external-link:hover { color: var(--primary-color); }
+
+/* UGC Section */
+.ugc-section h3 {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; color: var(--primary-color);
+}
+.ugc-form {
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;
+}
+.ugc-form-actions {
+  display: flex; gap: 0.75rem; margin-top: 0.75rem; align-items: center;
+}
+.name-input { flex: 1; max-width: 250px; }
+.ugc-answers { display: flex; flex-direction: column; gap: 1rem; }
+.ugc-answer-card {
+  display: flex; gap: 1rem;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; padding: 1rem; transition: all 0.2s;
+}
+.ugc-answer-card:hover { border-color: rgba(255, 255, 255, 0.15); }
+.ugc-vote {
+  display: flex; flex-direction: column; align-items: center; min-width: 40px;
+}
+.vote-count { font-weight: 700; font-size: 1rem; color: rgba(255,255,255,0.7); }
+.vote-count.positive { color: #22c55e; }
+.vote-count.negative { color: #ef4444; }
+.ugc-content { flex: 1; }
+.ugc-meta {
+  display: flex; gap: 0.75rem; align-items: center; margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.ugc-author { color: var(--primary-color); font-weight: 600; }
+.ugc-date { color: rgba(255,255,255,0.4); }
+.ugc-text { color: rgba(255,255,255,0.85); line-height: 1.7; }
+.ugc-empty {
+  text-align: center; padding: 2rem; color: rgba(255,255,255,0.4);
+}
+.ugc-empty i { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
 </style>

@@ -41,8 +41,8 @@
       <div class="features-container">
         <div class="feature-card" @click="$router.push('/trainer')">
           <div class="feature-icon trainer-icon"><i class="pi pi-bolt"></i></div>
-          <h3>Тренажёр</h3>
-          <p>Карточки с интервальным повторением и режим реального собеседования</p>
+          <h3>Тренажёр SM-2</h3>
+          <p>Интервальные повторения по алгоритму SM-2 — запоминай эффективнее</p>
         </div>
         <div class="feature-card" @click="$router.push('/recordings')">
           <div class="feature-icon recordings-icon"><i class="pi pi-video"></i></div>
@@ -53,6 +53,21 @@
           <div class="feature-icon questions-icon"><i class="pi pi-list"></i></div>
           <h3>Вопросы с собеседований</h3>
           <p>Полная база вопросов с фильтрацией по технологии, сложности, вероятности</p>
+        </div>
+        <div class="feature-card" @click="$router.push('/test-assignments')">
+          <div class="feature-icon assignments-icon"><i class="pi pi-file-edit"></i></div>
+          <h3>Тестовые задания</h3>
+          <p>Реальные тестовые задания от IT-компаний для практики</p>
+        </div>
+        <div class="feature-card" @click="$router.push('/hh-requirements')">
+          <div class="feature-icon hh-icon"><i class="pi pi-chart-bar"></i></div>
+          <h3>Навыки из вакансий</h3>
+          <p>Какие навыки требуют работодатели и в каком % вакансий</p>
+        </div>
+        <div class="feature-card" @click="$router.push('/suggest')">
+          <div class="feature-icon suggest-icon"><i class="pi pi-send"></i></div>
+          <h3>Предложить видео</h3>
+          <p>Знаешь хорошее видео с собеседования? Предложи его!</p>
         </div>
       </div>
     </section>
@@ -235,6 +250,9 @@ onMounted(async () => {
 .trainer-icon { background: linear-gradient(135deg, #667eea, #764ba2); }
 .recordings-icon { background: linear-gradient(135deg, #f093fb, #f5576c); }
 .questions-icon { background: linear-gradient(135deg, #22c55e, #14b8a6); }
+.assignments-icon { background: linear-gradient(135deg, #fa709a, #fee140); }
+.hh-icon { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.suggest-icon { background: linear-gradient(135deg, #fbc2eb, #a6c1ee); }
 
 .feature-card h3 { color: rgba(255, 255, 255, 0.9); margin-bottom: 0.5rem; font-size: 1.2rem; }
 .feature-card p { color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; line-height: 1.5; }

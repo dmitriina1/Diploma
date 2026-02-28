@@ -33,6 +33,8 @@ import TabPanel from 'primevue/tabpanel'
 import ProgressSpinner from 'primevue/progressspinner'
 import Message from 'primevue/message'
 import Tooltip from 'primevue/tooltip'
+import Slider from 'primevue/slider'
+import Paginator from 'primevue/paginator'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -64,6 +66,8 @@ app.component('TabView', TabView)
 app.component('TabPanel', TabPanel)
 app.component('ProgressSpinner', ProgressSpinner)
 app.component('Message', Message)
+app.component('Slider', Slider)
+app.component('Paginator', Paginator)
 
 // Register directives
 app.directive('tooltip', Tooltip)

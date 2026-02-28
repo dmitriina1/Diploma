@@ -6,9 +6,16 @@
       <!-- Mode Selection -->
       <div v-if="mode === 'select'" class="mode-select">
         <h1 class="page-title">
-          <i class="pi pi-bolt"></i> Тренажёр
+          <i class="pi pi-bolt"></i> Тренажёр SM-2
         </h1>
-        <p class="page-subtitle">Выберите режим подготовки к собеседованию</p>
+        <p class="page-subtitle">Интервальные повторения по алгоритму SuperMemo 2</p>
+
+        <!-- SM-2 Stats -->
+        <div v-if="sm2Stats.total > 0" class="sm2-overview">
+          <div class="sm2-stat new"><i class="pi pi-plus-circle"></i> <span>{{ sm2Stats.new }}</span> новых</div>
+          <div class="sm2-stat review"><i class="pi pi-replay"></i> <span>{{ sm2Stats.review }}</span> к повтору</div>
+          <div class="sm2-stat learned"><i class="pi pi-check-circle"></i> <span>{{ sm2Stats.learned }}</span> выучено</div>
+        </div>
 
         <div class="mode-cards">
           <div class="mode-card" @click="startFlashcards">
@@ -16,7 +23,7 @@
               <i class="pi pi-clone"></i>
             </div>
             <h2>Проработка вопросов</h2>
-            <p>Карточки с интервальным повторением. Отмечайте «Знаю» или «На повтор» — система будет возвращать сложные вопросы чаще.</p>
+            <p>Карточки с алгоритмом SM-2. Отмечайте «Знаю» или «На повтор» — система рассчитает оптимальный интервал повторения.</p>
             <div class="mode-stats">
               <Tag icon="pi pi-question-circle" :value="`${totalQuestions} вопросов`" severity="info" />
               <Tag v-if="repeatCount > 0" icon="pi pi-replay" :value="`${repeatCount} на повтор`" severity="warning" />
@@ -206,6 +213,9 @@ const repeatCount = ref(0)
 const availableInterviews = ref(0)
 const topics = ref([])
 
+// SM-2 stats
+const sm2Stats = ref({ total: 0, new: 0, review: 0, learned: 0 })
+
 // Flashcard setup
 const selectedTopic = ref(null)
 const selectedDifficulty = ref(null)
@@ -226,25 +236,6 @@ const knownCount = ref(0)
 const repeatQueue = ref([])
 const sessionComplete = ref(false)
 
-// Spaced repetition storage (localStorage)
-const SR_KEY = 'trainer_spaced_repetition'
-
-const getSpacedData = () => {
-  try { return JSON.parse(localStorage.getItem(SR_KEY) || '{}') } catch { return {} }
-}
-const saveSpacedData = (data) => { localStorage.setItem(SR_KEY, JSON.stringify(data)) }
-
-const markQuestionKnown = (qId) => {
-  const data = getSpacedData()
-  data[qId] = { status: 'known', lastSeen: Date.now(), streak: (data[qId]?.streak || 0) + 1 }
-  saveSpacedData(data)
-}
-const markQuestionRepeat = (qId) => {
-  const data = getSpacedData()
-  data[qId] = { status: 'repeat', lastSeen: Date.now(), streak: 0 }
-  saveSpacedData(data)
-}
-
 const currentCard = computed(() => flashcards.value[currentCardIndex.value])
 const repeatQueueCount = computed(() => repeatQueue.value.length)
 const flashcardProgress = computed(() => {
@@ -254,18 +245,24 @@ const flashcardProgress = computed(() => {
 
 const flipCard = () => { cardFlipped.value = !cardFlipped.value }
 
-const markKnown = () => {
+const markKnown = async () => {
   if (currentCard.value) {
-    markQuestionKnown(currentCard.value.id)
     knownCount.value++
+    // SM-2: quality = 5 (идеально знаю)
+    try {
+      await api.submitSM2Review(currentCard.value.id, 5)
+    } catch (e) { console.error('SM-2 review error:', e) }
   }
   advanceCard()
 }
 
-const markRepeat = () => {
+const markRepeat = async () => {
   if (currentCard.value) {
-    markQuestionRepeat(currentCard.value.id)
     repeatQueue.value.push(currentCard.value)
+    // SM-2: quality = 1 (не знаю, нужен повтор)
+    try {
+      await api.submitSM2Review(currentCard.value.id, 1)
+    } catch (e) { console.error('SM-2 review error:', e) }
   }
   advanceCard()
 }
@@ -317,18 +314,21 @@ const formatAnswer = (text) => {
 // API calls
 const loadStats = async () => {
   try {
-    const r = await api.getStats()
-    totalQuestions.value = r.data.total_questions || 0
-    topics.value = (r.data.topics || []).map(t => t.topic || t)
+    const r = await api.getQuestions({ status: 'approved', limit: 1 })
+    const data = r.data
+    totalQuestions.value = data.total || (data.questions || []).length
   } catch (e) { console.error(e) }
 
-  // Count repeat items from localStorage
-  const data = getSpacedData()
-  repeatCount.value = Object.values(data).filter(d => d.status === 'repeat').length
+  // Load SM-2 stats from server
+  try {
+    const r = await api.getSM2Cards({ })
+    sm2Stats.value = r.data.stats || { total: 0, new: 0, review: 0, learned: 0 }
+    repeatCount.value = sm2Stats.value.review
+  } catch (e) { console.error('SM-2 stats error:', e) }
 
   // Count available interview videos
   try {
-    const r = await api.getProcessedVideos?.() || await api.get('/api/processed-videos')
+    const r = await api.getProcessedVideos()
     const videos = r.data?.videos || r.data || []
     availableInterviews.value = videos.length
     interviewVideos.value = videos
@@ -338,33 +338,27 @@ const loadStats = async () => {
 const loadFlashcards = async () => {
   loadingCards.value = true
   try {
-    // Get approved questions with filters
-    const params = { status: 'approved', limit: 200 }
+    // Use SM-2 endpoint — it sorts cards by due date (review first, then new, then learned)
+    const params = {}
     if (selectedTopic.value) params.topic = selectedTopic.value
     if (selectedDifficulty.value) params.difficulty = selectedDifficulty.value
-    
-    const r = await api.getQuestions(params)
-    let questions = r.data.questions || r.data || []
-    
-    // Spaced repetition: prioritize repeat questions, then unseen, then known
-    const srData = getSpacedData()
-    if (prioritizeRepeat.value) {
-      questions.sort((a, b) => {
-        const asr = srData[a.id]
-        const bsr = srData[b.id]
-        const aScore = !asr ? 1 : (asr.status === 'repeat' ? 0 : 2 + (asr.streak || 0))
-        const bScore = !bsr ? 1 : (bsr.status === 'repeat' ? 0 : 2 + (bsr.streak || 0))
-        return aScore - bScore
-      })
-    } else {
-      // Shuffle
-      for (let i = questions.length - 1; i > 0; i--) {
+
+    const r = await api.getSM2Cards(params)
+    let cards = r.data.cards || []
+
+    // If not prioritizing repeat, shuffle
+    if (!prioritizeRepeat.value) {
+      for (let i = cards.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [questions[i], questions[j]] = [questions[j], questions[i]]
+        [cards[i], cards[j]] = [cards[j], cards[i]]
       }
     }
-    
-    flashcards.value = questions.slice(0, cardCount.value)
+
+    // Populate topics from first load
+    const topicSet = new Set(cards.map(c => c.topic).filter(Boolean))
+    topics.value = [...topicSet].sort()
+
+    flashcards.value = cards.slice(0, cardCount.value)
     currentCardIndex.value = 0
     knownCount.value = 0
     repeatQueue.value = []
@@ -383,7 +377,7 @@ const startInterview = async () => {
   mode.value = 'interview-setup'
   loadingInterviews.value = true
   try {
-    const r = await api.getProcessedVideos?.() || await api.get('/api/processed-videos')
+    const r = await api.getProcessedVideos()
     interviewVideos.value = r.data?.videos || r.data || []
   } catch { interviewVideos.value = [] }
   loadingInterviews.value = false
@@ -392,8 +386,7 @@ const startInterview = async () => {
 const startInterviewSession = async (video) => {
   currentInterviewTitle.value = video.title || 'Собеседование'
   try {
-    // Load questions associated with this video
-    const r = await api.getVideoQuestions?.(video.id) || await api.get(`/api/processed-videos/${video.id}/questions`)
+    const r = await api.getVideoQuestions(video.id)
     interviewQuestions.value = r.data?.questions || r.data || []
   } catch { interviewQuestions.value = [] }
   
@@ -427,9 +420,32 @@ onMounted(loadStats)
 .page-subtitle {
   text-align: center;
   color: rgba(255,255,255,0.6);
-  margin-bottom: 2.5rem;
+  margin-bottom: 1rem;
   font-size: 1.1rem;
 }
+
+.sm2-overview {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+.sm2-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+}
+.sm2-stat span { font-weight: 800; font-size: 1.2rem; }
+.sm2-stat.new { background: rgba(102, 126, 234, 0.2); color: #a4b4f7; }
+.sm2-stat.review { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.sm2-stat.learned { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+
 .mode-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;

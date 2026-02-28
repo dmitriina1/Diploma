@@ -6,6 +6,8 @@ import Suggestions from '../views/Suggestions.vue'
 import Trainer from '../views/Trainer.vue'
 import InterviewRecordings from '../views/InterviewRecordings.vue'
 import InterviewQuestions from '../views/InterviewQuestions.vue'
+import TestAssignments from '../views/TestAssignments.vue'
+import HHRequirements from '../views/HHRequirements.vue'
 
 const routes = [
   {
@@ -31,7 +33,7 @@ const routes = [
     path: '/trainer',
     name: 'Trainer',
     component: Trainer,
-    meta: { title: 'Тренажёр' }
+    meta: { title: 'Тренажёр SM-2' }
   },
   {
     path: '/recordings',
@@ -44,6 +46,18 @@ const routes = [
     name: 'InterviewQuestions',
     component: InterviewQuestions,
     meta: { title: 'Вопросы с собеседований' }
+  },
+  {
+    path: '/test-assignments',
+    name: 'TestAssignments',
+    component: TestAssignments,
+    meta: { title: 'Тестовые задания' }
+  },
+  {
+    path: '/hh-requirements',
+    name: 'HHRequirements',
+    component: HHRequirements,
+    meta: { title: 'Навыки из вакансий' }
   },
   {
     path: '/admin',

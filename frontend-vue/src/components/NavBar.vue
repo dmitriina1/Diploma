@@ -17,14 +17,24 @@
           <span>Тренажёр</span>
         </router-link>
 
-        <router-link to="/recordings" class="navbar-link">
-          <i class="pi pi-video"></i>
-          <span>Записи собеседований</span>
-        </router-link>
-
         <router-link to="/interview-questions" class="navbar-link">
           <i class="pi pi-list"></i>
-          <span>Вопросы с собеседований</span>
+          <span>Вопросы</span>
+        </router-link>
+
+        <router-link to="/recordings" class="navbar-link">
+          <i class="pi pi-video"></i>
+          <span>Записи</span>
+        </router-link>
+
+        <router-link to="/test-assignments" class="navbar-link">
+          <i class="pi pi-file-edit"></i>
+          <span>Задания</span>
+        </router-link>
+
+        <router-link to="/hh-requirements" class="navbar-link">
+          <i class="pi pi-chart-bar"></i>
+          <span>Навыки</span>
         </router-link>
         
         <router-link to="/admin" class="navbar-link admin-link">

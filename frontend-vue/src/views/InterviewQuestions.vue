@@ -2,13 +2,15 @@
   <div class="iq-page">
     <NavBar />
     <div class="page-container">
-      <h1 class="page-title"><i class="pi pi-list"></i> Вопросы с собеседований</h1>
+      <h1 class="page-title"><i class="pi pi-list"></i> {{ pageHeading }}</h1>
       <p class="page-subtitle">Реальные вопросы, задаваемые на IT-собеседованиях</p>
 
       <div class="filters">
         <Dropdown v-model="selectedTopic" :options="topics" placeholder="Все технологии" showClear />
         <Dropdown v-model="selectedDifficulty" :options="difficulties" optionLabel="label" optionValue="value" placeholder="Любая сложность" showClear />
         <InputText v-model="search" placeholder="Поиск вопроса..." class="search-input" />
+        <Button v-if="professionSlug" icon="pi pi-times" label="Сбросить профессию" severity="secondary" size="small"
+                @click="clearProfession" />
       </div>
 
       <div class="sort-row">
@@ -66,6 +68,20 @@ const search = ref('')
 const sortBy = ref('probability')
 const first = ref(0)
 const pageSize = ref(20)
+const professionSlug = ref(null)
+const professionTitle = ref('')
+
+const pageHeading = computed(() => {
+  if (professionTitle.value) return `Вопросы: ${professionTitle.value}`
+  return 'Вопросы с собеседований'
+})
+
+const clearProfession = () => {
+  professionSlug.value = null
+  professionTitle.value = ''
+  // Reload all questions
+  loadQuestions()
+}
 
 const difficulties = [
   { label: 'Junior', value: 'junior' },
@@ -105,17 +121,40 @@ watch(() => route.query.topic, (newTopic) => {
   first.value = 0
 })
 
-onMounted(async () => {
-  // Apply topic filter from query param if present
-  if (route.query.topic) {
-    selectedTopic.value = route.query.topic
+watch(() => route.query.profession, (newProf) => {
+  if (newProf && newProf !== professionSlug.value) {
+    professionSlug.value = newProf
+    professionTitle.value = route.query.profTitle || newProf
+    loadQuestions()
   }
+})
+
+const loadQuestions = async () => {
+  loading.value = true
   try {
-    const r = await api.getQuestions({ status: 'approved', limit: 1000 })
-    questions.value = r.data.questions || r.data || []
+    if (professionSlug.value) {
+      // Load questions for this profession
+      const r = await api.getProfessionQuestions(professionSlug.value, { limit: 1000 })
+      questions.value = r.data.questions || []
+    } else {
+      const r = await api.getQuestions({ status: 'approved', limit: 1000 })
+      questions.value = r.data.questions || r.data || []
+    }
     topics.value = [...new Set(questions.value.map(q => q.topic).filter(Boolean))]
   } catch (e) { console.error(e) }
   loading.value = false
+}
+
+onMounted(async () => {
+  // Apply filters from query params
+  if (route.query.topic) {
+    selectedTopic.value = route.query.topic
+  }
+  if (route.query.profession) {
+    professionSlug.value = route.query.profession
+    professionTitle.value = route.query.profTitle || route.query.profession
+  }
+  await loadQuestions()
 })
 </script>
 
