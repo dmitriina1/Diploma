@@ -1,19 +1,14 @@
 """
-Interview Prep API - Переработанная архитектура
-===============================================
-
-Изменения:
-1. ❌ Убран n8n - весь pipeline обработки напрямую в backend
-2. ❌ Убран WhisperPool с разделением аудио на части
-3. ✅ Добавлен WhisperOrchestrator - per-task модель (1 Whisper = 1 полное аудио)
-4. ✅ Динамическое управление Whisper-воркерами через Docker API
-5. ✅ Оптимизировано для AMD Ryzen 7, 32GB RAM
+Interview Prep API v2.0
+=======================
 
 Архитектура:
-- Whisper large-v3 модель (лучшее качество)
+- WhisperOrchestrator: per-task модель (1 Whisper = 1 полное аудио)
+- Whisper large-v3 модель (лучшее качество) через faster-whisper
 - CPU_THREADS=10 для одного воркера
 - Максимум 2 воркера одновременно
-- TaskQueue с приоритетами
+- Прямой REST API pipeline (без внешних оркестраторов)
+- Оптимизировано для CPU (AMD Ryzen 7, 32GB RAM)
 """
 
 import os
@@ -328,17 +323,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Interview Prep API v2.0",
     description="""
-## API для подготовки к IT собеседованиям (переработанная архитектура)
+## API для подготовки к IT собеседованиям
 
-**Улучшения:**
-- ❌ Убран n8n — прямой REST API pipeline
-- ❌ Убрано разделение аудио на части
-- ✅ Per-task масштабирование Whisper (1 воркер = 1 полное аудио)
-- ✅ Оптимизировано для AMD Ryzen 7, 32GB RAM
-- ✅ Whisper large-v3 для максимального качества
+**Возможности:**
+- Per-task масштабирование Whisper (1 воркер = 1 полное аудио)
+- Whisper large-v3 для максимального качества
+- Мультиплатформенная загрузка видео (YouTube, VK, Rutube, OK.ru)
+- Извлечение вопросов через LLM (OpenRouter, Gemini, Groq)
+- Семантический поиск похожих вопросов (FAISS)
 
 ### Основные эндпоинты:
-- `POST /api/process-video` - Запуск обработки видео (прямой pipeline)
+- `POST /api/process-video` - Запуск обработки видео
 - `GET /api/task/{task_id}` - Статус задачи
 - `GET /api/full-export/{task_id}` - Полный экспорт
 """,
@@ -412,7 +407,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 # ============== Core Processing Pipeline ==============
 async def process_video_pipeline(task_id: str, video_url: str, topic: str, level: str):
     """
-    Главный pipeline обработки видео (БЕЗ n8n!)
+    Главный pipeline обработки видео.
     
     Поддерживаемые платформы:
     - YouTube
@@ -759,7 +754,7 @@ async def health():
 @app.post("/api/process-video", tags=["Processing"])
 async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
     """
-    Запуск обработки видео (прямой pipeline, без n8n)
+    Запуск обработки видео
     
     Поддерживаемые платформы:
     - YouTube (youtube.com, youtu.be)
@@ -799,7 +794,7 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     await redis_client.ltrim("global:tasks", 0, 99)
     await redis_client.expire("global:tasks", REDIS_TTL)
     
-    # Запускаем обработку в фоне (БЕЗ n8n!)
+    # Запускаем обработку в фоне
     background_tasks.add_task(
         process_video_pipeline,
         task_id,

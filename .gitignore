@@ -22,5 +22,4 @@ temp/
 # Docker volumes (не коммитим данные)
 postgres_data/
 redis_data/
-ollama_data/
-n8n_data/
+whisper_cache/
