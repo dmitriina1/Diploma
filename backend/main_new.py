@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 import time
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Body, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Body, UploadFile, File, Form, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -33,6 +33,11 @@ import yt_dlp
 
 from similarity_search import get_similar_questions as search_similar_questions
 from video_downloader import VideoDownloader
+from auth import (
+    create_users_table, get_user_by_username, create_user, update_last_login,
+    verify_password, create_access_token, require_auth, require_admin,
+    get_current_user, update_user_profile, UserRegister, UserLogin, TokenResponse
+)
 
 # ============== Конфигурация ==============
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
@@ -365,6 +370,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️ Auto-migration warning: {e}")
     
+    # Инициализируем таблицу пользователей и admin
+    try:
+        await create_users_table()
+    except Exception as e:
+        print(f"⚠️ Users table warning: {e}")
+    
     # Инициализируем VideoDownloader
     video_downloader = VideoDownloader(TEMP_DIR)
     print("📥 VideoDownloader initialized (supports YouTube, VK.video, Rutube, OK.ru, etc.)")
@@ -412,6 +423,7 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_tags=[
+        {"name": "Auth", "description": "Авторизация и регистрация"},
         {"name": "Processing", "description": "Обработка видео"},
         {"name": "Status", "description": "Статус и мониторинг"},
         {"name": "Export", "description": "Экспорт данных"},
@@ -816,6 +828,142 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
         
     finally:
         await conn.close()
+
+
+# ============== Auth Endpoints ==============
+@app.post("/api/auth/register", tags=["Auth"], response_model=TokenResponse)
+async def register(data: UserRegister):
+    """Регистрация нового пользователя"""
+    user = await create_user(data.username, data.password, data.display_name)
+    
+    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
+    await update_last_login(user["id"])
+    
+    return TokenResponse(
+        access_token=token,
+        user={"id": user["id"], "username": user["username"], 
+              "display_name": user["display_name"], "role": user["role"]}
+    )
+
+
+@app.post("/api/auth/login", tags=["Auth"], response_model=TokenResponse)
+async def login(data: UserLogin):
+    """Авторизация пользователя"""
+    user = await get_user_by_username(data.username)
+    
+    if not user or not verify_password(data.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверный логин или пароль"
+        )
+    
+    if not user.get("is_active"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Аккаунт деактивирован"
+        )
+    
+    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
+    await update_last_login(user["id"])
+    
+    return TokenResponse(
+        access_token=token,
+        user={"id": user["id"], "username": user["username"],
+              "display_name": user["display_name"], "role": user["role"]}
+    )
+
+
+@app.get("/api/auth/me", tags=["Auth"])
+async def get_me(user: dict = Depends(require_auth)):
+    """Получить информацию о текущем пользователе"""
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "display_name": user["display_name"],
+        "role": user["role"],
+        "avatar_url": user.get("avatar_url"),
+        "github_url": user.get("github_url"),
+        "created_at": user.get("created_at")
+    }
+
+
+@app.get("/api/profile", tags=["Auth"])
+async def get_profile(user: dict = Depends(require_auth)):
+    """Получить профиль текущего пользователя с закладками и записями"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        # Закладки пользователя (по user_session = username для привязки)
+        bookmarks = await conn.fetch("""
+            SELECT b.id, b.note, b.created_at,
+                   q.id as question_id, q.question, q.topic, q.difficulty
+            FROM bookmarks b
+            JOIN questions q ON b.question_id = q.id
+            WHERE b.user_session = $1
+            ORDER BY b.created_at DESC
+            LIMIT 50
+        """, user["username"])
+
+        bookmarks_list = []
+        for b in bookmarks:
+            row = dict(b)
+            for k in row:
+                if hasattr(row[k], 'isoformat'):
+                    row[k] = row[k].isoformat()
+            bookmarks_list.append(row)
+
+        # SM-2 статистика тренажёра
+        try:
+            trainer_stats = await conn.fetchrow("""
+                SELECT COUNT(*) as total_cards,
+                       COUNT(*) FILTER (WHERE repetitions > 0) as reviewed,
+                       ROUND(AVG(easiness)::numeric, 2) as avg_easiness
+                FROM sm2_cards
+                WHERE user_session = $1
+            """, user["username"])
+            trainer_stats = dict(trainer_stats) if trainer_stats else None
+            if trainer_stats and trainer_stats.get('avg_easiness') is not None:
+                trainer_stats['avg_easiness'] = float(trainer_stats['avg_easiness'])
+        except Exception:
+            trainer_stats = None
+
+        return {
+            "id": user["id"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "role": user["role"],
+            "avatar_url": user.get("avatar_url"),
+            "github_url": user.get("github_url"),
+            "created_at": user.get("created_at"),
+            "bookmarks": bookmarks_list,
+            "trainer_stats": trainer_stats
+        }
+    finally:
+        await conn.close()
+
+
+@app.put("/api/profile", tags=["Auth"])
+async def update_profile(data: dict = Body(...), user: dict = Depends(require_auth)):
+    """Обновить профиль пользователя (имя, github, аватар)"""
+    updated = await update_user_profile(
+        user_id=user["id"],
+        display_name=data.get("display_name"),
+        github_url=data.get("github_url"),
+        avatar_url=data.get("avatar_url")
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    # Sync localStorage data: return fresh user info
+    return {
+        "id": updated["id"],
+        "username": updated["username"],
+        "display_name": updated["display_name"],
+        "role": updated["role"],
+        "avatar_url": updated.get("avatar_url"),
+        "github_url": updated.get("github_url"),
+        "created_at": updated.get("created_at"),
+        "message": "Профиль обновлён"
+    }
 
 
 # ============== API Endpoints ==============
@@ -1242,7 +1390,7 @@ async def full_export(task_id: str):
 
 # ============== Admin Panel Endpoints ==============
 @app.get("/api/admin/questions", tags=["Admin"])
-async def get_admin_questions():
+async def get_admin_questions(_admin: dict = Depends(require_admin)):
     """Получить все вопросы для админа с video_count и total_videos"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -1289,7 +1437,7 @@ async def get_admin_questions():
 
 
 @app.post("/api/admin/questions", tags=["Admin"])
-async def create_question(data: dict = Body(...)):
+async def create_question(data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Создать новый вопрос"""
     from similarity_search import invalidate_similarity_cache
     
@@ -1313,7 +1461,7 @@ async def create_question(data: dict = Body(...)):
 
 
 @app.put("/api/admin/questions/{question_id}", tags=["Admin"])
-async def update_question(question_id: int, data: dict = Body(...)):
+async def update_question(question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Обновить вопрос (body JSON)"""
     from similarity_search import invalidate_similarity_cache
     
@@ -1339,7 +1487,7 @@ async def update_question(question_id: int, data: dict = Body(...)):
 
 
 @app.delete("/api/admin/questions/{question_id}", tags=["Admin"])
-async def delete_question(question_id: int):
+async def delete_question(question_id: int, _admin: dict = Depends(require_admin)):
     """Удалить вопрос"""
     from similarity_search import invalidate_similarity_cache
     
@@ -1353,7 +1501,7 @@ async def delete_question(question_id: int):
 
 
 @app.post("/api/admin/approve-questions", tags=["Admin"])
-async def approve_questions(data: Dict[str, List[int]]):
+async def approve_questions(data: Dict[str, List[int]], _admin: dict = Depends(require_admin)):
     """Одобрить вопросы"""
     from similarity_search import invalidate_similarity_cache
     
@@ -1375,7 +1523,7 @@ async def approve_questions(data: Dict[str, List[int]]):
 
 
 @app.post("/api/admin/revoke-questions", tags=["Admin"])
-async def revoke_questions(data: Dict[str, List[int]]):
+async def revoke_questions(data: Dict[str, List[int]], _admin: dict = Depends(require_admin)):
     """Отозвать утверждение вопросов (approved → false)"""
     from similarity_search import invalidate_similarity_cache
     
@@ -1397,7 +1545,7 @@ async def revoke_questions(data: Dict[str, List[int]]):
 
 
 @app.get("/api/admin/questions/{question_id}", tags=["Admin"])
-async def get_question_detail(question_id: int):
+async def get_question_detail(question_id: int, _admin: dict = Depends(require_admin)):
     """Получить полную карточку вопроса: данные + video_count + похожие вопросы"""
     from similarity_search import get_similar_questions as find_similar
     
@@ -1479,7 +1627,7 @@ async def get_question_detail(question_id: int):
 
 
 @app.post("/api/admin/questions/merge", tags=["Admin"])
-async def merge_questions(data: dict = Body(...)):
+async def merge_questions(data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """
     Объединить вопрос source_id в target_id.
     Все video-связи source переносятся на target, source удаляется.
@@ -1530,7 +1678,7 @@ async def merge_questions(data: dict = Body(...)):
 
 
 @app.post("/api/admin/generate-answer/{question_id}", tags=["Admin"])
-async def generate_answer_for_question(question_id: int):
+async def generate_answer_for_question(question_id: int, _admin: dict = Depends(require_admin)):
     """
     Генерация ответа на вопрос через LLM
     
@@ -1592,7 +1740,7 @@ async def generate_answer_for_question(question_id: int):
 
 
 @app.post("/api/admin/recalculate-probabilities", tags=["Admin"])
-async def recalculate_probabilities():
+async def recalculate_probabilities(_admin: dict = Depends(require_admin)):
     """Пересчитать вероятности"""
     from similarity_search import invalidate_similarity_cache
     
@@ -2006,7 +2154,7 @@ async def _table_exists(conn, table_name: str) -> bool:
 
 # ============== Массовая генерация ответов ==============
 @app.post("/api/admin/generate-answers-bulk", tags=["Admin"])
-async def generate_answers_bulk(data: dict = Body(...)):
+async def generate_answers_bulk(data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Массовая генерация ответов для вопросов без ответов"""
     question_ids = data.get("question_ids", [])
     max_count = data.get("max_count", 10)
@@ -2086,7 +2234,7 @@ async def get_suggestions(status: Optional[str] = None):
 
 
 @app.get("/api/admin/suggestions", tags=["Admin"])
-async def get_admin_suggestions():
+async def get_admin_suggestions(_admin: dict = Depends(require_admin)):
     """Все предложения видео для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2104,7 +2252,7 @@ async def get_admin_suggestions():
 
 
 @app.put("/api/admin/suggestions/{suggestion_id}", tags=["Admin"])
-async def update_suggestion(suggestion_id: int, data: dict = Body(...)):
+async def update_suggestion(suggestion_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Обновить статус предложения"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2119,7 +2267,7 @@ async def update_suggestion(suggestion_id: int, data: dict = Body(...)):
 
 
 @app.post("/api/admin/suggestions/{suggestion_id}/process", tags=["Admin"])
-async def process_suggestion(suggestion_id: int, background_tasks: BackgroundTasks):
+async def process_suggestion(suggestion_id: int, background_tasks: BackgroundTasks, _admin: dict = Depends(require_admin)):
     """Обработать предложенное видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2174,7 +2322,7 @@ async def create_feedback(data: dict = Body(...)):
 
 
 @app.get("/api/admin/feedback", tags=["Admin"])
-async def get_admin_feedback(is_resolved: Optional[bool] = None):
+async def get_admin_feedback(is_resolved: Optional[bool] = None, _admin: dict = Depends(require_admin)):
     """Вся обратная связь для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2198,7 +2346,7 @@ async def get_admin_feedback(is_resolved: Optional[bool] = None):
 
 
 @app.put("/api/admin/feedback/{feedback_id}", tags=["Admin"])
-async def resolve_feedback(feedback_id: int, data: dict = Body(...)):
+async def resolve_feedback(feedback_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Разрешить/ответить на обратную связь"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2307,8 +2455,8 @@ async def get_notes(user_session: str):
 
 
 # ============== Мок-интервью ==============
-@app.post("/api/mock-interview/start", tags=["Public"])
-async def start_mock_interview(data: dict = Body(...)):
+@app.post("/api/mock-interview/start", tags=["Auth"])
+async def start_mock_interview(data: dict = Body(...), _user: dict = Depends(require_auth)):
     """Начать мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2345,8 +2493,8 @@ async def start_mock_interview(data: dict = Body(...)):
         await conn.close()
 
 
-@app.post("/api/mock-interview/{interview_id}/submit", tags=["Public"])
-async def submit_mock_interview(interview_id: int, data: dict = Body(...)):
+@app.post("/api/mock-interview/{interview_id}/submit", tags=["Auth"])
+async def submit_mock_interview(interview_id: int, data: dict = Body(...), _user: dict = Depends(require_auth)):
     """Завершить мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2365,8 +2513,8 @@ async def submit_mock_interview(interview_id: int, data: dict = Body(...)):
         await conn.close()
 
 
-@app.get("/api/mock-interview/history/{user_session}", tags=["Public"])
-async def get_mock_interview_history(user_session: str):
+@app.get("/api/mock-interview/history/{user_session}", tags=["Auth"])
+async def get_mock_interview_history(user_session: str, _user: dict = Depends(require_auth)):
     """История мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2392,7 +2540,8 @@ async def upload_video_file(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     topic: str = Form("General"),
-    difficulty: str = Form("middle")
+    difficulty: str = Form("middle"),
+    _admin: dict = Depends(require_admin)
 ):
     """Загрузить видео файл для обработки"""
     task_id = str(uuid.uuid4())
@@ -2471,7 +2620,7 @@ async def process_local_video(task_id: str, audio_path: str, filename: str, topi
 
 # ============== Теги вопросов ==============
 @app.post("/api/admin/questions/{question_id}/tags", tags=["Admin"])
-async def add_question_tag(question_id: int, data: dict = Body(...)):
+async def add_question_tag(question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Добавить тег к вопросу"""
     tag = data.get("tag", "").strip().lower()
     if not tag:
@@ -2487,7 +2636,7 @@ async def add_question_tag(question_id: int, data: dict = Body(...)):
 
 
 @app.delete("/api/admin/questions/{question_id}/tags/{tag}", tags=["Admin"])
-async def remove_question_tag(question_id: int, tag: str):
+async def remove_question_tag(question_id: int, tag: str, _admin: dict = Depends(require_admin)):
     """Удалить тег у вопроса"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2545,7 +2694,7 @@ async def get_public_stats():
 
 
 @app.get("/api/admin/stats", tags=["Admin"])
-async def get_admin_stats():
+async def get_admin_stats(_admin: dict = Depends(require_admin)):
     """Расширенная статистика для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2579,9 +2728,201 @@ async def get_admin_stats():
         await conn.close()
 
 
+@app.get("/api/admin/analytics", tags=["Admin"])
+async def get_admin_analytics(_admin: dict = Depends(require_admin)):
+    """Комплексная аналитика для панели администратора"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        analytics = {}
+
+        # === 1. Пользователи ===
+        users_total = await conn.fetchval("SELECT COUNT(*) FROM users")
+        users_active = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE last_login > CURRENT_TIMESTAMP - INTERVAL '30 days'")
+        users_new_week = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'")
+        users_new_month = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'")
+
+        # Регистрации по дням (последние 30 дней)
+        user_registrations = await conn.fetch("""
+            SELECT DATE(created_at) as day, COUNT(*) as count
+            FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            GROUP BY DATE(created_at) ORDER BY day
+        """)
+
+        analytics["users"] = {
+            "total": users_total,
+            "active_30d": users_active,
+            "new_week": users_new_week,
+            "new_month": users_new_month,
+            "registrations_by_day": [{"day": str(r["day"]), "count": r["count"]} for r in user_registrations]
+        }
+
+        # === 2. Популярность технологий (по просмотрам вопросов) ===
+        try:
+            topic_views = await conn.fetch("""
+                SELECT q.topic, COUNT(qv.id) as views
+                FROM question_views qv
+                JOIN questions q ON qv.question_id = q.id
+                WHERE q.topic IS NOT NULL
+                GROUP BY q.topic ORDER BY views DESC LIMIT 20
+            """)
+            analytics["topic_popularity"] = [{"topic": r["topic"], "views": r["views"]} for r in topic_views]
+        except Exception:
+            # Считаем по количеству вопросов если нет таблицы просмотров
+            topic_counts = await conn.fetch("""
+                SELECT topic, COUNT(*) as count FROM questions
+                WHERE topic IS NOT NULL AND approved = TRUE
+                GROUP BY topic ORDER BY count DESC LIMIT 20
+            """)
+            analytics["topic_popularity"] = [{"topic": r["topic"], "views": r["count"]} for r in topic_counts]
+
+        # === 3. Активность по дням (вопросы добавлены за 30 дней) ===
+        questions_by_day = await conn.fetch("""
+            SELECT DATE(created_at) as day, COUNT(*) as count
+            FROM questions WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
+            GROUP BY DATE(created_at) ORDER BY day
+        """)
+        analytics["questions_by_day"] = [{"day": str(r["day"]), "count": r["count"]} for r in questions_by_day]
+
+        # === 4. Тренажёр — активность ===
+        try:
+            trainer_users = await conn.fetchval("SELECT COUNT(DISTINCT user_session) FROM sr_cards")
+            trainer_reviews = await conn.fetchval("SELECT SUM(total_reviews) FROM sr_cards")
+            trainer_avg_ease = await conn.fetchval("SELECT ROUND(AVG(easiness_factor)::numeric, 2) FROM sr_cards WHERE repetitions > 0")
+            analytics["trainer"] = {
+                "unique_users": trainer_users or 0,
+                "total_reviews": trainer_reviews or 0,
+                "avg_easiness": float(trainer_avg_ease) if trainer_avg_ease else 0
+            }
+        except Exception:
+            analytics["trainer"] = {"unique_users": 0, "total_reviews": 0, "avg_easiness": 0}
+
+        # === 5. Закладки — топ сохранённых вопросов ===
+        try:
+            top_bookmarked = await conn.fetch("""
+                SELECT q.id, q.question, q.topic, COUNT(b.id) as saves
+                FROM bookmarks b JOIN questions q ON b.question_id = q.id
+                GROUP BY q.id, q.question, q.topic
+                ORDER BY saves DESC LIMIT 10
+            """)
+            analytics["top_bookmarked"] = [{"id": r["id"], "question": r["question"][:80], "topic": r["topic"], "saves": r["saves"]} for r in top_bookmarked]
+        except Exception:
+            analytics["top_bookmarked"] = []
+
+        # === 6. Ответы сообщества ===
+        try:
+            community_answers = await conn.fetchval("SELECT COUNT(*) FROM user_answers")
+            community_voters = await conn.fetchval("SELECT COUNT(DISTINCT user_session) FROM answer_votes")
+            analytics["community"] = {
+                "total_answers": community_answers or 0,
+                "active_voters": community_voters or 0
+            }
+        except Exception:
+            analytics["community"] = {"total_answers": 0, "active_voters": 0}
+
+        # === 7. Тестовые задания ===
+        try:
+            ta_total = await conn.fetchval("SELECT COUNT(*) FROM test_assignments")
+            ta_by_diff = await conn.fetch("""
+                SELECT difficulty, COUNT(*) as count FROM test_assignments GROUP BY difficulty ORDER BY count DESC
+            """)
+            ta_by_company = await conn.fetch("""
+                SELECT company, COUNT(*) as count FROM test_assignments
+                WHERE company IS NOT NULL AND company != '' GROUP BY company ORDER BY count DESC LIMIT 10
+            """)
+            analytics["test_assignments"] = {
+                "total": ta_total or 0,
+                "by_difficulty": [{"difficulty": r["difficulty"], "count": r["count"]} for r in ta_by_diff],
+                "by_company": [{"company": r["company"], "count": r["count"]} for r in ta_by_company]
+            }
+        except Exception:
+            analytics["test_assignments"] = {"total": 0, "by_difficulty": [], "by_company": []}
+
+        # === 8. Видео и источники ===
+        videos_total = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
+        try:
+            videos_by_platform = await conn.fetch("""
+                SELECT COALESCE(platform, 'youtube') as platform, COUNT(*) as count
+                FROM processed_videos GROUP BY COALESCE(platform, 'youtube') ORDER BY count DESC
+            """)
+        except Exception:
+            videos_by_platform = []
+        avg_questions_per_video = await conn.fetchval(
+            "SELECT ROUND(AVG(questions_count)::numeric, 1) FROM processed_videos WHERE questions_count > 0")
+
+        analytics["videos"] = {
+            "total": videos_total or 0,
+            "avg_questions": float(avg_questions_per_video) if avg_questions_per_video else 0,
+            "by_platform": [{"platform": r["platform"], "count": r["count"]} for r in videos_by_platform]
+        }
+
+        # === 9. Уровни вопросов ===
+        diff_dist = await conn.fetch("""
+            SELECT COALESCE(difficulty, 'unknown') as difficulty, COUNT(*) as count
+            FROM questions WHERE approved = TRUE
+            GROUP BY difficulty ORDER BY count DESC
+        """)
+        analytics["difficulty_distribution"] = [{"difficulty": r["difficulty"], "count": r["count"]} for r in diff_dist]
+
+        # === 10. Обратная связь ===
+        try:
+            fb_total = await conn.fetchval("SELECT COUNT(*) FROM feedback")
+            fb_unresolved = await conn.fetchval("SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE")
+            fb_by_type = await conn.fetch("""
+                SELECT feedback_type, COUNT(*) as count FROM feedback GROUP BY feedback_type ORDER BY count DESC
+            """)
+            analytics["feedback"] = {
+                "total": fb_total or 0,
+                "unresolved": fb_unresolved or 0,
+                "by_type": [{"type": r["feedback_type"], "count": r["count"]} for r in fb_by_type]
+            }
+        except Exception:
+            analytics["feedback"] = {"total": 0, "unresolved": 0, "by_type": []}
+
+        # === 11. Предложения видео ===  
+        try:
+            sug_total = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions")
+            sug_pending = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'")
+            sug_approved = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions WHERE status IN ('approved', 'completed')")
+            analytics["suggestions"] = {
+                "total": sug_total or 0,
+                "pending": sug_pending or 0,
+                "approved": sug_approved or 0
+            }
+        except Exception:
+            analytics["suggestions"] = {"total": 0, "pending": 0, "approved": 0}
+
+        # === 12. Топ вопросов по вероятности ===
+        top_probable = await conn.fetch("""
+            SELECT id, question, topic, probability FROM questions
+            WHERE approved = TRUE AND probability > 0
+            ORDER BY probability DESC LIMIT 10
+        """)
+        analytics["top_probable"] = [
+            {"id": r["id"], "question": r["question"][:80], "topic": r["topic"], "probability": round(r["probability"], 2)}
+            for r in top_probable
+        ]
+
+        # === 13. HH навыки — наиболее востребованные ===
+        try:
+            hh_top = await conn.fetch("""
+                SELECT skill, SUM(vacancy_count) as total_vacancies
+                FROM hh_skills GROUP BY skill ORDER BY total_vacancies DESC LIMIT 15
+            """)
+            analytics["hh_top_skills"] = [{"skill": r["skill"], "vacancies": r["total_vacancies"]} for r in hh_top]
+        except Exception:
+            analytics["hh_top_skills"] = []
+
+        return analytics
+    finally:
+        await conn.close()
+
+
 # ============== Экспорт CSV ==============
 @app.get("/api/admin/export-csv", tags=["Admin"])
-async def export_questions_csv():
+async def export_questions_csv(_admin: dict = Depends(require_admin)):
     """Экспорт вопросов в CSV"""
     from fastapi.responses import StreamingResponse
     import io
@@ -2621,7 +2962,7 @@ async def export_questions_csv():
 
 # ============== Обработанные видео ==============
 @app.get("/api/admin/videos", tags=["Admin"])
-async def get_processed_videos():
+async def get_processed_videos(_admin: dict = Depends(require_admin)):
     """Список обработанных видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2644,7 +2985,7 @@ async def get_processed_videos():
 
 
 @app.get("/api/admin/videos/{video_id}/questions", tags=["Admin"])
-async def get_video_questions(video_id: int):
+async def get_video_questions(video_id: int, _admin: dict = Depends(require_admin)):
     """Вопросы, извлечённые из конкретного видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2669,7 +3010,7 @@ async def get_video_questions(video_id: int):
 
 
 @app.delete("/api/admin/videos/{video_id}", tags=["Admin"])
-async def delete_processed_video(video_id: int):
+async def delete_processed_video(video_id: int, _admin: dict = Depends(require_admin)):
     """Удалить обработанное видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2684,7 +3025,7 @@ async def delete_processed_video(video_id: int):
 
 
 @app.patch("/api/admin/videos/{video_id}", tags=["Admin"])
-async def update_processed_video(video_id: int, data: dict = Body(...)):
+async def update_processed_video(video_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Обновить заголовок обработанного видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2805,8 +3146,8 @@ async def get_profession_questions(
 # v3: SM-2 Spaced Repetition
 # ============================================
 
-@app.post("/api/trainer/sm2-review", tags=["Public"])
-async def sm2_review(data: dict = Body(...)):
+@app.post("/api/trainer/sm2-review", tags=["Auth"])
+async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)):
     """
     Записать результат повторения по SM-2.
     quality: 0-5 (0=забыл, 1=повтор, 3=сложно вспомнил, 5=идеально)
@@ -2877,8 +3218,8 @@ async def sm2_review(data: dict = Body(...)):
         await conn.close()
 
 
-@app.get("/api/trainer/sm2-cards/{user_session}", tags=["Public"])
-async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficulty: Optional[str] = None):
+@app.get("/api/trainer/sm2-cards/{user_session}", tags=["Auth"])
+async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficulty: Optional[str] = None, _user: dict = Depends(require_auth)):
     """Получить карточки SM-2 для тренажёра (сортировка: нужные для повторения первые)"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2940,8 +3281,8 @@ async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficul
         await conn.close()
 
 
-@app.delete("/api/trainer/sm2-reset/{user_session}", tags=["Public"])
-async def reset_sm2_progress(user_session: str):
+@app.delete("/api/trainer/sm2-reset/{user_session}", tags=["Auth"])
+async def reset_sm2_progress(user_session: str, _user: dict = Depends(require_auth)):
     """Сбросить весь прогресс SM-2"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -3076,13 +3417,14 @@ async def delete_user_answer(answer_id: int, user_session: str = ""):
 # v3: Тестовые задания от компаний
 # ============================================
 
-@app.get("/api/test-assignments", tags=["Public"])
+@app.get("/api/test-assignments", tags=["Auth"])
 async def get_test_assignments(
     profession: Optional[str] = None,
     difficulty: Optional[str] = None,
     search: Optional[str] = None,
     page: int = 1,
-    per_page: int = 20
+    per_page: int = 20,
+    _user: dict = Depends(require_auth)
 ):
     """Список тестовых заданий"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3129,7 +3471,7 @@ async def get_test_assignments(
 
 
 @app.post("/api/admin/test-assignments", tags=["Admin"])
-async def create_test_assignment(data: dict = Body(...)):
+async def create_test_assignment(data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Создать тестовое задание"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -3145,12 +3487,47 @@ async def create_test_assignment(data: dict = Body(...)):
 
 
 @app.delete("/api/admin/test-assignments/{assignment_id}", tags=["Admin"])
-async def delete_test_assignment(assignment_id: int):
+async def delete_test_assignment(assignment_id: int, _admin: dict = Depends(require_admin)):
     """Удалить тестовое задание"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute("DELETE FROM test_assignments WHERE id = $1", assignment_id)
         return {"message": "Удалено"}
+    finally:
+        await conn.close()
+
+
+@app.put("/api/admin/test-assignments/{assignment_id}", tags=["Admin"])
+async def update_test_assignment(assignment_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+    """Обновить тестовое задание"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute("""
+            UPDATE test_assignments SET title=$1, description=$2, company=$3, profession=$4,
+            difficulty=$5, skills=$6, link=$7, source=$8 WHERE id=$9
+        """, data.get('title'), data.get('description'), data.get('company'),
+             data.get('profession'), data.get('difficulty', 'middle'),
+             data.get('skills'), data.get('link'), data.get('source'), assignment_id)
+        return {"message": "Обновлено"}
+    finally:
+        await conn.close()
+
+
+@app.get("/api/test-assignments/{assignment_id}", tags=["Public"])
+async def get_test_assignment_detail(assignment_id: int):
+    """Получить детали тестового задания"""
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        row = await conn.fetchrow("SELECT * FROM test_assignments WHERE id = $1", assignment_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Задание не найдено")
+        result = dict(row)
+        if result.get('skills'):
+            result['skills_list'] = [s.strip() for s in result['skills'].split(',')]
+        for key in result:
+            if hasattr(result[key], 'isoformat'):
+                result[key] = result[key].isoformat()
+        return result
     finally:
         await conn.close()
 
@@ -3201,7 +3578,7 @@ async def get_hh_skills(profession: Optional[str] = None, page: int = 1, per_pag
 
 
 @app.post("/api/admin/hh-skills", tags=["Admin"])
-async def upsert_hh_skill(data: dict = Body(...)):
+async def upsert_hh_skill(data: dict = Body(...), _admin: dict = Depends(require_admin)):
     """Добавить/обновить HH навык"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:

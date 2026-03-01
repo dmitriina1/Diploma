@@ -6,31 +6,31 @@
           <i class="pi pi-bookmark"></i>
           <span>Interview Prep</span>
         </div>
-        <p class="footer-desc">Платформа подготовки к IT-собеседованиям на основе анализа реальных интервью</p>
+        <p class="footer-desc">Платформа подготовки к IT-собеседованиям на основе анализа реальных интервью с использованием Whisper и LLM</p>
       </div>
 
       <div class="footer-section">
-        <h4>Навигация</h4>
-        <router-link to="/">Главная</router-link>
-        <router-link to="/trainer">Тренажёр</router-link>
-        <router-link to="/recordings">Записи собеседований</router-link>
+        <h4>Подготовка</h4>
         <router-link to="/interview-questions">Вопросы с собеседований</router-link>
+        <router-link to="/test-assignments">Тестовые задания</router-link>
+        <router-link to="/hh-requirements">Навыки из вакансий</router-link>
+        <router-link to="/trainer">Тренажёр SM-2</router-link>
       </div>
 
       <div class="footer-section">
-        <h4>Сообщество</h4>
+        <h4>Ресурсы</h4>
+        <router-link to="/recordings">Записи собеседований</router-link>
         <router-link to="/suggest">Предложить видео</router-link>
-        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
       </div>
 
       <div class="footer-section">
         <h4>О проекте</h4>
-        <p class="footer-text">Дипломный проект — автоматизированная система анализа видео-собеседований с использованием Whisper и LLM.</p>
+        <p class="footer-text">Дипломный проект — система анализа видео-собеседований с автоматическим извлечением вопросов, генерацией ответов и интервальным повторением.</p>
       </div>
     </div>
 
     <div class="footer-bottom">
-      <span>&copy; {{ new Date().getFullYear() }} Interview Prep. Проект разработан в образовательных целях.</span>
+      <span>&copy; {{ new Date().getFullYear() }} Interview Prep. Разработано в образовательных целях.</span>
     </div>
   </footer>
 </template>

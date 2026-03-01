@@ -7,7 +7,10 @@ import Trainer from '../views/Trainer.vue'
 import InterviewRecordings from '../views/InterviewRecordings.vue'
 import InterviewQuestions from '../views/InterviewQuestions.vue'
 import TestAssignments from '../views/TestAssignments.vue'
+import TestAssignmentDetail from '../views/TestAssignmentDetail.vue'
 import HHRequirements from '../views/HHRequirements.vue'
+import Login from '../views/Login.vue'
+import Profile from '../views/Profile.vue'
 
 const routes = [
   {
@@ -15,6 +18,18 @@ const routes = [
     name: 'Home',
     component: Home,
     meta: { title: 'Interview Prep - Подготовка к IT собеседованиям' }
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: Login,
+    meta: { title: 'Вход / Регистрация', guest: true }
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: Profile,
+    meta: { title: 'Профиль', requiresAuth: true }
   },
   {
     path: '/question/:id',
@@ -33,13 +48,13 @@ const routes = [
     path: '/trainer',
     name: 'Trainer',
     component: Trainer,
-    meta: { title: 'Тренажёр SM-2' }
+    meta: { title: 'Тренажёр SM-2', requiresAuth: true }
   },
   {
     path: '/recordings',
     name: 'InterviewRecordings',
     component: InterviewRecordings,
-    meta: { title: 'Записи собеседований' }
+    meta: { title: 'Записи собеседований', requiresAuth: true }
   },
   {
     path: '/interview-questions',
@@ -51,7 +66,14 @@ const routes = [
     path: '/test-assignments',
     name: 'TestAssignments',
     component: TestAssignments,
-    meta: { title: 'Тестовые задания' }
+    meta: { title: 'Тестовые задания', requiresAuth: true }
+  },
+  {
+    path: '/test-assignments/:id',
+    name: 'TestAssignmentDetail',
+    component: TestAssignmentDetail,
+    props: true,
+    meta: { title: 'Тестовое задание', requiresAuth: true }
   },
   {
     path: '/hh-requirements',
@@ -63,7 +85,7 @@ const routes = [
     path: '/admin',
     name: 'Admin',
     component: Admin,
-    meta: { title: 'Админ-панель', requiresAuth: true }
+    meta: { title: 'Админ-панель', requiresAuth: true, requiresAdmin: true }
   }
 ]
 
@@ -74,6 +96,27 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title || 'Interview Prep'
+  
+  const token = localStorage.getItem('auth_token')
+  const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
+  const isAuthenticated = !!token && !!user
+  const isAdmin = user?.role === 'admin'
+
+  // Redirect authenticated users away from login page
+  if (to.meta.guest && isAuthenticated) {
+    return next('/')
+  }
+
+  // Require authentication
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    return next({ name: 'Login', query: { redirect: to.fullPath } })
+  }
+
+  // Require admin role
+  if (to.meta.requiresAdmin && !isAdmin) {
+    return next({ name: 'Login', query: { redirect: to.fullPath } })
+  }
+
   next()
 })
 

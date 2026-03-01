@@ -29,6 +29,13 @@
         </div>
 
         <div class="header-actions">
+          <Button v-if="isAuthenticated" 
+                  :icon="isBookmarked ? 'pi pi-bookmark-fill' : 'pi pi-bookmark'" 
+                  :label="isBookmarked ? 'Сохранено' : 'Сохранить'"
+                  size="small" 
+                  :severity="isBookmarked ? 'warning' : 'secondary'"
+                  @click="toggleBookmark" 
+                  :loading="bookmarkLoading" />
           <Button icon="pi pi-comment" label="Отзыв" size="small" severity="help"
                   @click="showFeedback = true" />
         </div>
@@ -95,16 +102,20 @@
               <Tag :value="`${userAnswers.length}`" severity="secondary" />
             </h3>
 
-            <!-- Форма нового ответа -->
-            <div class="ugc-form">
+            <!-- Форма нового ответа (только для авторизованных) -->
+            <div v-if="isAuthenticated" class="ugc-form">
               <Textarea v-model="newAnswerText" placeholder="Напишите свой вариант ответа..." 
                         :autoResize="true" rows="3" class="w-full" />
               <div class="ugc-form-actions">
-                <InputText v-model="userName" placeholder="Ваше имя (необязательно)" class="name-input" />
+                <span class="author-name"><i class="pi pi-user"></i> {{ displayName }}</span>
                 <Button label="Отправить" icon="pi pi-send" size="small"
                         @click="submitAnswer" :loading="submittingAnswer"
                         :disabled="!newAnswerText || newAnswerText.length < 10" />
               </div>
+            </div>
+            <div v-else class="ugc-login-hint">
+              <i class="pi pi-lock"></i>
+              <span>Чтобы оставить ответ или оценить, <router-link to="/login">войдите</router-link> или <router-link to="/login">зарегистрируйтесь</router-link></span>
             </div>
 
             <!-- Список ответов -->
@@ -113,13 +124,13 @@
                 <div class="ugc-vote">
                   <Button icon="pi pi-chevron-up" text size="small" 
                           :severity="ans.my_vote === 'up' ? 'success' : 'secondary'"
-                          @click="voteAnswer(ans.id, 'up')" />
+                          @click="voteAnswer(ans.id, 'up')" :disabled="!isAuthenticated" />
                   <span class="vote-count" :class="{ positive: ans.votes > 0, negative: ans.votes < 0 }">
                     {{ ans.votes }}
                   </span>
                   <Button icon="pi pi-chevron-down" text size="small"
                           :severity="ans.my_vote === 'down' ? 'danger' : 'secondary'"
-                          @click="voteAnswer(ans.id, 'down')" />
+                          @click="voteAnswer(ans.id, 'down')" :disabled="!isAuthenticated" />
                 </div>
                 <div class="ugc-content">
                   <div class="ugc-meta">
@@ -185,11 +196,16 @@ import { useQuestionsStore } from '../store'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import FeedbackDialog from '../components/FeedbackDialog.vue'
+import { useAuthStore } from '../store/auth'
 import api from '../api/client'
 
 const route = useRoute()
 const router = useRouter()
 const questionsStore = useQuestionsStore()
+const authStore = useAuthStore()
+
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+const displayName = computed(() => authStore.displayName)
 
 const questionId = computed(() => parseInt(route.params.id))
 const loading = ref(true)
@@ -200,8 +216,11 @@ const showFeedback = ref(false)
 // UGC
 const userAnswers = ref([])
 const newAnswerText = ref('')
-const userName = ref('')
 const submittingAnswer = ref(false)
+
+// Bookmarks
+const isBookmarked = ref(false)
+const bookmarkLoading = ref(false)
 
 // Video embed
 const activeVideoEmbed = ref(null)
@@ -338,7 +357,7 @@ const submitAnswer = async () => {
   if (!newAnswerText.value || newAnswerText.value.length < 10) return
   submittingAnswer.value = true
   try {
-    await api.createUserAnswer(questionId.value, newAnswerText.value, userName.value || 'Аноним')
+    await api.createUserAnswer(questionId.value, newAnswerText.value, displayName.value || 'Аноним')
     newAnswerText.value = ''
     await loadUserAnswers()
   } catch (e) {
@@ -376,8 +395,30 @@ const loadQuestionDetail = async () => {
   
   // Load UGC answers
   await loadUserAnswers()
+
+  // Load bookmark state
+  await checkBookmark()
   
   loading.value = false
+}
+
+// Bookmark methods
+const checkBookmark = async () => {
+  if (!isAuthenticated.value) return
+  try {
+    const r = await api.getBookmarks()
+    const bookmarks = r.data.bookmarks || []
+    isBookmarked.value = bookmarks.some(b => b.question_id === questionId.value)
+  } catch (e) { /* ignore */ }
+}
+
+const toggleBookmark = async () => {
+  bookmarkLoading.value = true
+  try {
+    await api.addBookmark(questionId.value)
+    isBookmarked.value = !isBookmarked.value
+  } catch (e) { console.error('Bookmark error:', e) }
+  bookmarkLoading.value = false
 }
 
 onMounted(loadQuestionDetail)
@@ -462,6 +503,20 @@ watch(questionId, loadQuestionDetail)
   display: flex; gap: 0.75rem; margin-top: 0.75rem; align-items: center;
 }
 .name-input { flex: 1; max-width: 250px; }
+.author-name {
+  display: flex; align-items: center; gap: 0.4rem;
+  color: rgba(255,255,255,0.6); font-size: 0.85rem; font-weight: 600;
+}
+.author-name i { color: var(--primary-color); }
+.ugc-login-hint {
+  display: flex; align-items: center; gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+  color: rgba(255,255,255,0.5); font-size: 0.9rem;
+}
+.ugc-login-hint i { font-size: 1.1rem; color: rgba(255,255,255,0.3); }
+.ugc-login-hint a { color: #667eea; text-decoration: none; font-weight: 600; }
+.ugc-login-hint a:hover { text-decoration: underline; }
 .ugc-answers { display: flex; flex-direction: column; gap: 1rem; }
 .ugc-answer-card {
   display: flex; gap: 1rem;

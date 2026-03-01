@@ -32,7 +32,9 @@
             </div>
           </template>
           <template #title>
-            {{ a.title }}
+            <router-link :to="'/test-assignments/' + a.id" class="assignment-title-link">
+              {{ a.title }}
+            </router-link>
           </template>
           <template #content>
             <p class="assignment-desc">{{ a.description }}</p>
@@ -48,8 +50,10 @@
           </template>
           <template #footer>
             <div class="assignment-footer">
+              <Button label="Подробнее" icon="pi pi-arrow-right" size="small" severity="secondary" text
+                      @click="router.push('/test-assignments/' + a.id)" />
               <Button v-if="a.link" label="Открыть" icon="pi pi-external-link" size="small"
-                      @click="openLink(a.link)" />
+                      @click.stop="openLink(a.link)" />
               <span class="assignment-date">{{ formatDate(a.created_at) }}</span>
             </div>
           </template>
@@ -76,9 +80,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import api from '../api/client'
+
+const router = useRouter()
 
 const assignments = ref([])
 const loading = ref(true)
@@ -232,9 +239,16 @@ onMounted(loadData)
 
 .assignment-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
 }
+.assignment-footer .assignment-date { margin-left: auto; }
+.assignment-title-link {
+  color: white;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.assignment-title-link:hover { color: #60a5fa; }
 .assignment-date {
   color: rgba(255,255,255,0.4);
   font-size: 0.8rem;

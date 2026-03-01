@@ -12,7 +12,7 @@
           <span>Главная</span>
         </router-link>
 
-        <router-link to="/trainer" class="navbar-link">
+        <router-link v-if="isAuthenticated" to="/trainer" class="navbar-link">
           <i class="pi pi-bolt"></i>
           <span>Тренажёр</span>
         </router-link>
@@ -22,12 +22,12 @@
           <span>Вопросы</span>
         </router-link>
 
-        <router-link to="/recordings" class="navbar-link">
+        <router-link v-if="isAuthenticated" to="/recordings" class="navbar-link">
           <i class="pi pi-video"></i>
           <span>Записи</span>
         </router-link>
 
-        <router-link to="/test-assignments" class="navbar-link">
+        <router-link v-if="isAuthenticated" to="/test-assignments" class="navbar-link">
           <i class="pi pi-file-edit"></i>
           <span>Задания</span>
         </router-link>
@@ -37,14 +37,31 @@
           <span>Навыки</span>
         </router-link>
         
-        <router-link to="/admin" class="navbar-link admin-link">
+        <router-link v-if="isAdmin" to="/admin" class="navbar-link admin-link">
           <i class="pi pi-cog"></i>
           <span>Админка</span>
         </router-link>
       </div>
       
-      <div class="navbar-stats">
+      <div class="navbar-right">
         <Chip :label="`${questionsCount} вопросов`" icon="pi pi-question-circle" />
+        
+        <template v-if="isAuthenticated">
+          <div class="user-menu">
+            <router-link :to="isAdmin ? '/admin' : '/profile'" class="user-chip-link" :title="isAdmin ? 'Админ-панель' : 'Профиль'">
+              <Chip :label="displayName" :icon="isAdmin ? 'pi pi-shield' : 'pi pi-user'" class="user-chip" />
+            </router-link>
+            <button class="logout-btn" @click="handleLogout" title="Выйти">
+              <i class="pi pi-sign-out"></i>
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <router-link to="/login" class="login-btn">
+            <i class="pi pi-sign-in"></i>
+            <span>Войти</span>
+          </router-link>
+        </template>
       </div>
     </div>
   </nav>
@@ -52,11 +69,23 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useQuestionsStore } from '../store'
+import { useAuthStore } from '../store/auth'
 
+const router = useRouter()
 const questionsStore = useQuestionsStore()
+const authStore = useAuthStore()
 
 const questionsCount = computed(() => questionsStore.questions.length)
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+const isAdmin = computed(() => authStore.isAdmin)
+const displayName = computed(() => authStore.displayName)
+
+function handleLogout() {
+  authStore.logout()
+  router.push('/')
+}
 </script>
 
 <style scoped>
@@ -162,8 +191,73 @@ const questionsCount = computed(() => questionsStore.questions.length)
   transform: scale(1.2);
 }
 
-.navbar-stats {
+.navbar-right {
   display: flex;
+  align-items: center;
   gap: 1rem;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-chip-link {
+  text-decoration: none;
+  transition: all 0.3s;
+  border-radius: 16px;
+}
+
+.user-chip-link:hover .user-chip {
+  background: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.user-chip {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: white !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  cursor: pointer;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: white;
+}
+
+.login-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: white;
+  padding: 0.5rem 1.2rem;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.login-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 </style>

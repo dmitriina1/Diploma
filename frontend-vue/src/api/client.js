@@ -9,8 +9,43 @@ const apiClient = axios.create({
   }
 })
 
+// JWT Authorization interceptor
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Auto-logout on 401
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && !error.config.url?.includes('/api/auth/')) {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('auth_user')
+      // Redirect to login if on protected page
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 // Генерируем/получаем уникальную сессию пользователя
+// Для авторизованных — используем username, чтобы данные привязывались к аккаунту
 function getUserSession() {
+  // Если пользователь авторизован, используем его username
+  const authUser = localStorage.getItem('auth_user')
+  if (authUser) {
+    try {
+      const user = JSON.parse(authUser)
+      if (user.username) return user.username
+    } catch (e) { /* fallback */ }
+  }
+  // Иначе — анонимная сессия
   let session = localStorage.getItem('user_session')
   if (!session) {
     session = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
@@ -21,6 +56,28 @@ function getUserSession() {
 
 export default {
   getUserSession,
+
+  // ============== Auth ==============
+  login(data) {
+    return apiClient.post('/api/auth/login', data)
+  },
+
+  register(data) {
+    return apiClient.post('/api/auth/register', data)
+  },
+
+  getMe() {
+    return apiClient.get('/api/auth/me')
+  },
+
+  // ============== Profile ==============
+  getProfile() {
+    return apiClient.get('/api/profile')
+  },
+
+  updateProfile(data) {
+    return apiClient.put('/api/profile', data)
+  },
 
   // ============== Processing ==============
   processVideo(data) {
@@ -204,6 +261,10 @@ export default {
   getAdminStats() {
     return apiClient.get('/api/admin/stats')
   },
+
+  getAdminAnalytics() {
+    return apiClient.get('/api/admin/analytics')
+  },
   
   // ============== Videos ==============
   getProcessedVideos() {
@@ -308,8 +369,16 @@ export default {
     return apiClient.get('/api/test-assignments', { params })
   },
 
+  getTestAssignmentDetail(id) {
+    return apiClient.get(`/api/test-assignments/${id}`)
+  },
+
   createTestAssignment(data) {
     return apiClient.post('/api/admin/test-assignments', data)
+  },
+
+  updateTestAssignment(id, data) {
+    return apiClient.put(`/api/admin/test-assignments/${id}`, data)
   },
 
   deleteTestAssignment(id) {

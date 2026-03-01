@@ -57,31 +57,14 @@
               <ProgressBar v-if="uploadProgress > 0 && uploadProgress < 100" :value="uploadProgress" :showValue="true" class="mt-2" />
             </div>
 
-            <div class="field-row">
-              <div class="field">
-                <label>Тема</label>
-                <Dropdown v-model="form.topic" :options="topicOptions" placeholder="Выберите тему" class="w-full" editable />
-              </div>
-              <div class="field">
-                <label>Уровень</label>
-                <Dropdown v-model="form.difficulty" :options="difficultyOptions" optionLabel="label" optionValue="value" placeholder="Уровень" class="w-full" />
-              </div>
-            </div>
-
             <div class="field">
               <label>Комментарий</label>
               <Textarea v-model="form.comment" rows="3" placeholder="Почему стоит обработать это видео?" class="w-full" />
             </div>
 
-            <div class="field-row">
-              <div class="field">
-                <label>Ваше имя (необязательно)</label>
-                <InputText v-model="form.user_name" placeholder="Иван" class="w-full" />
-              </div>
-              <div class="field">
-                <label>Email (необязательно)</label>
-                <InputText v-model="form.user_email" placeholder="ivan@example.com" class="w-full" />
-              </div>
+            <div class="field">
+              <label>Email (необязательно)</label>
+              <InputText v-model="form.user_email" placeholder="ivan@example.com" class="w-full" />
             </div>
 
             <Button label="Отправить предложение" icon="pi pi-send" @click="submitSuggestion" 
