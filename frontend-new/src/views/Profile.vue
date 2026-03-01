@@ -131,7 +131,7 @@ async function save() {
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .av-letter { font-size: 2.5rem; font-weight: 700; color: #fff; }
-.role-badge { padding: .2rem .75rem; border-radius: var(--r-full); font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.role-badge { padding: .2rem .75rem; border-radius: var(--r-full); font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
 .role-badge.admin { background: var(--c-warn-bg); color: var(--c-warn); }
 .role-badge.user { background: var(--c-brand-bg); color: var(--c-brand-h); }
 .info-col { flex: 1; display: flex; flex-direction: column; gap: .9rem; }
@@ -145,8 +145,8 @@ async function save() {
 
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.5rem; }
 .stat-card { text-align: center; padding: 1.1rem; }
-.sv { font-size: 1.6rem; font-weight: 800; color: var(--c-text); }
-.sl { font-size: .72rem; color: var(--c-text-4); text-transform: uppercase; letter-spacing: .5px; margin-top: .15rem; }
+.sv { font-size: 1.75rem; font-weight: 800; color: var(--c-text); }
+.sl { font-size: .78rem; color: var(--c-text-4); text-transform: uppercase; letter-spacing: .5px; margin-top: .15rem; }
 .section { margin-bottom: 1.5rem; }
 .gh-link { color: var(--c-brand); text-decoration: none; word-break: break-all; }
 .gh-link:hover { text-decoration: underline; }
@@ -155,9 +155,9 @@ async function save() {
 .bm-list { display: flex; flex-direction: column; gap: .5rem; }
 .bm-card { display: block; padding: 1rem 1.15rem; text-decoration: none; }
 .bm-tags { display: flex; gap: .35rem; margin-bottom: .4rem; }
-.bm-q { color: var(--c-text); font-size: .92rem; line-height: 1.4; margin-bottom: .35rem; }
-.bm-note { color: var(--c-text-3); font-size: .78rem; font-style: italic; margin-bottom: .2rem; }
-.bm-date { color: var(--c-text-4); font-size: .72rem; }
+.bm-q { color: var(--c-text); font-size: .96rem; line-height: 1.4; margin-bottom: .35rem; }
+.bm-note { color: var(--c-text-3); font-size: .84rem; font-style: italic; margin-bottom: .2rem; }
+.bm-date { color: var(--c-text-4); font-size: .78rem; }
 
 @media (max-width: 640px) {
   .profile-card { flex-direction: column; align-items: center; text-align: center; }

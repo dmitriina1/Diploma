@@ -73,7 +73,7 @@ const features = [
 /* ── Hero ── */
 .hero {
   position: relative;
-  padding: 5rem 0 4rem;
+  padding: 4.5rem 0 3.5rem;
   overflow: hidden;
 }
 .hero-bg {
@@ -87,7 +87,7 @@ const features = [
 .hero-content { position: relative; text-align: center; }
 .hero-badge { margin-bottom: 1.25rem; display: inline-flex; }
 .hero-title {
-  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
   font-weight: 800;
   line-height: 1.15;
   margin-bottom: 1rem;
@@ -101,10 +101,10 @@ const features = [
 }
 .hero-sub {
   color: var(--c-text-2);
-  font-size: 1.05rem;
-  max-width: 580px;
-  margin: 0 auto 2rem;
-  line-height: 1.65;
+  font-size: 1.2rem;
+  max-width: 660px;
+  margin: 0 auto 2.25rem;
+  line-height: 1.7;
 }
 .hero-actions {
   display: flex;
@@ -115,49 +115,49 @@ const features = [
 }
 .hero-stats {
   display: inline-flex;
-  gap: 2.5rem;
+  gap: 3rem;
   border: 1px solid var(--c-border);
   border-radius: var(--r-xl);
-  padding: 1rem 2rem;
+  padding: 1.15rem 2.5rem;
   background: var(--c-surface);
 }
 .hs { text-align: center; }
-.hs-val { display: block; font-size: 1.4rem; font-weight: 800; color: var(--c-text); }
-.hs-label { font-size: .72rem; color: var(--c-text-3); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+.hs-val { display: block; font-size: 1.85rem; font-weight: 800; color: var(--c-text); }
+.hs-label { font-size: .85rem; color: var(--c-text-3); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
 
 /* ── Features ── */
 .features { padding: 3.5rem 0 4rem; }
 .section-title {
-  font-size: 1.5rem;
+  font-size: 1.85rem;
   font-weight: 700;
-  margin-bottom: 1.75rem;
+  margin-bottom: 2rem;
   text-align: center;
   color: var(--c-text);
 }
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.1rem;
 }
 .f-card {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.15rem 1.25rem;
+  gap: 1.2rem;
+  padding: 1.5rem 1.65rem;
   text-decoration: none;
 }
 .f-icon {
-  width: 44px; height: 44px;
+  width: 56px; height: 56px;
   border-radius: var(--r-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   flex-shrink: 0;
 }
 .f-body { flex: 1; min-width: 0; }
-.f-body h3 { font-size: .92rem; font-weight: 600; color: var(--c-text); margin-bottom: .15rem; }
-.f-body p { font-size: .8rem; color: var(--c-text-3); line-height: 1.45; }
+.f-body h3 { font-size: 1.1rem; font-weight: 600; color: var(--c-text); margin-bottom: .2rem; }
+.f-body p { font-size: .97rem; color: var(--c-text-3); line-height: 1.5; }
 .f-arrow {
   color: var(--c-text-4);
   opacity: 0;

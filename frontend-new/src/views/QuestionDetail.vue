@@ -168,7 +168,7 @@ watch(() => route.params.id, loadQuestion)
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-3); }
 
 .q-header { margin-bottom: 2rem; }
-.q-header h1 { font-size: 1.55rem; font-weight: 700; line-height: 1.35; margin-bottom: .75rem; }
+.q-header h1 { font-size: 1.9rem; font-weight: 700; line-height: 1.35; margin-bottom: .85rem; }
 .q-meta { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .meta-prob { font-size: .78rem; color: var(--c-text-3); }
 
@@ -178,7 +178,7 @@ watch(() => route.params.id, loadQuestion)
   display: flex;
   align-items: center;
   gap: .45rem;
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: var(--c-text);
   padding-bottom: .6rem;
@@ -198,10 +198,10 @@ watch(() => route.params.id, loadQuestion)
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
-  padding: 1.25rem 1.5rem;
+  padding: 1.5rem 1.75rem;
   color: var(--c-text-2);
   line-height: 1.75;
-  font-size: .92rem;
+  font-size: 1.05rem;
 }
 
 /* Community Answers */
@@ -211,9 +211,9 @@ watch(() => route.params.id, loadQuestion)
 .answers-list { display: flex; flex-direction: column; gap: .6rem; }
 .ua-card { padding: 1rem 1.15rem; }
 .ua-top { display: flex; justify-content: space-between; margin-bottom: .4rem; }
-.ua-author { font-size: .82rem; font-weight: 600; color: var(--c-text); }
+.ua-author { font-size: .9rem; font-weight: 600; color: var(--c-text); }
 .ua-date { font-size: .75rem; color: var(--c-text-4); }
-.ua-text { font-size: .88rem; color: var(--c-text-2); line-height: 1.65; margin-bottom: .5rem; }
+.ua-text { font-size: .94rem; color: var(--c-text-2); line-height: 1.65; margin-bottom: .5rem; }
 .ua-bottom { display: flex; justify-content: space-between; align-items: center; }
 .vote-group { display: flex; gap: .3rem; }
 .vote-btn {
@@ -241,7 +241,7 @@ watch(() => route.params.id, loadQuestion)
   padding: .7rem 1rem;
   text-decoration: none;
 }
-.sim-text { font-size: .88rem; color: var(--c-text-2); }
+.sim-text { font-size: .94rem; color: var(--c-text-2); }
 .sim-row:hover .sim-text { color: var(--c-text); }
 
 @media (max-width: 640px) {

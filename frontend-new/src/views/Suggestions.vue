@@ -139,13 +139,13 @@ onMounted(loadSuggestions)
 </script>
 
 <style scoped>
-.sub { color: var(--c-text-3); font-size: .9rem; margin-bottom: 1.5rem; }
+.sub { color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .form-card { padding: 1.75rem; display: flex; flex-direction: column; gap: 1.1rem; }
 .mode-toggle { display: flex; gap: .5rem; }
 .field { display: flex; flex-direction: column; gap: .3rem; }
 .field label { font-size: .85rem; color: var(--c-text-2); font-weight: 500; }
 .field textarea { resize: vertical; font-family: inherit; }
-.platform-hint { color: var(--c-brand); font-weight: 600; font-size: .82rem; }
+.platform-hint { color: var(--c-brand); font-weight: 600; font-size: .88rem; }
 .drop-zone {
   border: 2px dashed var(--c-border); border-radius: var(--r-md);
   padding: 2rem; text-align: center; cursor: pointer; transition: all var(--dur);
@@ -165,9 +165,9 @@ onMounted(loadSuggestions)
 .sug-list { display: flex; flex-direction: column; gap: .5rem; }
 .sug-card { padding: 1rem 1.15rem; }
 .sug-top { display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
-.sug-url { color: var(--c-brand); font-size: .82rem; word-break: break-all; text-decoration: none; }
+.sug-url { color: var(--c-brand); font-size: .88rem; word-break: break-all; text-decoration: none; }
 .sug-url:hover { text-decoration: underline; }
-.sug-meta { display: flex; gap: .75rem; margin-top: .35rem; font-size: .78rem; color: var(--c-text-4); }
-.sug-comment { margin-top: .4rem; font-size: .85rem; color: var(--c-text-3); }
-.sug-admin { margin-top: .3rem; font-size: .85rem; color: var(--c-ok); font-style: italic; }
+.sug-meta { display: flex; gap: .75rem; margin-top: .35rem; font-size: .84rem; color: var(--c-text-4); }
+.sug-comment { margin-top: .4rem; font-size: .9rem; color: var(--c-text-3); }
+.sug-admin { margin-top: .3rem; font-size: .9rem; color: var(--c-ok); font-style: italic; }
 </style>

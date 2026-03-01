@@ -78,21 +78,21 @@ function logout() {
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 1.25rem;
-  gap: 1rem;
+  padding: 0 1.75rem;
+  gap: 1.25rem;
 }
 
 /* Logo */
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: .5rem;
+  gap: .6rem;
   color: var(--c-text);
   font-weight: 700;
-  font-size: .95rem;
+  font-size: 1.22rem;
   flex-shrink: 0;
 }
-.nav-logo svg { color: var(--c-brand); }
+.nav-logo svg { color: var(--c-brand); width: 26px; height: 26px; }
 
 /* Links */
 .nav-links {
@@ -102,9 +102,9 @@ function logout() {
   margin-left: auto;
 }
 .nav-link {
-  padding: .4rem .7rem;
+  padding: .55rem 1rem;
   border-radius: var(--r-sm);
-  font-size: .82rem;
+  font-size: 1rem;
   font-weight: 500;
   color: var(--c-text-2);
   transition: all var(--dur) var(--ease);
@@ -133,18 +133,18 @@ function logout() {
 }
 .nav-user:hover { background: var(--c-surface); }
 .nav-avatar {
-  width: 28px; height: 28px;
+  width: 38px; height: 38px;
   border-radius: 50%;
   background: var(--c-brand-bg);
   color: var(--c-brand-h);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: .75rem;
+  font-size: .9rem;
   font-weight: 700;
 }
 .nav-username {
-  font-size: .82rem;
+  font-size: .95rem;
   color: var(--c-text-2);
   font-weight: 500;
 }

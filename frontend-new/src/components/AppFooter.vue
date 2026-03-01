@@ -18,19 +18,19 @@ const year = new Date().getFullYear()
 .footer {
   margin-top: auto;
   border-top: 1px solid var(--c-border);
-  padding: 1.5rem 0;
+  padding: 2rem 0;
 }
 .footer-inner {
   max-width: var(--max-w-lg);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1.75rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.footer-copy { color: var(--c-text-4); font-size: .8rem; }
-.footer-links { display: flex; gap: 1.25rem; }
-.footer-links a { color: var(--c-text-3); font-size: .8rem; transition: color var(--dur) var(--ease); }
+.footer-copy { color: var(--c-text-4); font-size: .9rem; }
+.footer-links { display: flex; gap: 1.5rem; }
+.footer-links a { color: var(--c-text-3); font-size: .9rem; transition: color var(--dur) var(--ease); }
 .footer-links a:hover { color: var(--c-text); }
 
 @media (max-width: 480px) {

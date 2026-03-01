@@ -86,7 +86,7 @@ async function handleSubmit() {
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-xl);
-  padding: 2.5rem;
+  padding: 2.75rem;
 }
 .back-link {
   display: inline-flex;
@@ -106,7 +106,7 @@ async function handleSubmit() {
   margin-bottom: .35rem;
 }
 .logo h1 {
-  font-size: 1.4rem;
+  font-size: 1.55rem;
   font-weight: 800;
   background: linear-gradient(135deg, var(--c-brand), var(--c-brand-h));
   -webkit-background-clip: text;
@@ -114,7 +114,7 @@ async function handleSubmit() {
 }
 .subtitle {
   color: var(--c-text-3);
-  font-size: .88rem;
+  font-size: .94rem;
   margin-bottom: 1.5rem;
 }
 .tabs {
@@ -126,11 +126,11 @@ async function handleSubmit() {
 }
 .tabs button {
   flex: 1;
-  padding: .65rem 1rem;
+  padding: .7rem 1rem;
   border: none;
   background: transparent;
   color: var(--c-text-3);
-  font-size: .9rem;
+  font-size: .95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--dur);

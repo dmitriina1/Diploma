@@ -22,25 +22,30 @@
 
 | Сервис | Порт | Описание |
 |--------|------|----------|
-| Frontend | 3000 | Vue 3 + PrimeVue |
-| Backend | 8000 | FastAPI REST API (55 эндпоинтов) |
+| **Frontend NEW** | 3000 | Vue 3 + Custom CSS (новый дизайн, без PrimeVue) |
+| **Frontend OLD** | 3001 | Vue 3 + PrimeVue (legacy, для сравнения) |
+| Backend | 8000 | FastAPI REST API (55+ эндпоинтов) |
 | Whisper | 8001 | faster-whisper large-v3-turbo |
 | PostgreSQL | 5432 | Основная БД (19 таблиц) |
 | Redis | 6379 | Кэш задач и FAISS-эмбеддингов |
+
+Оба фронтенда работают параллельно и используют один и тот же бэкенд (API на порту 8000).
 
 ---
 
 ## Возможности
 
-**Обработка видео:** мультиплатформенная загрузка, автоматический pipeline, мониторинг задач в реальном времени (WebSocket)
+**Обработка видео:** мультиплатформенная загрузка (6 платформ), автоматический pipeline, мониторинг задач в реальном времени (WebSocket), загрузка файлов
 
-**Подготовка:** 26 IT-профессий, фильтрация по технологии/сложности, семантический поиск похожих вопросов (FAISS + sentence-transformers), тренажёр SM-2 (интервальное повторение), mock-собеседования
+**Подготовка:** 26 IT-профессий, фильтрация по технологии/сложности, семантический поиск похожих вопросов (FAISS + sentence-transformers), тренажёр SM-2 (интервальное повторение с 3D-флипкартами), mock-собеседования
 
-**Аналитика:** навыки из вакансий HH.ru (214 навыков, пагинация), тестовые задания от компаний, расчёт вероятности вопроса на собеседовании
+**Аналитика:** навыки из вакансий HH.ru (214 навыков, пагинация, bar chart), тестовые задания от компаний, расчёт вероятности вопроса на собеседовании, дашборд с KPI
 
-**UGC:** пользовательские ответы с голосованием, закладки, заметки, предложение видео
+**UGC:** пользовательские ответы с голосованием ↑↓, закладки с заметками, предложение видео (URL + загрузка файлов)
 
-**Админ-панель:** модерация вопросов, генерация ответов через LLM, управление видео, статистика, экспорт (JSON/CSV)
+**Админ-панель:** 6 вкладок — модерация вопросов (массовые действия), предложения, обратная связь, видео, тестовые задания (CRUD), аналитика (метрики, экспорт JSON/CSV, пересчёт вероятностей)
+
+**Аутентификация:** JWT-авторизация, роли (user/admin), профиль с GitHub-ссылкой
 
 ---
 
@@ -65,7 +70,7 @@ cd Diploma
 #    - GEMINI_API_KEY=AI...
 #    - GROQ_API_KEY=gsk_...
 
-# 3. Запустить
+# 3. Запустить все сервисы (включая оба фронтенда)
 docker-compose up -d --build
 
 # 4. Дождаться загрузки модели Whisper (~3 ГБ при первом запуске)
@@ -76,8 +81,10 @@ docker logs -f diploma-whisper-worker
 
 | URL | Описание |
 |-----|----------|
-| http://localhost:3000 | Веб-интерфейс |
-| http://localhost:3000/admin | Панель администратора |
+| http://localhost:3000 | **Новый** веб-интерфейс (custom CSS) |
+| http://localhost:3001 | **Старый** веб-интерфейс (PrimeVue) |
+| http://localhost:3000/admin | Панель администратора (новый) |
+| http://localhost:3001/admin | Панель администратора (старый) |
 | http://localhost:8000/docs | Swagger API документация |
 
 ---
@@ -85,8 +92,9 @@ docker logs -f diploma-whisper-worker
 ## Технологический стек
 
 **Backend:** Python 3.11, FastAPI, asyncpg, yt-dlp, sentence-transformers, FAISS  
-**Frontend:** Vue 3, Vite, PrimeVue (lara-dark-purple), Pinia, Axios  
-**AI/ML:** faster-whisper (CTranslate2), all-MiniLM-L6-v2, LLM (GPT-4 / Gemini / Llama-3.1)  
+**Frontend NEW:** Vue 3.4, Vite 5, Pinia, Vue Router 4, Axios, @vueuse/core — **без PrimeVue**, полностью кастомный CSS  
+**Frontend OLD (legacy):** Vue 3, Vite, PrimeVue (lara-dark-purple), Pinia, Axios  
+**AI/ML:** faster-whisper (CTranslate2), all-MiniLM-L6-v2, LLM (GPT-4o / Gemini / Llama-3.1)  
 **Инфраструктура:** Docker Compose, PostgreSQL 15, Redis 7, nginx  
 
 ---
@@ -94,33 +102,62 @@ docker logs -f diploma-whisper-worker
 ## Структура проекта
 
 ```
-├── backend/          # FastAPI сервер (main_new.py — 3200+ строк)
-├── frontend-vue/     # Vue 3 приложение (9 views, 12 components)
-├── whisper-service/  # Сервис транскрибации (faster-whisper)
-├── scripts/          # SQL миграции
-├── nginx/            # Конфигурация nginx
-└── docker-compose.yml
+├── backend/            # FastAPI сервер (main_new.py — 3200+ строк)
+├── frontend-new/       # НОВЫЙ Vue 3 фронтенд (12 views, кастомный CSS)
+│   ├── src/
+│   │   ├── api/        # HTTP-клиент (100+ методов)
+│   │   ├── assets/     # global.css — дизайн-система
+│   │   ├── components/ # NavBar, AppFooter
+│   │   ├── router/     # 12 маршрутов с guards
+│   │   ├── store/      # Pinia (auth, questions, tasks)
+│   │   └── views/      # 12 страниц (Home – Admin)
+│   ├── Dockerfile      # Production (multi-stage + nginx)
+│   └── Dockerfile.dev  # Development (hot-reload)
+├── frontend-vue/       # СТАРЫЙ Vue 3 фронтенд (PrimeVue)
+├── whisper-service/    # Сервис транскрибации (faster-whisper)
+├── scripts/            # SQL миграции, данные
+└── docker-compose.yml  # Оркестрация всех сервисов
 ```
+
+---
+
+## Новый дизайн (frontend-new)
+
+Полностью переписанный фронтенд **без PrimeVue** — только нативный HTML + CSS custom properties:
+
+- **Дизайн-система:** тёмная тема (#0c0c0f), фиолетовый бренд (#7c5cfc), CSS-переменные для цветов/радиусов/теней
+- **Утилитные классы:** `.btn` (primary/secondary/ghost/ok/warn/err + sm/lg/icon), `.badge` (brand/ok/warn/err/info/muted), `.card`, `.input`, `.spinner`, `.progress`
+- **Компоненты:** glassmorphism NavBar с hamburger-меню, Teleport-диалоги (вместо PrimeVue Dialog), нативные `<select>` (вместо PrimeVue Dropdown), HTML-таблицы (вместо PrimeVue DataTable)
+- **Тренажёр:** 3D CSS-флипкарты, keyboard shortcuts (Space/←/→), SM-2 алгоритм
+- **Админка:** 6 вкладок (нативные табы), inline вся логика подкомпонентов
 
 ---
 
 ## Команды
 
 ```bash
-# Запуск
+# Запуск всех сервисов
 docker-compose up -d
 
+# Запуск только нового фронтенда (локально, без Docker)
+cd frontend-new && npm install && npm run dev
+
 # Пересборка одного сервиса
-docker-compose up -d --build backend
+docker-compose up -d --build frontend
 
 # Логи
 docker logs -f diploma-backend
+docker logs -f diploma-frontend-new
+docker logs -f diploma-frontend-old
 
 # Остановка
 docker-compose down
 
 # Проверка статуса
-docker ps --format "table {{.Names}}\t{{.Status}}"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Production-сборка нового фронтенда
+cd frontend-new && npm run build
 ```
 
 ---

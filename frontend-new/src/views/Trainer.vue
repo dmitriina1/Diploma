@@ -292,23 +292,23 @@ const startInterviewSession = async (v) => {
 </script>
 
 <style scoped>
-.page-heading { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: .25rem; }
-.page-desc { text-align: center; color: var(--c-text-3); font-size: .9rem; margin-bottom: 1.5rem; }
+.page-heading { font-size: 1.85rem; font-weight: 700; text-align: center; margin-bottom: .3rem; }
+.page-desc { text-align: center; color: var(--c-text-3); font-size: 1rem; margin-bottom: 1.75rem; }
 
 /* SM-2 stats */
 .sm2-row { display: flex; justify-content: center; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.sm2-pill { display: flex; align-items: center; gap: .35rem; padding: .4rem .9rem; border-radius: var(--r-full); font-size: .82rem; font-weight: 600; }
-.sm2-pill span { font-weight: 800; font-size: 1rem; }
+.sm2-pill { display: flex; align-items: center; gap: .35rem; padding: .45rem .95rem; border-radius: var(--r-full); font-size: .92rem; font-weight: 600; }
+.sm2-pill span { font-weight: 800; font-size: 1.05rem; }
 .sm2-pill.new     { background: var(--c-brand-bg); color: var(--c-brand-h); }
 .sm2-pill.review  { background: var(--c-warn-bg);  color: var(--c-warn); }
 .sm2-pill.learned { background: var(--c-ok-bg);    color: var(--c-ok); }
 
 /* Mode cards */
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.mode-card { padding: 1.75rem; text-align: center; cursor: pointer; }
-.mc-icon { font-size: 2.5rem; margin-bottom: .75rem; }
-.mode-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: .35rem; }
-.mode-card p { font-size: .82rem; color: var(--c-text-3); line-height: 1.5; margin-bottom: .75rem; }
+.mode-card { padding: 2rem; text-align: center; cursor: pointer; }
+.mc-icon { font-size: 3rem; margin-bottom: .85rem; }
+.mode-card h3 { font-size: 1.22rem; font-weight: 600; margin-bottom: .4rem; }
+.mode-card p { font-size: .97rem; color: var(--c-text-3); line-height: 1.55; margin-bottom: .85rem; }
 .mc-footer { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; }
 
 /* Setup */
@@ -329,15 +329,15 @@ const startInterviewSession = async (v) => {
 /* 3D Flip */
 .fc-scene {
   width: 100%;
-  max-width: 640px;
-  min-height: 320px;
+  max-width: 720px;
+  min-height: 360px;
   perspective: 1000px;
   cursor: pointer;
   margin-bottom: 1.5rem;
 }
 .fc-card {
   width: 100%;
-  min-height: 320px;
+  min-height: 360px;
   position: relative;
   transform-style: preserve-3d;
   transition: transform .5s var(--ease);
@@ -364,7 +364,7 @@ const startInterviewSession = async (v) => {
   align-items: flex-start;
 }
 .fc-tags { display: flex; gap: .4rem; margin-bottom: 1.25rem; }
-.fc-question { font-size: 1.25rem; font-weight: 600; text-align: center; line-height: 1.5; color: var(--c-text); }
+.fc-question { font-size: 1.5rem; font-weight: 600; text-align: center; line-height: 1.5; color: var(--c-text); }
 .fc-hint { margin-top: 1.5rem; font-size: .78rem; color: var(--c-text-4); display: flex; align-items: center; gap: .35rem; }
 .fc-hint kbd, .fc-btn kbd {
   background: var(--c-bg-2);
@@ -375,7 +375,7 @@ const startInterviewSession = async (v) => {
   color: var(--c-text-4);
   font-family: inherit;
 }
-.fc-answer { font-size: .9rem; color: var(--c-text-2); line-height: 1.75; width: 100%; }
+.fc-answer { font-size: 1rem; color: var(--c-text-2); line-height: 1.75; width: 100%; }
 
 /* Action buttons */
 .fc-actions { display: flex; gap: .75rem; width: 100%; max-width: 420px; }
@@ -413,7 +413,7 @@ const startInterviewSession = async (v) => {
 /* Interview */
 .iv-list { display: flex; flex-direction: column; gap: .5rem; }
 .iv-item { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; cursor: pointer; }
-.iv-info h3 { font-size: .92rem; font-weight: 600; margin-bottom: .3rem; }
+.iv-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: .3rem; }
 .iv-meta { display: flex; align-items: center; gap: .5rem; }
 .iv-count { font-size: .78rem; color: var(--c-text-3); }
 .iv-item svg { color: var(--c-text-4); }
@@ -423,8 +423,8 @@ const startInterviewSession = async (v) => {
 .iv-counter { font-size: .82rem; color: var(--c-text-3); white-space: nowrap; }
 
 .iv-card { padding: 2rem; text-align: center; }
-.iv-card h2 { font-size: 1.2rem; font-weight: 600; line-height: 1.45; margin-bottom: 1.25rem; }
-.iv-answer { text-align: left; color: var(--c-text-2); line-height: 1.7; background: var(--c-bg-2); border-radius: var(--r-md); padding: 1.25rem; margin-bottom: 1.25rem; font-size: .9rem; }
+.iv-card h2 { font-size: 1.3rem; font-weight: 600; line-height: 1.45; margin-bottom: 1.25rem; }
+.iv-answer { text-align: left; color: var(--c-text-2); line-height: 1.7; background: var(--c-bg-2); border-radius: var(--r-md); padding: 1.25rem; margin-bottom: 1.25rem; font-size: .96rem; }
 .iv-actions { display: flex; justify-content: center; gap: .75rem; }
 .iv-done { text-align: center; padding: 1.5rem; color: var(--c-text-2); margin-top: 1rem; }
 

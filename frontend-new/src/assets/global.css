@@ -53,21 +53,25 @@
   --dur: .18s;
 
   /* -- Layout -- */
-  --nav-h: 56px;
-  --max-w: 960px;
-  --max-w-lg: 1120px;
-  --max-w-sm: 680px;
+  --nav-h: 76px;
+  --max-w: 1320px;
+  --max-w-lg: 1520px;
+  --max-w-sm: 880px;
 }
 
 /* ── Global Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 18px;          /* base 18 → all rem values +12.5% vs browser default */
+}
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   background: var(--c-bg);
   color: var(--c-text);
-  line-height: 1.5;
+  line-height: 1.55;
   overflow-x: hidden;
 }
 
@@ -91,12 +95,12 @@ img { max-width: 100%; }
 /* ── Input base ── */
 .input {
   width: 100%;
-  padding: .6rem .85rem;
+  padding: .8rem 1.15rem;
   background: var(--c-bg-2);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   color: var(--c-text);
-  font-size: .9rem;
+  font-size: 1rem;
   outline: none;
   transition: border-color var(--dur) var(--ease);
 }
@@ -119,10 +123,10 @@ select.input {
   align-items: center;
   justify-content: center;
   gap: .4rem;
-  padding: .55rem 1.1rem;
+  padding: .75rem 1.5rem;
   border: 1px solid transparent;
   border-radius: var(--r-md);
-  font-size: .875rem;
+  font-size: 1rem;
   font-weight: 600;
   transition: all var(--dur) var(--ease);
   white-space: nowrap;
@@ -155,12 +159,12 @@ select.input {
 .btn-err  { background: var(--c-err); color: #111; }
 .btn-err:hover { filter: brightness(1.15); }
 
-.btn-sm { padding: .35rem .7rem; font-size: .8rem; }
-.btn-lg { padding: .75rem 1.5rem; font-size: 1rem; }
+.btn-sm { padding: .5rem 1.1rem; font-size: .9rem; }
+.btn-lg { padding: 1rem 2rem; font-size: 1.12rem; }
 .btn-icon {
-  padding: .45rem;
-  min-width: 34px;
-  min-height: 34px;
+  padding: .5rem;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 /* ── Badge / Tag ── */
@@ -168,9 +172,9 @@ select.input {
   display: inline-flex;
   align-items: center;
   gap: .25rem;
-  padding: .2rem .55rem;
+  padding: .3rem .75rem;
   border-radius: var(--r-full);
-  font-size: .72rem;
+  font-size: .84rem;
   font-weight: 600;
   letter-spacing: .3px;
   text-transform: uppercase;
@@ -198,7 +202,7 @@ select.input {
 
 /* ── Spinner ── */
 .spinner {
-  width: 32px; height: 32px;
+  width: 40px; height: 40px;
   border: 3px solid var(--c-border);
   border-top-color: var(--c-brand);
   border-radius: 50%;

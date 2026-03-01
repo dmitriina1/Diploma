@@ -64,11 +64,11 @@ onMounted(async () => {
 .center-block { display: flex; justify-content: center; padding: 4rem; }
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 .link { color: var(--c-brand); text-decoration: none; font-weight: 600; }
-.title { font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.3; }
+.title { font-size: 1.85rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.3; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
-.meta-item { color: var(--c-text-3); font-size: .88rem; display: flex; align-items: center; gap: .3rem; }
+.meta-item { color: var(--c-text-3); font-size: .94rem; display: flex; align-items: center; gap: .3rem; }
 .section { margin-bottom: 1.5rem; }
 .skills-wrap { display: flex; flex-wrap: wrap; gap: .4rem; }
-.desc { padding: 1.25rem; color: var(--c-text-2); line-height: 1.7; font-size: .92rem; white-space: pre-wrap; word-break: break-word; }
-.date { color: var(--c-text-4); font-size: .82rem; border-top: 1px solid var(--c-border); padding-top: .75rem; }
+.desc { padding: 1.25rem; color: var(--c-text-2); line-height: 1.7; font-size: 1rem; white-space: pre-wrap; word-break: break-word; }
+.date { color: var(--c-text-4); font-size: .88rem; border-top: 1px solid var(--c-border); padding-top: .75rem; }
 </style>

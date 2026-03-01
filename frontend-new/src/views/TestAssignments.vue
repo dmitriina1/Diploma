@@ -104,8 +104,8 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.heading { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .9rem; margin-bottom: 1.5rem; }
+.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .filters { display: flex; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center; }
 .filters .input { min-width: 180px; }
 .search-wrap { position: relative; flex: 1; max-width: 260px; }
@@ -119,14 +119,14 @@ onMounted(loadData)
 .ta-head.junior { border-left: 3px solid var(--c-ok); }
 .ta-head.middle { border-left: 3px solid var(--c-warn); }
 .ta-head.senior { border-left: 3px solid var(--c-err); }
-.company { font-weight: 700; font-size: .9rem; color: var(--c-text); }
-.ta-title { padding: .75rem 1.15rem 0; font-weight: 600; font-size: 1rem; color: var(--c-text); text-decoration: none; }
+.company { font-weight: 700; font-size: .96rem; color: var(--c-text); }
+.ta-title { padding: .75rem 1.15rem 0; font-weight: 600; font-size: 1.05rem; color: var(--c-text); text-decoration: none; }
 .ta-title:hover { color: var(--c-brand); }
-.ta-desc { padding: .35rem 1.15rem; font-size: .85rem; color: var(--c-text-3); line-height: 1.5; flex: 1; }
-.ta-prof { padding: 0 1.15rem; font-size: .82rem; color: var(--c-text-3); margin-bottom: .5rem; }
+.ta-desc { padding: .35rem 1.15rem; font-size: .9rem; color: var(--c-text-3); line-height: 1.5; flex: 1; }
+.ta-prof { padding: 0 1.15rem; font-size: .88rem; color: var(--c-text-3); margin-bottom: .5rem; }
 .ta-skills { padding: 0 1.15rem .75rem; display: flex; flex-wrap: wrap; gap: .25rem; }
 .ta-foot { display: flex; align-items: center; gap: .5rem; padding: .75rem 1.15rem; border-top: 1px solid var(--c-border); }
-.ta-date { margin-left: auto; color: var(--c-text-4); font-size: .78rem; }
+.ta-date { margin-left: auto; color: var(--c-text-4); font-size: .84rem; }
 .pg { display: flex; justify-content: center; align-items: center; gap: .75rem; margin-top: 1.5rem; color: var(--c-text-2); font-size: .88rem; }
 .empty-state { text-align: center; padding: 3rem; color: var(--c-text-4); }
 

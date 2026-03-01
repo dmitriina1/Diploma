@@ -688,10 +688,10 @@ Docker Compose настраивает healthcheck для каждого серв
 **NFR-4. Удобство использования (Usability).**
 
 - Адаптивный интерфейс: от 320px до 2560px;
-- Тёмная тема (PrimeVue `lara-dark-purple`);
+- Тёмная тема на собственной дизайн-системе (CSS Custom Properties, основной фон `#0c0c0f`, акцент `#7c5cfc`);
 - Загрузка главной страницы: не более 3 секунд;
 - Плавные page-transitions (translateY, opacity);
-- Кастомный scrollbar с градиентом `#667eea → #764ba2`.
+- Кастомный scrollbar с градиентом `#7c5cfc → #6c47d9`.
 
 **NFR-5. Безопасность.**
 
@@ -857,32 +857,40 @@ UUID генерируется при первом визите и сохраня
 
 ### 3.2.2. Компонентная архитектура
 
-Система состоит из 5 контейнеризованных сервисов, взаимодействующих через выделенную bridge-сеть Docker `diploma-network`.
+Система состоит из 6 контейнеризованных сервисов, взаимодействующих через выделенную bridge-сеть Docker `diploma-network`.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                        Docker Compose Cluster                           │
 │                  Network: diploma-network (bridge)                      │
 │                                                                          │
-│  ┌───────────────┐     ┌──────────────────┐     ┌────────────────────┐  │
-│  │   Frontend     │     │     Backend       │     │  Whisper Worker    │  │
-│  │   Vue 3 +      │     │    FastAPI        │     │  faster-whisper    │  │
-│  │   PrimeVue     │────▶│   (67 endpoints)  │────▶│  large-v3-turbo   │  │
-│  │   Vite 5       │     │   main_new.py     │     │  CTranslate2      │  │
-│  │   :3000        │     │   3237 строк      │     │  267 строк        │  │
-│  │                │     │   :8000           │     │  :8001             │  │
-│  └───────────────┘     └────────┬──────────┘     └────────────────────┘  │
-│                                 │                                        │
-│                        ┌────────┴─────────┐                              │
-│                        │                  │                               │
-│                  ┌─────▼──────┐    ┌──────▼────────┐                     │
-│                  │ PostgreSQL  │    │     Redis      │                     │
-│                  │ 15-alpine   │    │   7-alpine     │                     │
-│                  │ :5432       │    │   :6379        │                     │
-│                  │ 20 таблиц   │    │ кэш, задачи,  │                     │
-│                  │ 22 индекса  │    │ FAISS-index    │                     │
-│                  │ pg_trgm     │    │ WebSocket map  │                     │
-│                  └────────────┘    └───────────────┘                     │
+│  ┌───────────────┐  ┌───────────────┐  ┌──────────────────┐             │
+│  │ Frontend NEW  │  │ Frontend OLD  │  │  Whisper Worker   │             │
+│  │ Vue 3.4 +     │  │ Vue 3 +       │  │  faster-whisper   │             │
+│  │ Custom CSS    │  │ PrimeVue      │  │  large-v3-turbo   │             │
+│  │ :3000         │  │ :3001         │  │  CTranslate2      │             │
+│  └──────┬────────┘  └──────┬────────┘  │  :8001             │             │
+│         │                  │           └────────┬───────────┘             │
+│         └──────────────────┼───────────────────▶│                         │
+│                            └───────────────────▶│                         │
+│                                    ┌────────────┴──────────┐             │
+│                                    │      Backend          │             │
+│                                    │     FastAPI           │             │
+│                                    │    (67 endpoints)     │             │
+│                                    │    main_new.py        │             │
+│                                    │    3237 строк         │             │
+│                                    │    :8000              │             │
+│                                    └──────────┬────────────┘             │
+│                                    ┌──────────┴─────────┐                │
+│                                    │                    │                 │
+│                              ┌─────▼──────┐    ┌───────▼───────┐         │
+│                              │ PostgreSQL  │    │     Redis      │         │
+│                              │ 15-alpine   │    │   7-alpine     │         │
+│                              │ :5432       │    │   :6379        │         │
+│                              │ 20 таблиц   │    │ кэш, задачи,  │         │
+│                              │ 22 индекса  │    │ FAISS-index    │         │
+│                              │ pg_trgm     │    │ WebSocket map  │         │
+│                              └────────────┘    └───────────────┘         │
 │                                                                          │
 │  Volumes: postgres_data | redis_data | whisper_cache | shared_temp       │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -890,61 +898,61 @@ UUID генерируется при первом визите и сохраня
 
 ---
 
-**Компонент 1: Frontend (порт 3000).**
+**Компонент 1: Frontend NEW (порт 3000).**
 
-Одностраничное приложение (SPA) на Vue 3 с библиотекой компонентов PrimeVue.
+Основное одностраничное приложение (SPA) на Vue 3.4 с собственной дизайн-системой на CSS Custom Properties (без сторонних UI-библиотек).
 
 | Характеристика | Значение |
 |---------------|----------|
-| Фреймворк | Vue 3 (Composition API) |
-| Сборщик | Vite 5.4.21 |
-| UI-библиотека | PrimeVue 3.50 (тема lara-dark-purple) |
+| Фреймворк | Vue 3.4 (Composition API / `<script setup>`) |
+| Сборщик | Vite 5.4 |
+| UI-библиотека | Собственная дизайн-система (global.css, CSS Custom Properties) |
 | State management | Pinia 2.1.7 |
 | HTTP-клиент | Axios 1.6.2 |
 | Маршрутизация | Vue Router 4.2.0 |
-| Иконки | PrimeIcons 6.0.1 |
-| Views (представления) | 9 |
-| Компоненты | 12 переиспользуемых |
-| PrimeVue-компоненты | 23 |
+| Утилиты | @vueuse/core 10.7.0 |
+| Views (представления) | 12 |
+| Компоненты | 2 переиспользуемых (NavBar, AppFooter) |
+| Тема | Тёмная с фиолетовыми акцентами (#7c5cfc) |
 | Базовый образ (dev) | node:18-alpine |
 | Базовый образ (prod) | nginx:alpine |
 
 **Структура компонентов:**
 
 ```
-src/
+frontend-new/src/
 ├── App.vue              — корневой компонент с router-view и transitions
-├── main.js              — точка входа, регистрация PrimeVue
+├── main.js              — точка входа, инициализация Pinia / Router
+├── assets/
+│   └── global.css       — дизайн-система (CSS Custom Properties, утилитарные классы)
 ├── api/
-│   └── client.js        — централизованный API-клиент (334 строки)
+│   └── client.js        — централизованный API-клиент
 ├── router/
-│   └── index.js         — маршруты (79 строк)
+│   └── index.js         — маршруты (12 views)
 ├── store/
-│   └── index.js         — Pinia stores (312 строк)
+│   ├── index.js         — Pinia store (вопросы, задачи)
+│   └── auth.js          — JWT-авторизация
 ├── views/
-│   ├── Home.vue         — главная страница с профессиями
-│   ├── InterviewQuestions.vue — каталог вопросов
-│   ├── QuestionDetail.vue    — карточка вопроса
-│   ├── Trainer.vue      — тренажёр SM-2 (601 строка)
-│   ├── MockInterview.vue     — mock-собеседование
-│   ├── Bookmarks.vue    — закладки пользователя
-│   ├── Suggestions.vue  — предложения видео
-│   ├── Admin.vue        — панель управления (873 строки)
-│   └── InterviewRecordings.vue — HH-навыки
+│   ├── Home.vue              — главная страница с профессиями и статистикой
+│   ├── InterviewQuestions.vue — каталог вопросов с фильтрами
+│   ├── QuestionDetail.vue     — карточка вопроса
+│   ├── Trainer.vue            — тренажёр SM-2
+│   ├── Suggestions.vue        — предложения видео
+│   ├── HHRequirements.vue     — навыки из вакансий HeadHunter
+│   ├── TestAssignments.vue    — тестовые задания от компаний
+│   ├── TestAssignmentDetail.vue — детали тестового задания
+│   ├── InterviewRecordings.vue — записи собеседований
+│   ├── Login.vue              — авторизация / регистрация
+│   ├── Profile.vue            — профиль, закладки, заметки
+│   └── Admin.vue              — панель управления
 └── components/
-    ├── NavBar.vue        — навигационная панель
-    ├── AppFooter.vue     — нижний колонтитул
-    ├── TechSelector.vue  — выбор профессии (308 строк)
-    ├── QuestionCard.vue  — карточка вопроса в списке
-    ├── QuestionDetailDialog.vue — модальное окно вопроса
-    ├── QuestionApproval.vue — одобрение вопросов (Admin)
-    ├── VideoManager.vue  — управление видео (Admin)
-    ├── VideoUpload.vue   — загрузка видео (Admin)
-    ├── AnswerGenerator.vue — генерация ответов (Admin)
-    ├── FeedbackDialog.vue — форма обратной связи
-    ├── FeedbackManager.vue — управление фидбэком (Admin)
-    └── SuggestionsManager.vue — управление предложениями (Admin)
+    ├── NavBar.vue             — навигационная панель
+    └── AppFooter.vue          — нижний колонтитул
 ```
+
+**Компонент 1a: Frontend OLD (порт 3001).**
+
+Легаси-версия фронтенда на Vue 3 с библиотекой PrimeVue (тема `lara-dark-purple`, 23 компонента). Сохранена для сравнительного анализа и A/B-тестирования с новым интерфейсом. Оба фронтенда подключены к единому Backend на порту 8000.
 
 ---
 
@@ -1443,7 +1451,7 @@ CREATE TRIGGER tr_questions_updated
 
 При проектировании интерфейса применены 5 принципов:
 
-1. **Dark-first дизайн.** Тёмная схема (PrimeVue `lara-dark-purple`) как основная. Целевая аудитория — разработчики, привыкшие к тёмным IDE. Фон: `#0f0f1e` (body), радиальные градиенты `#1e1e3f → #0f0f1e → #000000`.
+1. **Dark-first дизайн.** Тёмная схема на основе собственной дизайн-системы (CSS Custom Properties, основной фон `#0c0c0f`, поверхность `#16161a`, акцент `#7c5cfc`). Целевая аудитория — разработчики, привыкшие к тёмным IDE. Радиальные градиенты для глубины интерфейса.
 
 2. **Контент-ориентированность.** NavBar + Footer, без боковых панелей. Максимум пространства для контента.
 
@@ -1452,38 +1460,36 @@ CREATE TRIGGER tr_questions_updated
    - Уровень 2: список вопросов профессии (таблица с фильтрами);
    - Уровень 3: детальная карточка вопроса (ответ, видео, UGC).
 
-4. **Консистентность.** 23 PrimeVue-компонента обеспечивают единый стиль: DataTable, Column, Dialog, Button, InputText, Textarea, Dropdown, Tag, ProgressBar, Toast, ConfirmDialog, TabView, TabPanel, Badge, Chip, Skeleton, Card, Tooltip, Paginator, Slider, Accordion, AccordionTab, ProgressSpinner.
+4. **Консистентность через дизайн-систему.** Все UI-элементы реализованы через утилитарные CSS-классы в `global.css` (.btn, .btn-primary, .btn-ghost, .btn-danger, .btn-sm, .btn-lg, .badge, .card, .input, .spinner, .progress), обеспечивающие единый стиль без зависимости от сторонних UI-библиотек.
 
 5. **Адаптивность.** CSS Grid с `auto-fill` и `minmax()` для автоматической подгонки колонок.
 
 
 ### 3.4.2. Структура представлений (Views)
 
-9 представлений организованы в 3 зоны:
+12 представлений организованы в 2 зоны:
 
-**Публичная зона (7 views):**
+**Публичная зона (11 views):**
 
-| View | Маршрут | Строк кода | Описание |
-|------|---------|-----------|----------|
-| Home | `/` | ~250 | Hero-секция, статистика, TechSelector |
-| InterviewQuestions | `/interview-questions` | ~350 | Каталог вопросов с фильтрами |
-| QuestionDetail | `/question/:id` | ~300 | Карточка вопроса |
-| Trainer | `/trainer` | 601 | SM-2 тренажёр |
-| MockInterview | `/recordings` | ~200 | Mock-собеседование |
-| Bookmarks | `/bookmarks` | ~150 | Закладки пользователя |
-| Suggestions | `/suggest` | ~150 | Предложение видео |
+| View | Маршрут | Описание |
+|------|---------|----------|
+| Home | `/` | Hero-секция, статистика, выбор профессии |
+| InterviewQuestions | `/questions/:profession` | Каталог вопросов с фильтрами |
+| QuestionDetail | `/question/:id` | Карточка вопроса |
+| Trainer | `/trainer` | SM-2 тренажёр |
+| Suggestions | `/suggestions` | Предложение видео |
+| HHRequirements | `/hh-requirements` | Навыки из вакансий HeadHunter |
+| TestAssignments | `/test-assignments` | Тестовые задания от компаний |
+| TestAssignmentDetail | `/test-assignments/:id` | Детали тестового задания |
+| InterviewRecordings | `/recordings` | Записи собеседований |
+| Login | `/login` | Авторизация / регистрация |
+| Profile | `/profile` | Профиль, закладки, заметки |
 
 **Административная зона (1 view):**
 
-| View | Маршрут | Строк кода | Описание |
-|------|---------|-----------|----------|
-| Admin | `/admin` | 873 | Модерация, видео, задачи, фидбэк |
-
-**Аналитическая зона (1 view):**
-
-| View | Маршрут | Строк кода | Описание |
-|------|---------|-----------|----------|
-| InterviewRecordings | `/recordings` | ~250 | HH-навыки, тестовые задания |
+| View | Маршрут | Описание |
+|------|---------|----------|
+| Admin | `/admin` | Модерация, видео, задачи, фидбэк, аналитика |
 
 
 ### 3.4.3. Дизайн-система
@@ -1492,14 +1498,19 @@ CREATE TRIGGER tr_questions_updated
 
 | Элемент | Цвет | Hex | Использование |
 |---------|------|-----|-------------|
-| Фон (body) | Тёмно-синий | `#0f0f1e` | Основной фон |
-| Фон (card) | Тёмно-фиолетовый | `#1e1e3f` | Карточки |
-| Акцент 1 | Фиолетовый | `#667eea` | Кнопки, ссылки |
-| Акцент 2 | Пурпурный | `#764ba2` | Градиенты |
-| Предупреждение | Розовый | `#f093fb` | Hover-состояния |
-| Текст основной | Светло-серый | `#e4e4e7` | Основной текст |
-| Текст вторичный | Серый | `#9ca3af` | Подписи |
-| Код (inline) | — | `rgba(139,92,246,0.15)` + border | Код в тексте |
+| Фон (body) | Тёмно-чёрный | `#0c0c0f` | Основной фон |
+| Фон (surface) | Тёмно-серый | `#16161a` | Карточки, панели |
+| Фон (elevated) | Серый приподнятый | `#1e1e24` | Навигация, вложенные блоки |
+| Акцент (primary) | Фиолетовый | `#7c5cfc` | Кнопки, ссылки, акценты |
+| Акцент (hover) | Тёмно-фиолетовый | `#6c47d9` | Hover-состояния |
+| Кнопка ghost (hover) | Полупрозрачный | `rgba(124,92,252,0.1)` | Ghost-кнопки |
+| Текст основной | Белый | `#e4e4e7` | Основной текст |
+| Текст вторичный | Серый | `#a1a1aa` | Подписи, мета |
+| Текст приглушённый | Тёмно-серый | `#71717a` | Плейсхолдеры |
+| Граница | Полупрозрачный | `rgba(255,255,255,0.08)` | Разделители |
+| Успех | Зелёный | `#34d399` | Бейджи, статусы |
+| Предупреждение | Жёлтый | `#fbbf24` | Бейджи, статусы |
+| Ошибка | Красный | `#f87171` | Бейджи, удаление |
 
 **Типографика:**
 
@@ -1622,27 +1633,25 @@ ws.onmessage = (event) => {
 }
 ```
 
-**Маршрутизация (Vue Router, 79 строк).**
+**Маршрутизация (Vue Router).**
 
 ```javascript
 const routes = [
-    { path: '/',                    name: 'Home',               component: Home },
-    { path: '/question/:id',       name: 'QuestionDetail',      component: QuestionDetail, props: true },
-    { path: '/suggest',            name: 'Suggestions',         component: Suggestions },
-    { path: '/trainer',            name: 'Trainer',             component: Trainer },
-    { path: '/recordings',         name: 'InterviewRecordings', component: InterviewRecordings },
-    { path: '/interview-questions', name: 'InterviewQuestions', component: InterviewQuestions },
-    { path: '/test-assignments',   name: 'TestAssignments',     component: TestAssignments },
-    { path: '/hh-requirements',    name: 'HHRequirements',      component: HHRequirements },
-    { path: '/admin',              name: 'Admin',               component: Admin, meta: { requiresAuth: true } }
+    { path: '/',                       name: 'Home',                 component: Home },
+    { path: '/question/:id',          name: 'QuestionDetail',       component: QuestionDetail, props: true },
+    { path: '/suggestions',           name: 'Suggestions',          component: Suggestions },
+    { path: '/trainer',               name: 'Trainer',              component: Trainer },
+    { path: '/recordings',            name: 'InterviewRecordings',  component: InterviewRecordings },
+    { path: '/questions/:profession', name: 'InterviewQuestions',   component: InterviewQuestions, props: true },
+    { path: '/test-assignments',      name: 'TestAssignments',      component: TestAssignments },
+    { path: '/test-assignments/:id',  name: 'TestAssignmentDetail', component: TestAssignmentDetail, props: true },
+    { path: '/hh-requirements',       name: 'HHRequirements',       component: HHRequirements },
+    { path: '/login',                 name: 'Login',                component: Login },
+    { path: '/profile',              name: 'Profile',              component: Profile },
+    { path: '/admin',                name: 'Admin',                component: Admin, meta: { requiresAuth: true } }
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
-
-router.beforeEach((to, from, next) => {
-    document.title = to.meta.title || 'Interview Prep'
-    next()
-})
 ```
 
 **Vite конфигурация (proxy).**
@@ -1715,11 +1724,11 @@ server {
 
 2. **Обоснован выбор SOA-архитектуры** с контейнеризацией через Docker Compose. Проведён сравнительный анализ с монолитной, микросервисной и serverless-архитектурами.
 
-3. **Спроектирована компонентная архитектура** из 5 сервисов: Frontend (Vue 3), Backend (FastAPI), Whisper Worker (faster-whisper), PostgreSQL 15 и Redis 7.
+3. **Спроектирована компонентная архитектура** из 6 сервисов: Frontend NEW (Vue 3.4 + собственная CSS дизайн-система), Frontend OLD (Vue 3 + PrimeVue, для сравнительного анализа), Backend (FastAPI), Whisper Worker (faster-whisper), PostgreSQL 15 и Redis 7.
 
 4. **Спроектирована модель данных** из 20 таблиц с 22 индексами, обеспечивающая нормализованное хранение вопросов, видеозаписей, пользовательского прогресса и аналитических данных.
 
-5. **Разработана дизайн-система** с тёмной темой, 23 PrimeVue-компонентами, адаптивной вёрсткой и анимациями переходов.
+5. **Разработана собственная дизайн-система** на CSS Custom Properties с утилитарными классами (.btn, .badge, .card, .input, .spinner, .progress), тёмной темой (#0c0c0f, акцент #7c5cfc), адаптивной вёрсткой и анимациями переходов — без зависимости от сторонних UI-библиотек.
 
 6. **Спроектирован Pipeline обработки видео** из 4 этапов с WebSocket-мониторингом и multi-provider LLM fallback.
 

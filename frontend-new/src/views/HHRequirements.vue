@@ -100,14 +100,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.heading { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .9rem; margin-bottom: 1.5rem; }
+.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .prof-row { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-bottom: 1.5rem; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }
 
 .skills-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 1.25rem; flex-wrap: wrap; gap: .5rem; }
-.skills-head h2 { font-size: 1.2rem; margin: 0; }
-.muted { color: var(--c-text-4); font-size: .82rem; }
+.skills-head h2 { font-size: 1.3rem; margin: 0; }
+.muted { color: var(--c-text-4); font-size: .88rem; }
 
 .chart { display: flex; flex-direction: column; gap: .45rem; margin-bottom: 1.5rem; }
 .skill-row {
@@ -116,18 +116,18 @@ onMounted(async () => {
   animation: fadeUp .4s var(--ease) backwards;
 }
 .sk-info { display: flex; align-items: center; gap: .4rem; }
-.sk-rank { font-weight: 800; color: var(--c-text-4); font-size: .82rem; min-width: 26px; }
-.sk-name { font-weight: 600; font-size: .9rem; color: var(--c-text); }
-.sk-bar-wrap { display: flex; align-items: center; gap: .6rem; height: 24px; }
+.sk-rank { font-weight: 800; color: var(--c-text-4); font-size: .88rem; min-width: 26px; }
+.sk-name { font-weight: 600; font-size: .96rem; color: var(--c-text); }
+.sk-bar-wrap { display: flex; align-items: center; gap: .6rem; height: 28px; }
 .sk-bar { height: 100%; border-radius: 5px; transition: width .6s cubic-bezier(.4,0,.2,1); min-width: 4px; }
-.sk-pct { font-weight: 800; color: var(--c-text); font-size: .85rem; min-width: 36px; text-align: right; }
-.sk-count { color: var(--c-text-4); font-size: .78rem; text-align: right; }
+.sk-pct { font-weight: 800; color: var(--c-text); font-size: .92rem; min-width: 36px; text-align: right; }
+.sk-count { color: var(--c-text-4); font-size: .84rem; text-align: right; }
 
 .pg { display: flex; justify-content: center; align-items: center; gap: .75rem; margin-bottom: 1.5rem; color: var(--c-text-2); font-size: .88rem; }
 
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
 .sum-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 1.15rem; }
-.sum-card h4 { font-size: .88rem; font-weight: 600; margin-bottom: .6rem; }
+.sum-card h4 { font-size: .94rem; font-weight: 600; margin-bottom: .6rem; }
 .must h4 { color: var(--c-err); }
 .nice h4 { color: var(--c-warn); }
 .bonus h4 { color: var(--c-ok); }

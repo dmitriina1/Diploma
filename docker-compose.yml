@@ -103,7 +103,7 @@ services:
       - diploma-network
     command: ["uvicorn", "main_new:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-  # ============== Frontend (Vue.js — New Design) ==============
+  # ============== Frontend NEW (Vue.js — New Design) ==============
   frontend:
     build:
       context: ./frontend-new
@@ -115,6 +115,24 @@ services:
       - "3000:3000"
     volumes:
       - ./frontend-new:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - diploma-network
+
+  # ============== Frontend OLD (Vue.js + PrimeVue — legacy) ==============
+  frontend-old:
+    build:
+      context: ./frontend-vue
+      dockerfile: Dockerfile.dev
+    container_name: diploma-frontend-old
+    environment:
+      - VITE_API_BASE_URL=/api
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend-vue:/app
       - /app/node_modules
     depends_on:
       - backend

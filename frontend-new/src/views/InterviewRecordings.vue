@@ -103,8 +103,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.heading { font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .9rem; margin-bottom: 1.5rem; }
+.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .filters { display: flex; gap: .75rem; justify-content: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .filters .input { min-width: 180px; }
 .search-wrap { position: relative; min-width: 240px; }
@@ -116,9 +116,9 @@ onMounted(async () => {
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
 .rec-card { padding: 1.25rem; display: flex; flex-direction: column; }
 .rec-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
-.rec-date { color: var(--c-text-4); font-size: .78rem; }
-.rec-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .35rem; line-height: 1.35; }
-.rec-meta { color: var(--c-text-3); font-size: .82rem; margin-bottom: .75rem; flex: 1; }
+.rec-date { color: var(--c-text-4); font-size: .84rem; }
+.rec-card h3 { font-size: 1.06rem; font-weight: 600; margin-bottom: .35rem; line-height: 1.35; }
+.rec-meta { color: var(--c-text-3); font-size: .88rem; margin-bottom: .75rem; flex: 1; }
 .rec-actions { display: flex; gap: .4rem; }
 
 /* Dialog */
@@ -140,10 +140,10 @@ onMounted(async () => {
   font-size: .75rem; font-weight: 700;
 }
 .q-body { flex: 1; }
-.q-link { color: var(--c-brand); text-decoration: none; font-weight: 500; font-size: .9rem; }
+.q-link { color: var(--c-brand); text-decoration: none; font-weight: 500; font-size: .96rem; }
 .q-link:hover { text-decoration: underline; }
 .q-meta { display: flex; align-items: center; gap: .4rem; margin-top: .2rem; }
-.tc { color: var(--c-text-4); font-size: .78rem; }
+.tc { color: var(--c-text-4); font-size: .84rem; }
 
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
