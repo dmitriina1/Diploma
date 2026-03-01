@@ -1,0 +1,253 @@
+{
+  "videos": [
+    {
+      "name": "Python собеседование Junior",
+      "url": "https://youtube.com/watch?v=example1",
+      "duration_minutes": 35,
+      "questions": [
+        {
+          "question": "Что такое GIL в Python и как он влияет на многопоточность?",
+          "topic": "Python",
+          "difficulty": "middle",
+          "timecode": "02:15"
+        },
+        {
+          "question": "Чем отличается list от tuple?",
+          "topic": "Python",
+          "difficulty": "junior",
+          "timecode": "05:30"
+        },
+        {
+          "question": "Что такое декораторы в Python?",
+          "topic": "Python",
+          "difficulty": "middle",
+          "timecode": "08:45"
+        },
+        {
+          "question": "Расскажите про генераторы и итераторы",
+          "topic": "Python",
+          "difficulty": "middle",
+          "timecode": "12:10"
+        },
+        {
+          "question": "Как работает сборщик мусора в Python?",
+          "topic": "Python",
+          "difficulty": "senior",
+          "timecode": "16:20"
+        },
+        {
+          "question": "Что такое контекстный менеджер и зачем он нужен?",
+          "topic": "Python",
+          "difficulty": "middle",
+          "timecode": "19:00"
+        },
+        {
+          "question": "Чем отличается deepcopy от copy?",
+          "topic": "Python",
+          "difficulty": "junior",
+          "timecode": "22:30"
+        },
+        {
+          "question": "Что такое метаклассы в Python?",
+          "topic": "Python",
+          "difficulty": "senior",
+          "timecode": "25:15"
+        },
+        {
+          "question": "Как работают дескрипторы?",
+          "topic": "Python",
+          "difficulty": "senior",
+          "timecode": "28:00"
+        },
+        {
+          "question": "Что такое MRO и как Python определяет порядок наследования?",
+          "topic": "Python",
+          "difficulty": "senior",
+          "timecode": "30:45"
+        },
+        {
+          "question": "Расскажите про asyncio и как работает event loop",
+          "topic": "Python",
+          "difficulty": "middle",
+          "timecode": "33:10"
+        },
+        {
+          "question": "Какие типы данных в Python являются изменяемыми, а какие нет?",
+          "topic": "Python",
+          "difficulty": "junior",
+          "timecode": "34:40"
+        }
+      ]
+    },
+    {
+      "name": "JavaScript Frontend собеседование",
+      "url": "https://youtube.com/watch?v=example2",
+      "duration_minutes": 42,
+      "questions": [
+        {
+          "question": "Что такое замыкание (closure) в JavaScript?",
+          "topic": "JavaScript",
+          "difficulty": "middle",
+          "timecode": "01:30"
+        },
+        {
+          "question": "В чём разница между var, let и const?",
+          "topic": "JavaScript",
+          "difficulty": "junior",
+          "timecode": "04:20"
+        },
+        {
+          "question": "Что такое event loop и как он работает?",
+          "topic": "JavaScript",
+          "difficulty": "middle",
+          "timecode": "07:00"
+        },
+        {
+          "question": "Расскажите про прототипное наследование",
+          "topic": "JavaScript",
+          "difficulty": "middle",
+          "timecode": "10:15"
+        },
+        {
+          "question": "Что такое промисы и как они работают?",
+          "topic": "JavaScript",
+          "difficulty": "middle",
+          "timecode": "13:45"
+        },
+        {
+          "question": "Чем отличается == от ===?",
+          "topic": "JavaScript",
+          "difficulty": "junior",
+          "timecode": "16:30"
+        },
+        {
+          "question": "Что такое hoisting?",
+          "topic": "JavaScript",
+          "difficulty": "junior",
+          "timecode": "18:00"
+        },
+        {
+          "question": "Расскажите про методы массивов: map, filter, reduce",
+          "topic": "JavaScript",
+          "difficulty": "junior",
+          "timecode": "20:30"
+        },
+        {
+          "question": "Что такое Virtual DOM в React?",
+          "topic": "React",
+          "difficulty": "middle",
+          "timecode": "23:15"
+        },
+        {
+          "question": "Как работает reconciliation в React?",
+          "topic": "React",
+          "difficulty": "senior",
+          "timecode": "26:00"
+        },
+        {
+          "question": "Чем отличаются хуки useState и useReducer?",
+          "topic": "React",
+          "difficulty": "middle",
+          "timecode": "28:45"
+        },
+        {
+          "question": "Что такое мемоизация и когда стоит использовать useMemo?",
+          "topic": "React",
+          "difficulty": "middle",
+          "timecode": "31:20"
+        },
+        {
+          "question": "Расскажите про CSS Flexbox и Grid",
+          "topic": "CSS",
+          "difficulty": "junior",
+          "timecode": "34:00"
+        },
+        {
+          "question": "Как работает CORS?",
+          "topic": "Web",
+          "difficulty": "middle",
+          "timecode": "36:30"
+        },
+        {
+          "question": "Что такое Web Workers?",
+          "topic": "JavaScript",
+          "difficulty": "senior",
+          "timecode": "38:15"
+        },
+        {
+          "question": "Расскажите про HTTP/2 и его преимущества перед HTTP/1.1",
+          "topic": "Web",
+          "difficulty": "middle",
+          "timecode": "39:50"
+        },
+        {
+          "question": "Как оптимизировать производительность веб-приложения?",
+          "topic": "Web",
+          "difficulty": "senior",
+          "timecode": "41:00"
+        },
+        {
+          "question": "Что такое Service Workers и для чего они нужны?",
+          "topic": "JavaScript",
+          "difficulty": "senior",
+          "timecode": "42:00"
+        }
+      ]
+    },
+    {
+      "name": "System Design собеседование",
+      "url": "https://youtube.com/watch?v=example3",
+      "duration_minutes": 28,
+      "questions": [
+        {
+          "question": "Спроектируйте систему для сокращения URL (URL shortener)",
+          "topic": "System Design",
+          "difficulty": "middle",
+          "timecode": "01:00"
+        },
+        {
+          "question": "Как бы вы спроектировали систему уведомлений?",
+          "topic": "System Design",
+          "difficulty": "middle",
+          "timecode": "05:30"
+        },
+        {
+          "question": "Какие паттерны масштабирования баз данных вы знаете?",
+          "topic": "System Design",
+          "difficulty": "senior",
+          "timecode": "09:00"
+        },
+        {
+          "question": "Объясните разницу между горизонтальным и вертикальным масштабированием",
+          "topic": "System Design",
+          "difficulty": "middle",
+          "timecode": "12:30"
+        },
+        {
+          "question": "Что такое CAP-теорема?",
+          "topic": "System Design",
+          "difficulty": "senior",
+          "timecode": "16:00"
+        },
+        {
+          "question": "Как работает балансировка нагрузки?",
+          "topic": "System Design",
+          "difficulty": "middle",
+          "timecode": "19:30"
+        },
+        {
+          "question": "Расскажите про паттерн CQRS",
+          "topic": "System Design",
+          "difficulty": "senior",
+          "timecode": "22:00"
+        },
+        {
+          "question": "Как обеспечить консистентность данных в распределённой системе?",
+          "topic": "System Design",
+          "difficulty": "senior",
+          "timecode": "25:00"
+        }
+      ]
+    }
+  ]
+}
