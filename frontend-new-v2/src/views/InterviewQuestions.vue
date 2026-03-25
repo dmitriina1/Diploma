@@ -181,16 +181,13 @@ onMounted(async () => {
   margin-bottom: 1rem;
   flex-wrap: wrap;
   position: sticky;
-  top: var(--nav-h);
+  top: calc(var(--nav-h) + .45rem);
   z-index: 20;
-  background: color-mix(in srgb, var(--c-bg) 88%, transparent);
+  background: color-mix(in srgb, var(--c-surface) 64%, transparent);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--c-border);
-  padding: .75rem 0;
-  margin-left: -1.5rem;
-  margin-right: -1.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: .75rem;
 }
 .search-wrap {
   position: relative;

@@ -208,29 +208,17 @@
           <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
             <div class="anl-panel card" v-if="registrationChart.length">
               <h4>Регистрации (30 дней)</h4>
-              <div class="mini-chart">
-                <div v-for="p in registrationChart" :key="'r'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
-                  <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
-                </div>
-              </div>
+              <LineChart :points="registrationChart" unit="чел" />
             </div>
             <div class="anl-panel card" v-if="loginChart.length">
               <h4>Логины (30 дней)</h4>
-              <div class="mini-chart">
-                <div v-for="p in loginChart" :key="'l'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
-                  <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
-                </div>
-              </div>
+              <LineChart :points="loginChart" unit="входов" />
             </div>
           </div>
 
           <div class="anl-panel card" v-if="viewsChart.length">
             <h4>Просмотры вопросов (30 дней)</h4>
-            <div class="mini-chart">
-              <div v-for="p in viewsChart" :key="'v'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
-                <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
-              </div>
-            </div>
+            <LineChart :points="viewsChart" unit="просмотров" />
           </div>
 
           <!-- Topic distribution -->
@@ -363,6 +351,7 @@ import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
+import LineChart from '../components/LineChart.vue'
 import api from '../api/client'
 
 const questionsStore = useQuestionsStore()
@@ -371,9 +360,10 @@ const tasksStore = useTasksStore()
 const tabs = ['Вопросы', 'Предложения', 'Обратная связь', 'Видео', 'Тестовые задания', 'Аналитика']
 const activeTab = ref(0)
 const expandedLogs = ref({})
+const hiddenTaskIds = ref(JSON.parse(localStorage.getItem('admin_hidden_tasks') || '[]'))
 
 // Tasks
-const allTasks = computed(() => tasksStore.tasks)
+const allTasks = computed(() => tasksStore.tasks.filter(t => !hiddenTaskIds.value.includes(t.task_id)))
 const activeTasks = computed(() => tasksStore.activeTasks)
 const hasActive = computed(() => tasksStore.hasActiveTasks)
 const taskBadge = (s) => ({ completed: 'badge-ok', error: 'badge-err' }[s] || 'badge-info')
@@ -484,8 +474,8 @@ const loginChart = computed(() => chartify(anl.value.logins_30d || []))
 const viewsChart = computed(() => chartify(anl.value.views_30d || []))
 
 const dismissTask = (taskId) => {
-  tasksStore.tasks = tasksStore.tasks.filter(t => t.task_id !== taskId)
-  if (tasksStore.currentTask?.task_id === taskId) tasksStore.currentTask = null
+  if (!hiddenTaskIds.value.includes(taskId)) hiddenTaskIds.value.push(taskId)
+  localStorage.setItem('admin_hidden_tasks', JSON.stringify(hiddenTaskIds.value))
   delete expandedLogs.value[taskId]
 }
 
@@ -605,26 +595,6 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 .top-rank { font-size: .84rem; font-weight: 700; color: var(--c-text-4); min-width: 22px; }
 .top-txt { flex: 1; font-size: .88rem; color: var(--c-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sys-actions { display: flex; gap: .5rem; flex-wrap: wrap; padding: .75rem; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); }
-
-.mini-chart {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
-  align-items: end;
-  gap: 4px;
-  min-height: 110px;
-  padding: .4rem .2rem 0;
-}
-.mc-col {
-  position: relative;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-}
-.mc-bar {
-  width: 100%;
-  border-radius: 4px 4px 2px 2px;
-  background: linear-gradient(180deg, var(--c-brand-h), var(--c-brand));
-}
 
 /* Dialogs */
 .overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
