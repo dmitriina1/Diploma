@@ -182,7 +182,7 @@
         </div>
 
         <div v-if="interviewIndex >= interviewQuestions.length - 1 && showInterviewAnswer" class="iv-done">
-          <p>✅ Все вопросы пройдены!</p>
+          <p>Все вопросы пройдены!</p>
           <button class="btn btn-secondary" @click="mode = 'select'">Вернуться</button>
         </div>
       </div>

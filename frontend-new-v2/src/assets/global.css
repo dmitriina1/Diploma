@@ -145,7 +145,7 @@ body::before {
   background:
     radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--c-brand) 20%, transparent) 0%, transparent 32%),
     radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--c-info) 17%, transparent) 0%, transparent 28%);
-  filter: blur(30px);
+  filter: blur(24px);
   animation: ambientFloat 16s ease-in-out infinite alternate;
 }
 
@@ -309,6 +309,7 @@ select.input {
   border-color: var(--c-border-h);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+  will-change: transform;
 }
 
 .interactive-card {
@@ -457,6 +458,8 @@ select.input {
 /* ── Responsive ── */
 @media (max-width: 640px) {
   .container, .container-lg, .container-sm { padding: 0 1rem; }
+  body::after { display: none; }
+  .card-hover:hover { transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

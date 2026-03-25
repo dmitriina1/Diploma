@@ -3,9 +3,19 @@
     <NavBar />
     <div class="container" style="padding-top:2rem;padding-bottom:3rem">
       <div class="mi-head">
-        <h1>Mock Interview</h1>
+        <h1 class="h-page"><BrandIcon name="mock" :size="30" /> Mock Interview</h1>
         <p>Проверь себя в режиме имитации собеседования.</p>
       </div>
+
+      <StatePanel
+        v-if="loadError"
+        icon="warning"
+        type="error"
+        title="Ошибка в mock-сессии"
+        :description="loadError"
+      >
+        <button class="btn btn-secondary btn-sm" @click="loadHistory">Обновить</button>
+      </StatePanel>
 
       <section v-if="mode === 'setup'" class="card mi-setup">
         <div class="field-row">
@@ -67,6 +77,13 @@
           <span class="badge badge-brand">{{ h.score }}%</span>
         </div>
       </section>
+
+      <StatePanel
+        v-else-if="mode === 'setup'"
+        icon="empty"
+        title="История пока пуста"
+        description="Пройди первую симуляцию, чтобы видеть прогресс и результаты"
+      />
     </div>
     <AppFooter />
   </div>
@@ -76,6 +93,8 @@
 import { computed, onMounted, ref } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
+import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 
 const mode = ref('setup')
@@ -93,6 +112,7 @@ const interviewId = ref(null)
 const startedAt = ref(0)
 const result = ref(null)
 const history = ref([])
+const loadError = ref('')
 
 const currentQuestion = computed(() => questions.value[currentIndex.value])
 
@@ -101,6 +121,7 @@ const formatDate = (d) => d ? new Date(d).toLocaleString('ru-RU') : ''
 
 async function start() {
   loading.value = true
+  loadError.value = ''
   try {
     const r = await api.startMockInterview({
       topic: topic.value || null,
@@ -114,6 +135,8 @@ async function start() {
     draftAnswer.value = ''
     startedAt.value = Date.now()
     mode.value = questions.value.length ? 'session' : 'setup'
+  } catch {
+    loadError.value = 'Не удалось запустить mock-интервью.'
   } finally {
     loading.value = false
   }
@@ -134,18 +157,24 @@ async function mark(isCorrect) {
   }
 
   const duration_seconds = Math.round((Date.now() - startedAt.value) / 1000)
-  const r = await api.submitMockInterview(interviewId.value, { answers: answers.value, duration_seconds })
-  result.value = r.data
-  mode.value = 'result'
-  await loadHistory()
+  try {
+    const r = await api.submitMockInterview(interviewId.value, { answers: answers.value, duration_seconds })
+    result.value = r.data
+    mode.value = 'result'
+    await loadHistory()
+  } catch {
+    loadError.value = 'Не удалось отправить результаты интервью.'
+  }
 }
 
 async function loadHistory() {
+  loadError.value = ''
   try {
     const r = await api.getMockInterviewHistory()
     history.value = r.data.interviews || []
   } catch {
     history.value = []
+    loadError.value = 'История временно недоступна.'
   }
 }
 
@@ -161,7 +190,7 @@ onMounted(async () => {
 
 <style scoped>
 .mi-head { margin-bottom: 1rem; }
-.mi-head h1 { font-size: 1.8rem; }
+.mi-head h1 { display:flex; align-items:center; gap:.5rem; }
 .mi-head p { color: var(--c-text-3); margin-top: .25rem; }
 .mi-setup { padding: 1rem; margin-bottom: 1rem; }
 .field-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin-bottom: .75rem; }

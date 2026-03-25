@@ -2,21 +2,21 @@
   <div class="page">
     <NavBar />
     <div class="container" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="sec-title" style="font-size:1.4rem;margin-bottom:.25rem">💡 Предложить видео</h1>
+      <h1 class="sec-title h-page" style="margin-bottom:.25rem;display:flex;align-items:center;gap:.5rem"><BrandIcon name="suggest" :size="28" /> Предложить видео</h1>
       <p class="sub">Знаете хорошее видео с IT-собеседованием? Предложите его для обработки!</p>
 
       <div class="card form-card">
         <!-- Mode Toggle -->
         <div class="mode-toggle">
-          <button class="btn btn-sm" :class="mode === 'url' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'url'">🔗 Ссылка</button>
-          <button class="btn btn-sm" :class="mode === 'file' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'file'">📁 Файл</button>
+          <button class="btn btn-sm" :class="mode === 'url' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'url'">Ссылка</button>
+          <button class="btn btn-sm" :class="mode === 'file' ? 'btn-primary' : 'btn-secondary'" @click="mode = 'file'">Файл</button>
         </div>
 
         <!-- URL mode -->
         <div v-if="mode === 'url'" class="field">
           <label>Ссылка на видео *</label>
           <input v-model="form.url" class="input" placeholder="https://youtube.com/watch?v=... или rutube.ru/video/..." />
-          <small v-if="detectedPlatform" class="platform-hint">{{ platformIcons[detectedPlatform] }} {{ platformNames[detectedPlatform] }}</small>
+          <small v-if="detectedPlatform" class="platform-hint">{{ platformNames[detectedPlatform] }}</small>
         </div>
 
         <!-- File upload -->
@@ -32,7 +32,7 @@
               <div class="file-info">
                 <span class="fname">{{ selectedFile.name }}</span>
                 <span class="fsize">{{ (selectedFile.size / 1024 / 1024).toFixed(1) }} MB</span>
-                <button class="btn btn-ghost btn-icon btn-sm" @click="selectedFile = null">✕</button>
+                 <button class="btn btn-ghost btn-icon btn-sm" @click="selectedFile = null">×</button>
               </div>
             </template>
           </div>
@@ -61,7 +61,7 @@
           <div v-for="s in suggestions" :key="s.id" class="sug-card card">
             <div class="sug-top">
               <span class="badge" :class="statusClass[s.status]">{{ statusLabels[s.status] }}</span>
-              <span class="sug-plat">{{ platformIcons[s.platform] || '📹' }}</span>
+              <span class="sug-plat">{{ platformNames[s.platform] || 'video' }}</span>
             </div>
             <a :href="s.url" target="_blank" class="sug-url">{{ s.url }}</a>
             <div class="sug-meta">
@@ -70,7 +70,7 @@
               <span>{{ fmtDate(s.created_at) }}</span>
             </div>
             <p v-if="s.comment" class="sug-comment">{{ s.comment }}</p>
-            <p v-if="s.admin_comment" class="sug-admin">↩ {{ s.admin_comment }}</p>
+            <p v-if="s.admin_comment" class="sug-admin">{{ s.admin_comment }}</p>
           </div>
         </div>
       </section>
@@ -83,6 +83,7 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
 
 const submitting = ref(false)
@@ -96,7 +97,6 @@ const feedback = ref(null)
 const form = ref({ url: '', comment: '', user_email: '' })
 
 const platformNames = { youtube: 'YouTube', vk: 'VK Video', rutube: 'Rutube', ok: 'OK.ru' }
-const platformIcons = { youtube: '🎬', vk: '🔵', rutube: '🎥', ok: '🟠' }
 const statusLabels = { pending: 'На рассмотрении', approved: 'Одобрено', rejected: 'Отклонено', processing: 'Обрабатывается', completed: 'Обработано' }
 const statusClass = { pending: 'badge-info', approved: 'badge-ok', rejected: 'badge-err', processing: 'badge-warn', completed: 'badge-ok' }
 

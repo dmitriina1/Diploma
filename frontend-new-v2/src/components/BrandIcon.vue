@@ -49,6 +49,29 @@
         <path d="M5 11v1a7 7 0 0 0 14 0v-1" />
         <path d="M12 19v3" />
       </template>
+      <template v-else-if="name === 'admin'">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v10" />
+        <path d="M7 12h10" />
+      </template>
+      <template v-else-if="name === 'profile'">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20a8 8 0 0 1 16 0" />
+      </template>
+      <template v-else-if="name === 'warning'">
+        <path d="M12 3 2.8 19h18.4z" />
+        <path d="M12 9v4" />
+        <path d="M12 16h.01" />
+      </template>
+      <template v-else-if="name === 'success'">
+        <circle cx="12" cy="12" r="9" />
+        <path d="m8 12 2.8 2.8L16 9.6" />
+      </template>
+      <template v-else-if="name === 'empty'">
+        <rect x="5" y="5" width="14" height="14" rx="3" />
+        <path d="M9 10h6" />
+        <path d="M9 14h6" />
+      </template>
       <template v-else>
         <circle cx="12" cy="12" r="9" />
       </template>

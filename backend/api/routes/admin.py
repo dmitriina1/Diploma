@@ -278,12 +278,74 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             ORDER BY count DESC
             """
         )
+
+        user_totals = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE role = 'admin') AS admins,
+              COUNT(*) FILTER (WHERE role <> 'admin') AS regular,
+              COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS registered_30d
+            FROM users
+            """
+        )
+
+        registrations_30d = await conn.fetch(
+            """
+            SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
+            FROM users
+            WHERE created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY created_at::date
+            ORDER BY created_at::date
+            """
+        )
+
+        logins_30d = await conn.fetch(
+            """
+            SELECT TO_CHAR(last_login::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
+            FROM users
+            WHERE last_login IS NOT NULL AND last_login >= NOW() - INTERVAL '30 days'
+            GROUP BY last_login::date
+            ORDER BY last_login::date
+            """
+        )
+
+        sessions = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*) AS total_views,
+              COUNT(DISTINCT user_session) AS unique_sessions,
+              COUNT(DISTINCT user_session) FILTER (
+                WHERE user_session IS NOT NULL AND user_session IN (SELECT username FROM users)
+              ) AS authorized_sessions,
+              COUNT(DISTINCT user_session) FILTER (
+                WHERE user_session IS NULL OR user_session NOT IN (SELECT username FROM users)
+              ) AS anonymous_sessions
+            FROM question_views
+            """
+        )
+
+        daily_views = await conn.fetch(
+            """
+            SELECT TO_CHAR(viewed_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
+            FROM question_views
+            WHERE viewed_at >= NOW() - INTERVAL '30 days'
+            GROUP BY viewed_at::date
+            ORDER BY viewed_at::date
+            """
+        )
+
         return {
             "topics": [{"topic": r["topic"], "count": r["count"]} for r in by_topic],
             "difficulties": [
                 {"difficulty": r["difficulty"], "count": r["count"]}
                 for r in by_difficulty
             ],
+            "users": dict(user_totals) if user_totals else {},
+            "registrations_30d": [dict(r) for r in registrations_30d],
+            "logins_30d": [dict(r) for r in logins_30d],
+            "sessions": dict(sessions) if sessions else {},
+            "views_30d": [dict(r) for r in daily_views],
         }
     finally:
         await conn.close()

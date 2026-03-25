@@ -5,7 +5,7 @@
       <!-- Header -->
       <header class="admin-header">
         <div>
-          <h1>⚙️ Панель управления</h1>
+          <h1><BrandIcon name="admin" :size="30" /> Панель управления</h1>
           <p class="sub">Обработка видео, утверждение вопросов, генерация ответов</p>
         </div>
         <button class="btn btn-primary" @click="showUpload = true">+ Загрузить видео</button>
@@ -21,12 +21,15 @@
                 <span class="badge" :class="taskBadge(t.status)">{{ statusLabel(t.status) }}</span>
                 <span class="task-url">{{ trunc(t.video_url, 55) }}</span>
               </div>
-              <span class="task-time">{{ fmtTime(t.created_at) }}</span>
+              <div style="display:flex;align-items:center;gap:.45rem">
+                <span class="task-time">{{ fmtTime(t.created_at) }}</span>
+                <button v-if="t.status === 'completed' || t.status === 'error'" class="btn btn-ghost btn-sm btn-icon" @click="dismissTask(t.task_id)" title="Закрыть">×</button>
+              </div>
             </div>
             <div class="progress"><div class="progress-fill" :style="{ width: (t.progress || 0) + '%' }"></div></div>
             <div class="task-step">{{ t.step || 'Ожидание...' }}</div>
-            <div v-if="t.status === 'error' && t.error" class="task-err">⚠ {{ t.error }}</div>
-            <div v-if="t.status === 'completed' && t.result" class="task-ok">✅ Найдено {{ t.result.questions_count }} вопросов</div>
+            <div v-if="t.status === 'error' && t.error" class="task-err">{{ t.error }}</div>
+            <div v-if="t.status === 'completed' && t.result" class="task-ok">Найдено {{ t.result.questions_count }} вопросов</div>
             <div class="logs-toggle" @click="toggleLogs(t.task_id)">{{ expandedLogs[t.task_id] ? '▲ Скрыть' : '▼ Показать' }} логи</div>
             <div v-if="expandedLogs[t.task_id] && t.logs?.length" class="task-logs">
               <div v-for="(l, i) in t.logs" :key="i" class="log-row" :class="'log-' + l.status">
@@ -46,7 +49,7 @@
       <!-- Tab: Questions -->
       <div v-show="activeTab === 0" class="tab-panel">
         <div class="tp-toolbar">
-          <button class="btn btn-secondary btn-sm" @click="bulkGenerate" :disabled="bulkGenerating">{{ bulkGenerating ? 'Генерация...' : '✨ Массовая генерация ответов' }}</button>
+          <button class="btn btn-secondary btn-sm" @click="bulkGenerate" :disabled="bulkGenerating">{{ bulkGenerating ? 'Генерация...' : 'Массовая генерация ответов' }}</button>
         </div>
         <div class="tp-filters">
           <input v-model="qSearch" class="input" placeholder="Поиск..." style="max-width:260px" />
@@ -75,9 +78,9 @@
                 <td>{{ q.probability ? q.probability + '%' : '—' }}</td>
                 <td><span class="badge" :class="q.approved ? 'badge-ok' : 'badge-warn'">{{ q.approved ? 'Да' : 'Нет' }}</span></td>
                 <td @click.stop>
-                  <button v-if="!q.approved" class="btn btn-ok btn-sm btn-icon" title="Одобрить" @click="approveOne(q.id)">✓</button>
-                  <button v-else class="btn btn-warn btn-sm btn-icon" title="Отозвать" @click="revokeOne(q.id)">↩</button>
-                  <button class="btn btn-err btn-sm btn-icon" title="Удалить" @click="deleteOne(q.id)">✕</button>
+                  <button v-if="!q.approved" class="btn btn-ok btn-sm btn-icon" title="Одобрить" @click="approveOne(q.id)">OK</button>
+                  <button v-else class="btn btn-warn btn-sm btn-icon" title="Отозвать" @click="revokeOne(q.id)">↺</button>
+                  <button class="btn btn-err btn-sm btn-icon" title="Удалить" @click="deleteOne(q.id)">×</button>
                 </td>
               </tr>
             </tbody>
@@ -88,6 +91,7 @@
       <!-- Tab: Suggestions -->
       <div v-show="activeTab === 1" class="tab-panel">
         <div v-if="sugLoading" class="center-block"><div class="spinner"></div></div>
+        <StatePanel v-else-if="!sugList.length" icon="empty" title="Нет предложений" description="Пока никто не отправил новые видео" />
         <table v-else class="tbl">
           <thead><tr><th>URL</th><th style="width:90px">Платформа</th><th style="width:100px">Статус</th><th style="width:120px">Отправитель</th><th style="width:150px">Комментарий</th><th style="width:100px"></th></tr></thead>
           <tbody>
@@ -100,7 +104,7 @@
               <td>
                 <template v-if="s.status === 'pending'">
                   <button class="btn btn-ok btn-sm btn-icon" @click="processSug(s)" title="Обработать">▶</button>
-                  <button class="btn btn-err btn-sm btn-icon" @click="rejectSug(s)" title="Отклонить">✕</button>
+                  <button class="btn btn-err btn-sm btn-icon" @click="rejectSug(s)" title="Отклонить">×</button>
                 </template>
               </td>
             </tr>
@@ -111,16 +115,17 @@
       <!-- Tab: Feedback -->
       <div v-show="activeTab === 2" class="tab-panel">
         <div v-if="fbLoading" class="center-block"><div class="spinner"></div></div>
+        <StatePanel v-else-if="!fbList.length" icon="empty" title="Нет обратной связи" description="Feedback пока отсутствует" />
         <table v-else class="tbl">
           <thead><tr><th style="width:80px">Тип</th><th>Комментарий</th><th style="width:100px">Рейтинг</th><th style="width:100px">Пользователь</th><th style="width:80px">Решено</th><th style="width:80px"></th></tr></thead>
           <tbody>
             <tr v-for="f in fbList" :key="f.id">
               <td><span class="badge badge-muted">{{ f.type || '—' }}</span></td>
               <td class="comment-cell">{{ trunc(f.comment, 80) }}</td>
-              <td>{{ f.rating ? '⭐'.repeat(f.rating) : '—' }}</td>
+              <td>{{ f.rating ? (f.rating + '/5') : '—' }}</td>
               <td>{{ f.user_name || '—' }}</td>
               <td><span class="badge" :class="f.is_resolved ? 'badge-ok' : 'badge-warn'">{{ f.is_resolved ? 'Да' : 'Нет' }}</span></td>
-              <td><button v-if="!f.is_resolved" class="btn btn-ok btn-sm btn-icon" @click="resolveFb(f)" title="Решено">✓</button></td>
+              <td><button v-if="!f.is_resolved" class="btn btn-ok btn-sm btn-icon" @click="resolveFb(f)" title="Решено">OK</button></td>
             </tr>
           </tbody>
         </table>
@@ -133,6 +138,7 @@
           <span class="muted">{{ filteredVids.length }} видео</span>
         </div>
         <div v-if="vidLoading" class="center-block"><div class="spinner"></div></div>
+        <StatePanel v-else-if="!filteredVids.length" icon="empty" title="Видео не найдены" description="Загрузи новое видео или измени фильтр" />
         <table v-else class="tbl">
           <thead><tr><th>Название</th><th style="width:100px">Платформа</th><th style="width:80px">Вопросов</th><th style="width:120px">Обработано</th><th style="width:100px"></th></tr></thead>
           <tbody>
@@ -140,12 +146,12 @@
               <td>
                 <div v-if="editVidId === v.id" class="edit-inline">
                   <input v-model="editVidTitle" class="input" />
-                  <button class="btn btn-ok btn-sm btn-icon" @click="saveVidTitle(v)">✓</button>
-                  <button class="btn btn-ghost btn-sm btn-icon" @click="editVidId = null">✕</button>
+                  <button class="btn btn-ok btn-sm btn-icon" @click="saveVidTitle(v)">OK</button>
+                  <button class="btn btn-ghost btn-sm btn-icon" @click="editVidId = null">×</button>
                 </div>
                 <div v-else class="title-cell">
                   <span>{{ v.title || 'Без названия' }}</span>
-                  <button class="btn btn-ghost btn-sm btn-icon" @click="editVidId = v.id; editVidTitle = v.title || ''" title="Переименовать">✏</button>
+                  <button class="btn btn-ghost btn-sm btn-icon" @click="editVidId = v.id; editVidTitle = v.title || ''" title="Переименовать">✎</button>
                 </div>
               </td>
               <td><span class="badge badge-info">{{ v.platform }}</span></td>
@@ -153,7 +159,7 @@
               <td>{{ fmtTime(v.processed_at) }}</td>
               <td>
                 <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm btn-icon" title="Открыть">↗</a>
-                <button class="btn btn-err btn-sm btn-icon" @click="deleteVid(v)" title="Удалить">🗑</button>
+                <button class="btn btn-err btn-sm btn-icon" @click="deleteVid(v)" title="Удалить">×</button>
               </td>
             </tr>
           </tbody>
@@ -176,8 +182,8 @@
               <td>{{ a.profession || '—' }}</td>
               <td><span class="badge" :class="diffBadge(a.difficulty)">{{ a.difficulty }}</span></td>
               <td>
-                <button class="btn btn-ghost btn-sm btn-icon" @click="openTADialog(a)" title="Редактировать">✏</button>
-                <button class="btn btn-err btn-sm btn-icon" @click="deleteTA(a)" title="Удалить">🗑</button>
+                <button class="btn btn-ghost btn-sm btn-icon" @click="openTADialog(a)" title="Редактировать">✎</button>
+                <button class="btn btn-err btn-sm btn-icon" @click="deleteTA(a)" title="Удалить">×</button>
               </td>
             </tr>
           </tbody>
@@ -195,6 +201,36 @@
             <div class="metric-card"><div class="mv">{{ anl.test_assignments?.total || 0 }}</div><div class="ml">Тестовых заданий</div></div>
             <div class="metric-card"><div class="mv">{{ anl.community?.total_answers || 0 }}</div><div class="ml">Ответов сообщества</div><div class="ms">{{ anl.community?.active_voters || 0 }} голосовали</div></div>
             <div class="metric-card"><div class="mv">{{ anl.trainer?.unique_users || 0 }}</div><div class="ml">Тренажёр</div><div class="ms">{{ anl.trainer?.total_reviews || 0 }} повторений</div></div>
+            <div class="metric-card"><div class="mv">{{ anl.users?.registered_30d || 0 }}</div><div class="ml">Регистраций за 30д</div><div class="ms">admin: {{ anl.users?.admins || 0 }}, users: {{ anl.users?.regular || 0 }}</div></div>
+            <div class="metric-card"><div class="mv">{{ anl.sessions?.anonymous_sessions || 0 }}</div><div class="ml">Анонимные сессии</div><div class="ms">авторизованные: {{ anl.sessions?.authorized_sessions || 0 }}</div></div>
+          </div>
+
+          <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
+            <div class="anl-panel card" v-if="registrationChart.length">
+              <h4>Регистрации (30 дней)</h4>
+              <div class="mini-chart">
+                <div v-for="p in registrationChart" :key="'r'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
+                  <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
+                </div>
+              </div>
+            </div>
+            <div class="anl-panel card" v-if="loginChart.length">
+              <h4>Логины (30 дней)</h4>
+              <div class="mini-chart">
+                <div v-for="p in loginChart" :key="'l'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
+                  <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="anl-panel card" v-if="viewsChart.length">
+            <h4>Просмотры вопросов (30 дней)</h4>
+            <div class="mini-chart">
+              <div v-for="p in viewsChart" :key="'v'+p.day" class="mc-col" :title="`${p.day}: ${p.count}`">
+                <div class="mc-bar" :style="{ height: p.h + '%' }"></div>
+              </div>
+            </div>
           </div>
 
           <!-- Topic distribution -->
@@ -209,20 +245,20 @@
           <!-- Top bookmarked -->
           <div class="anl-row">
             <div class="anl-panel card" v-if="anl.top_bookmarked?.length">
-              <h4>🔖 Топ сохранённых</h4>
+              <h4>Топ сохранённых</h4>
               <div class="top-list"><div v-for="(q, i) in anl.top_bookmarked" :key="q.id" class="top-item"><span class="top-rank">#{{ i+1 }}</span><div class="top-txt">{{ trunc(q.question, 60) }}</div><span class="badge badge-warn">{{ q.saves }}</span></div></div>
             </div>
             <div class="anl-panel card" v-if="anl.top_probable?.length">
-              <h4>📈 Топ по вероятности</h4>
+              <h4>Топ по вероятности</h4>
               <div class="top-list"><div v-for="(q, i) in anl.top_probable" :key="q.id" class="top-item"><span class="top-rank">#{{ i+1 }}</span><div class="top-txt">{{ trunc(q.question, 60) }}</div><span class="badge badge-ok">{{ q.probability }}%</span></div></div>
             </div>
           </div>
 
           <div class="sys-actions">
-            <button class="btn btn-ghost btn-sm" @click="loadAnalytics">🔄 Обновить</button>
-            <button class="btn btn-secondary btn-sm" @click="recalcProb" :disabled="recalculating">{{ recalculating ? '...' : '📊 Пересчитать вероятности' }}</button>
-            <button class="btn btn-ghost btn-sm" @click="exportJSON">📥 JSON</button>
-            <button class="btn btn-ghost btn-sm" @click="exportCSV">📥 CSV</button>
+            <button class="btn btn-ghost btn-sm" @click="loadAnalytics">Обновить</button>
+            <button class="btn btn-secondary btn-sm" @click="recalcProb" :disabled="recalculating">{{ recalculating ? '...' : 'Пересчитать вероятности' }}</button>
+            <button class="btn btn-ghost btn-sm" @click="exportJSON">JSON</button>
+            <button class="btn btn-ghost btn-sm" @click="exportCSV">CSV</button>
           </div>
         </template>
       </div>
@@ -232,11 +268,11 @@
     <Teleport to="body">
       <div v-if="showUpload" class="overlay" @click.self="showUpload = false">
         <div class="dialog card" style="max-width:520px">
-          <div class="dialog-head"><h3>Загрузить видео</h3><button class="btn btn-ghost btn-icon btn-sm" @click="showUpload = false">✕</button></div>
+          <div class="dialog-head"><h3>Загрузить видео</h3><button class="btn btn-ghost btn-icon btn-sm" @click="showUpload = false">×</button></div>
           <div class="dialog-body">
             <div class="mode-toggle">
-              <button class="btn btn-sm" :class="uploadMode === 'url' ? 'btn-primary' : 'btn-secondary'" @click="uploadMode = 'url'">🔗 Ссылка</button>
-              <button class="btn btn-sm" :class="uploadMode === 'file' ? 'btn-primary' : 'btn-secondary'" @click="uploadMode = 'file'">📁 Файл</button>
+              <button class="btn btn-sm" :class="uploadMode === 'url' ? 'btn-primary' : 'btn-secondary'" @click="uploadMode = 'url'">Ссылка</button>
+              <button class="btn btn-sm" :class="uploadMode === 'file' ? 'btn-primary' : 'btn-secondary'" @click="uploadMode = 'file'">Файл</button>
             </div>
             <div v-if="uploadMode === 'url'" class="field" style="margin-top:1rem">
               <label>Ссылка на видео</label>
@@ -250,7 +286,7 @@
                 </template>
                 <template v-else>
                   <span>{{ uploadFile.name }} ({{ (uploadFile.size/1024/1024).toFixed(1) }} MB)</span>
-                  <button class="btn btn-ghost btn-sm btn-icon" @click="uploadFile = null">✕</button>
+                  <button class="btn btn-ghost btn-sm btn-icon" @click="uploadFile = null">×</button>
                 </template>
               </div>
               <input ref="uf" type="file" accept="video/*" style="display:none" @change="uploadFile = $event.target.files[0]" />
@@ -268,7 +304,7 @@
     <Teleport to="body">
       <div v-if="showTA" class="overlay" @click.self="showTA = false">
         <div class="dialog card" style="max-width:640px">
-          <div class="dialog-head"><h3>{{ editingTA ? 'Редактировать' : 'Новое задание' }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="showTA = false">✕</button></div>
+          <div class="dialog-head"><h3>{{ editingTA ? 'Редактировать' : 'Новое задание' }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="showTA = false">×</button></div>
           <div class="dialog-body ta-form">
             <div class="field"><label>Название *</label><input v-model="taForm.title" class="input" /></div>
             <div class="field"><label>Описание</label><textarea v-model="taForm.description" class="input" rows="4"></textarea></div>
@@ -295,7 +331,7 @@
     <Teleport to="body">
       <div v-if="qDetailId" class="overlay" @click.self="qDetailId = null">
         <div class="dialog card" style="max-width:700px;max-height:80vh;overflow-y:auto">
-          <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="qDetailId = null">✕</button></div>
+          <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="qDetailId = null">×</button></div>
           <div v-if="qDetail" class="dialog-body">
             <div class="qd-badges" style="margin-bottom:.75rem">
               <span class="badge badge-info">{{ qDetail.topic }}</span>
@@ -308,7 +344,7 @@
             <div style="display:flex;gap:.5rem;margin-top:1rem">
               <button v-if="!qDetail.approved" class="btn btn-ok btn-sm" @click="approveOne(qDetail.id); qDetailId = null">Одобрить</button>
               <button v-else class="btn btn-warn btn-sm" @click="revokeOne(qDetail.id); qDetailId = null">Отозвать</button>
-              <button class="btn btn-secondary btn-sm" @click="generateOne(qDetail.id)">✨ Генерировать ответ</button>
+              <button class="btn btn-secondary btn-sm" @click="generateOne(qDetail.id)">Генерировать ответ</button>
               <button class="btn btn-err btn-sm" @click="deleteOne(qDetail.id); qDetailId = null">Удалить</button>
             </div>
           </div>
@@ -325,6 +361,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useQuestionsStore, useTasksStore } from '../store'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
+import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 
 const questionsStore = useQuestionsStore()
@@ -435,6 +473,22 @@ const recalcProb = async () => { if (!confirm('Пересчитать?')) return
 const exportJSON = async () => { try { const r = await api.getAdminQuestions(); const b = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.json'; a.click(); URL.revokeObjectURL(u) } catch {} }
 const exportCSV = async () => { try { const r = await api.exportCSV(); const b = new Blob([r.data], { type: 'text/csv' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.csv'; a.click(); URL.revokeObjectURL(u) } catch {} }
 
+const chartify = (rows = []) => {
+  if (!rows.length) return []
+  const max = Math.max(...rows.map(r => Number(r.count || 0)), 1)
+  return rows.map(r => ({ ...r, h: Math.max(4, Math.round((Number(r.count || 0) / max) * 100)) }))
+}
+
+const registrationChart = computed(() => chartify(anl.value.registrations_30d || []))
+const loginChart = computed(() => chartify(anl.value.logins_30d || []))
+const viewsChart = computed(() => chartify(anl.value.views_30d || []))
+
+const dismissTask = (taskId) => {
+  tasksStore.tasks = tasksStore.tasks.filter(t => t.task_id !== taskId)
+  if (tasksStore.currentTask?.task_id === taskId) tasksStore.currentTask = null
+  delete expandedLogs.value[taskId]
+}
+
 // Upload Dialog
 const showUpload = ref(false); const uploadMode = ref('url'); const uploadUrl = ref(''); const uploadFile = ref(null); const uploadPct = ref(0); const uploadBusy = ref(false)
 const onUploadDrop = (e) => { const f = e.dataTransfer?.files?.[0]; if (f?.type.startsWith('video/')) uploadFile.value = f }
@@ -477,7 +531,7 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 <style scoped>
 .admin-wrap { max-width: 1400px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border); }
-.admin-header h1 { font-size: 1.85rem; font-weight: 700; margin-bottom: .2rem; }
+.admin-header h1 { font-size: 1.85rem; font-weight: 700; margin-bottom: .2rem; display:flex; align-items:center; gap:.55rem; }
 .sub { color: var(--c-text-3); font-size: 1rem; }
 
 /* Tasks */
@@ -551,6 +605,26 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 .top-rank { font-size: .84rem; font-weight: 700; color: var(--c-text-4); min-width: 22px; }
 .top-txt { flex: 1; font-size: .88rem; color: var(--c-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sys-actions { display: flex; gap: .5rem; flex-wrap: wrap; padding: .75rem; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); }
+
+.mini-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10px, 1fr));
+  align-items: end;
+  gap: 4px;
+  min-height: 110px;
+  padding: .4rem .2rem 0;
+}
+.mc-col {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.mc-bar {
+  width: 100%;
+  border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(180deg, var(--c-brand-h), var(--c-brand));
+}
 
 /* Dialogs */
 .overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
