@@ -24,6 +24,7 @@ export const adminApi = {
 
   getAdminStats: () => apiClient.get('/api/admin/stats'),
   getAdminAnalytics: () => apiClient.get('/api/admin/analytics'),
+  runHHSyncNow: () => apiClient.post('/api/admin/hh-sync/run'),
 
   getProcessedVideos: () => apiClient.get('/api/admin/videos'),
   getVideoQuestions: (vid) => apiClient.get(`/api/admin/videos/${vid}/questions`),

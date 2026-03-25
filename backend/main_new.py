@@ -57,6 +57,15 @@ from core.config import (
     DB_POOL_MIN_SIZE,
     DB_POOL_MAX_SIZE,
     CORS_ALLOW_ORIGINS,
+    HH_SYNC_ENABLED,
+    HH_SYNC_INTERVAL_HOURS,
+    HH_SYNC_STARTUP_DELAY_SECONDS,
+    HH_SYNC_MAX_PAGES,
+    HH_SYNC_PER_PAGE,
+    HH_SYNC_MAX_VACANCIES_PER_PROF,
+    HH_SYNC_TOP_SKILLS,
+    HH_SYNC_HTTP_CONCURRENCY,
+    HH_SYNC_MIN_VACANCIES,
 )
 from core.db import (
     init_pool,
@@ -72,6 +81,7 @@ from video_downloader import VideoDownloader
 from services.task_runtime import TaskRuntime
 from services.whisper_orchestrator import WhisperOrchestrator
 from services.ws_manager import ConnectionManager
+from services.hh_sync import HHSkillsSyncService
 from api.routes.auth import router as auth_router
 from api.routes.status import (
     router as status_router,
@@ -93,6 +103,7 @@ redis_client: Optional[redis.Redis] = None
 whisper_orchestrator: Optional["WhisperOrchestrator"] = None
 video_downloader: Optional[VideoDownloader] = None
 task_runtime: Optional[TaskRuntime] = None
+hh_sync_service: Optional[HHSkillsSyncService] = None
 
 
 # ============== External services (moved to backend/services) ==============
@@ -164,7 +175,12 @@ async def recover_pending_tasks():
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_orchestrator, video_downloader, task_runtime
+    global \
+        redis_client, \
+        whisper_orchestrator, \
+        video_downloader, \
+        task_runtime, \
+        hh_sync_service
 
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
@@ -184,6 +200,19 @@ async def lifespan(app: FastAPI):
         db_release=db_release,
         redis_ttl=REDIS_TTL,
     )
+    hh_sync_service = HHSkillsSyncService(
+        db_connect=lambda: db_connect(DATABASE_URL),
+        db_release=db_release,
+        enabled=HH_SYNC_ENABLED,
+        interval_hours=HH_SYNC_INTERVAL_HOURS,
+        startup_delay_seconds=HH_SYNC_STARTUP_DELAY_SECONDS,
+        max_pages=HH_SYNC_MAX_PAGES,
+        per_page=HH_SYNC_PER_PAGE,
+        max_vacancies_per_prof=HH_SYNC_MAX_VACANCIES_PER_PROF,
+        top_skills=HH_SYNC_TOP_SKILLS,
+        http_concurrency=HH_SYNC_HTTP_CONCURRENCY,
+        min_vacancies=HH_SYNC_MIN_VACANCIES,
+    )
     configure_status_routes(
         redis_client=redis_client,
         load_task_snapshot=load_task_snapshot,
@@ -193,6 +222,7 @@ async def lifespan(app: FastAPI):
     )
 
     await ensure_runtime_tables()
+    await hh_sync_service.ensure_tables()
     if AUTO_MIGRATE_DB:
         print("ℹ️ Runtime auto-migration is enabled (legacy compatibility mode)")
     else:
@@ -215,6 +245,7 @@ async def lifespan(app: FastAPI):
 
     await processing_worker_loop()
     await recover_pending_tasks()
+    await hh_sync_service.start()
 
     yield
 
@@ -222,6 +253,10 @@ async def lifespan(app: FastAPI):
     if task_runtime is not None:
         await task_runtime.stop_worker()
         task_runtime = None
+
+    if hh_sync_service is not None:
+        await hh_sync_service.stop()
+        hh_sync_service = None
 
     asyncpg.connect = get_raw_connect()
     set_auth_db_pool(None)

@@ -23,7 +23,7 @@
               </div>
               <div style="display:flex;align-items:center;gap:.45rem">
                 <span class="task-time">{{ fmtTime(t.created_at) }}</span>
-                <button v-if="t.status === 'completed' || t.status === 'error'" class="btn btn-ghost btn-sm btn-icon" @click="dismissTask(t.task_id)" title="Закрыть">×</button>
+                <button v-if="t.status === 'completed' || t.status === 'error'" class="btn btn-ghost btn-sm btn-icon" @click.stop="dismissTask(t.task_id)" title="Закрыть">×</button>
               </div>
             </div>
             <div class="progress"><div class="progress-fill" :style="{ width: (t.progress || 0) + '%' }"></div></div>
@@ -208,17 +208,17 @@
           <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
             <div class="anl-panel card" v-if="registrationChart.length">
               <h4>Регистрации (30 дней)</h4>
-              <LineChart :points="registrationChart" unit="чел" />
+              <LineChart :points="registrationChart" unit="чел" y-label="Регистрации" x-label="Дни" />
             </div>
             <div class="anl-panel card" v-if="loginChart.length">
               <h4>Логины (30 дней)</h4>
-              <LineChart :points="loginChart" unit="входов" />
+              <LineChart :points="loginChart" unit="входов" y-label="Логины" x-label="Дни" />
             </div>
           </div>
 
           <div class="anl-panel card" v-if="viewsChart.length">
             <h4>Просмотры вопросов (30 дней)</h4>
-            <LineChart :points="viewsChart" unit="просмотров" />
+            <LineChart :points="viewsChart" unit="просмотров" y-label="Просмотры" x-label="Дни" />
           </div>
 
           <!-- Topic distribution -->
@@ -360,10 +360,31 @@ const tasksStore = useTasksStore()
 const tabs = ['Вопросы', 'Предложения', 'Обратная связь', 'Видео', 'Тестовые задания', 'Аналитика']
 const activeTab = ref(0)
 const expandedLogs = ref({})
-const hiddenTaskIds = ref(JSON.parse(localStorage.getItem('admin_hidden_tasks') || '[]'))
+
+const loadHiddenTaskIds = () => {
+  try {
+    const raw = localStorage.getItem('admin_hidden_tasks')
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map((id) => String(id)) : []
+  } catch {
+    return []
+  }
+}
+
+const saveHiddenTaskIds = (ids) => {
+  try {
+    localStorage.setItem('admin_hidden_tasks', JSON.stringify(ids))
+  } catch (e) {
+    console.warn('Cannot save hidden admin tasks:', e)
+  }
+}
+
+const hiddenTaskIds = ref(loadHiddenTaskIds())
+const hiddenTaskIdSet = computed(() => new Set(hiddenTaskIds.value))
 
 // Tasks
-const allTasks = computed(() => tasksStore.tasks.filter(t => !hiddenTaskIds.value.includes(t.task_id)))
+const allTasks = computed(() => tasksStore.tasks.filter((t) => !hiddenTaskIdSet.value.has(String(t.task_id))))
 const activeTasks = computed(() => tasksStore.activeTasks)
 const hasActive = computed(() => tasksStore.hasActiveTasks)
 const taskBadge = (s) => ({ completed: 'badge-ok', error: 'badge-err' }[s] || 'badge-info')
@@ -474,9 +495,11 @@ const loginChart = computed(() => chartify(anl.value.logins_30d || []))
 const viewsChart = computed(() => chartify(anl.value.views_30d || []))
 
 const dismissTask = (taskId) => {
-  if (!hiddenTaskIds.value.includes(taskId)) hiddenTaskIds.value.push(taskId)
-  localStorage.setItem('admin_hidden_tasks', JSON.stringify(hiddenTaskIds.value))
-  delete expandedLogs.value[taskId]
+  const id = String(taskId)
+  if (hiddenTaskIdSet.value.has(id)) return
+  hiddenTaskIds.value = [...hiddenTaskIds.value, id]
+  saveHiddenTaskIds(hiddenTaskIds.value)
+  delete expandedLogs.value[id]
 }
 
 // Upload Dialog

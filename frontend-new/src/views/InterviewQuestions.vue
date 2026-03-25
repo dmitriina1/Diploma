@@ -183,11 +183,11 @@ onMounted(async () => {
   position: sticky;
   top: calc(var(--nav-h) + .45rem);
   z-index: 20;
-  background: color-mix(in srgb, var(--c-surface) 64%, transparent);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
-  padding: .75rem;
+  background: transparent;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
 }
 .search-wrap {
   position: relative;

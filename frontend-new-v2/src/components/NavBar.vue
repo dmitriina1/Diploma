@@ -17,9 +17,8 @@
       </div>
 
       <div class="nav-right">
-        <button class="btn btn-ghost btn-sm" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Тёмная тема'">
-          <svg v-if="theme.isDark" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-          <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+        <button class="btn btn-ghost btn-sm theme-toggle" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Тёмная тема'">
+          <BrandIcon :name="theme.isDark ? 'theme-light' : 'theme-dark'" :size="20" />
         </button>
         <template v-if="auth.isAuthenticated">
           <router-link to="/profile" class="nav-user">
@@ -48,6 +47,7 @@ import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store/auth'
 import { useThemeStore } from '../stores/theme'
+import BrandIcon from './BrandIcon.vue'
 
 const auth = useAuthStore()
 const theme = useThemeStore()
@@ -151,6 +151,11 @@ function logout() {
   gap: .5rem;
   margin-left: .5rem;
   flex-shrink: 0;
+}
+.theme-toggle {
+  width: 38px;
+  height: 38px;
+  padding: 0;
 }
 .nav-user {
   display: flex;

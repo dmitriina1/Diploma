@@ -3,7 +3,14 @@
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
       <h1 class="heading h-page"><BrandIcon name="skills" :size="30" /> Навыки из вакансий</h1>
-      <p class="sub">Какие навыки требуют работодатели и как часто они встречаются</p>
+      <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
+
+      <div v-if="auth.isAdmin" class="sync-actions">
+        <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="runSyncNow">
+          {{ syncing ? 'Синхронизация...' : 'Обновить из HH сейчас' }}
+        </button>
+        <span class="muted">Автообновление: примерно раз в 24 часа</span>
+      </div>
 
       <!-- Professions -->
       <div class="prof-row">
@@ -77,8 +84,10 @@ import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
+import { useAuthStore } from '../store/auth'
 
 const loading = ref(false)
+const syncing = ref(false)
 const professions = ref([])
 const skills = ref([])
 const selected = ref(null)
@@ -86,6 +95,7 @@ const page = ref(1)
 const perPage = ref(30)
 const totalSkills = ref(0)
 const loadError = ref('')
+const auth = useAuthStore()
 
 const mustHave = computed(() => skills.value.filter(s => s.percentage > 50))
 const niceToHave = computed(() => skills.value.filter(s => s.percentage >= 20 && s.percentage <= 50))
@@ -111,6 +121,19 @@ const loadSkills = async () => {
   loading.value = false
 }
 
+const runSyncNow = async () => {
+  syncing.value = true
+  try {
+    await api.runHHSyncNow()
+    page.value = 1
+    await loadSkills()
+  } catch (e) {
+    console.error(e)
+    alert(e.response?.data?.detail || 'Не удалось запустить синхронизацию HH')
+  }
+  syncing.value = false
+}
+
 onMounted(async () => {
   try {
     const r = await api.getHHProfessions()
@@ -123,6 +146,14 @@ onMounted(async () => {
 <style scoped>
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
+.sync-actions {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: -.5rem 0 1.2rem;
+}
 .prof-row { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-bottom: 1.5rem; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }
 

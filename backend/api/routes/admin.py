@@ -6,6 +6,15 @@ from auth import require_admin
 from core.config import DATABASE_URL
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    import os
+
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 router = APIRouter(tags=["Admin"])
 
 
@@ -349,3 +358,20 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
         }
     finally:
         await conn.close()
+
+
+@router.post("/api/admin/hh-sync/run")
+async def run_hh_sync_now(_admin: dict = Depends(require_admin)):
+    if not _env_bool("HH_SYNC_ALLOW_MANUAL", True):
+        raise HTTPException(status_code=403, detail="Manual HH sync is disabled")
+
+    import main_new
+
+    svc = getattr(main_new, "hh_sync_service", None)
+    if svc is None:
+        raise HTTPException(
+            status_code=503, detail="HH sync service is not initialized"
+        )
+
+    result = await svc.run_once()
+    return {"ok": True, **result}

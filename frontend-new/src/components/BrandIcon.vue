@@ -58,6 +58,21 @@
         <circle cx="12" cy="8" r="4" />
         <path d="M4 20a8 8 0 0 1 16 0" />
       </template>
+      <template v-else-if="name === 'theme-light'">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2.5v2.4" />
+        <path d="M12 19.1v2.4" />
+        <path d="m5.1 5.1 1.7 1.7" />
+        <path d="m17.2 17.2 1.7 1.7" />
+        <path d="M2.5 12h2.4" />
+        <path d="M19.1 12h2.4" />
+        <path d="m5.1 18.9 1.7-1.7" />
+        <path d="m17.2 6.8 1.7-1.7" />
+      </template>
+      <template v-else-if="name === 'theme-dark'">
+        <path d="M20 14.2A8.5 8.5 0 1 1 9.8 3.9 7 7 0 0 0 20 14.2z" />
+        <path d="m16.2 4.3.5.9.9.5-.9.5-.5.9-.5-.9-.9-.5.9-.5z" />
+      </template>
       <template v-else-if="name === 'warning'">
         <path d="M12 3 2.8 19h18.4z" />
         <path d="M12 9v4" />
@@ -108,5 +123,10 @@ defineProps({
 .brand-icon-assignments {
   color: var(--c-violet);
   background: color-mix(in srgb, var(--c-violet-bg) 70%, transparent);
+}
+.brand-icon-theme-light,
+.brand-icon-theme-dark {
+  color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent-bg) 70%, transparent);
 }
 </style>
