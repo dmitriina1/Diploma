@@ -9,7 +9,7 @@
       <span>Ось Y: {{ yLabel }} ({{ unit }})</span>
       <span>Ось X: {{ xLabel }}</span>
     </div>
-    <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-hidden="true">
+    <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-label="line-chart">
       <defs>
         <linearGradient :id="gradientId" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="var(--c-brand-h)" stop-opacity="0.32" />
@@ -22,7 +22,21 @@
       <line v-if="plotted.length" x1="10" :y1="avgY" x2="98" :y2="avgY" class="avg-line" />
       <polygon v-if="areaPoints" :points="areaPoints" class="area" :style="{ fill: `url(#${gradientId})` }" />
       <polyline :points="polylinePoints" class="line" />
-      <circle v-for="p in plotted" :key="p.key" :cx="p.x" :cy="p.y" r="0.8" class="dot" />
+      <g
+        v-for="p in plotted"
+        :key="p.key"
+        class="dot-group"
+        @mouseenter="showTooltip(p)"
+        @mousemove="showTooltip(p)"
+        @mouseleave="hideTooltip"
+      >
+        <circle :cx="p.x" :cy="p.y" r="1.1" class="dot-hit" />
+        <circle :cx="p.x" :cy="p.y" r="0.8" class="dot" />
+      </g>
+      <g v-if="tooltip.visible" class="tooltip" :transform="`translate(${tooltip.cx},${tooltip.cy})`">
+        <rect :x="tooltip.alignLeft ? -(tooltip.width + 2.4) : 2.4" y="-10.6" :width="tooltip.width" height="9" rx="1.1" class="tooltip-bg" />
+        <text :x="tooltip.alignLeft ? -(tooltip.width - 1.8) : 4" y="-7.3" class="tooltip-text">{{ tooltip.text }}</text>
+      </g>
     </svg>
     <div class="lc-scale">
       <span>{{ maxValue }} {{ unit }}</span>
@@ -38,7 +52,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   points: { type: Array, default: () => [] },
@@ -98,6 +112,32 @@ const lastValue = computed(() => {
   if (!props.points.length) return 0
   return Math.round(Number(props.points[props.points.length - 1]?.count || 0))
 })
+
+const tooltip = ref({
+  visible: false,
+  text: '',
+  cx: 0,
+  cy: 0,
+  width: 0,
+  alignLeft: false
+})
+
+const showTooltip = (p) => {
+  const text = `${p.labelShort}: ${p.value} ${props.unit}`
+  const width = Math.max(18, text.length * 0.63)
+  tooltip.value = {
+    visible: true,
+    text,
+    cx: p.x,
+    cy: p.y,
+    width,
+    alignLeft: p.x > 80
+  }
+}
+
+const hideTooltip = () => {
+  tooltip.value.visible = false
+}
 </script>
 
 <style scoped>
@@ -142,7 +182,20 @@ const lastValue = computed(() => {
 .line {
   fill: none;
   stroke: var(--c-brand-h);
-  stroke-width: 1.4;
+  stroke-width: 1.65;
 }
-.dot { fill: var(--c-accent); }
+.dot-group { cursor: crosshair; }
+.dot-hit { fill: transparent; }
+.dot { fill: var(--c-accent); transition: r .12s ease; }
+.dot-group:hover .dot { r: 1.05; }
+.tooltip-bg {
+  fill: color-mix(in srgb, var(--c-bg) 82%, var(--c-surface));
+  stroke: color-mix(in srgb, var(--c-border) 74%, transparent);
+  stroke-width: .24;
+}
+.tooltip-text {
+  fill: var(--c-text);
+  font-size: 2.5px;
+  font-weight: 600;
+}
 </style>

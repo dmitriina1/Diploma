@@ -1,5 +1,5 @@
 <template>
-  <span class="brand-icon" :class="`brand-icon-${name}`" :style="{ width: `${size}px`, height: `${size}px` }">
+  <span class="brand-icon" :class="`brand-icon-${name}`" :style="iconStyle">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <template v-if="name === 'questions'">
         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -95,9 +95,16 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   name: { type: String, required: true },
   size: { type: Number, default: 22 }
+})
+
+const iconStyle = computed(() => {
+  const scaled = Math.round(props.size * 1.2)
+  return { width: `${scaled}px`, height: `${scaled}px` }
 })
 </script>
 

@@ -268,7 +268,11 @@ async def get_admin_stats(_admin: dict = Depends(require_admin)):
 
 
 @router.get("/api/admin/analytics")
-async def get_admin_analytics(_admin: dict = Depends(require_admin)):
+async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_admin)):
+    days = int(days or 30)
+    if days not in {7, 30, 90}:
+        raise HTTPException(status_code=400, detail="days must be one of: 7, 30, 90")
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         by_topic = await conn.fetch(
@@ -294,29 +298,32 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
               COUNT(*) AS total,
               COUNT(*) FILTER (WHERE role = 'admin') AS admins,
               COUNT(*) FILTER (WHERE role <> 'admin') AS regular,
-              COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS registered_30d
+              COUNT(*) FILTER (WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')) AS registered_period
             FROM users
-            """
+            """,
+            days,
         )
 
-        registrations_30d = await conn.fetch(
+        registrations_period = await conn.fetch(
             """
             SELECT TO_CHAR(created_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
             FROM users
-            WHERE created_at >= NOW() - INTERVAL '30 days'
+            WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY created_at::date
             ORDER BY created_at::date
-            """
+            """,
+            days,
         )
 
-        logins_30d = await conn.fetch(
+        logins_period = await conn.fetch(
             """
             SELECT TO_CHAR(last_login::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
             FROM users
-            WHERE last_login IS NOT NULL AND last_login >= NOW() - INTERVAL '30 days'
+            WHERE last_login IS NOT NULL AND last_login >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY last_login::date
             ORDER BY last_login::date
-            """
+            """,
+            days,
         )
 
         sessions = await conn.fetchrow(
@@ -338,11 +345,15 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             """
             SELECT TO_CHAR(viewed_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
             FROM question_views
-            WHERE viewed_at >= NOW() - INTERVAL '30 days'
+            WHERE viewed_at >= NOW() - ($1::int * INTERVAL '1 day')
             GROUP BY viewed_at::date
             ORDER BY viewed_at::date
-            """
+            """,
+            days,
         )
+
+        users = dict(user_totals) if user_totals else {}
+        users["registered_30d"] = users.get("registered_period", 0)
 
         return {
             "topics": [{"topic": r["topic"], "count": r["count"]} for r in by_topic],
@@ -350,9 +361,10 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
                 {"difficulty": r["difficulty"], "count": r["count"]}
                 for r in by_difficulty
             ],
-            "users": dict(user_totals) if user_totals else {},
-            "registrations_30d": [dict(r) for r in registrations_30d],
-            "logins_30d": [dict(r) for r in logins_30d],
+            "users": users,
+            "days": days,
+            "registrations_30d": [dict(r) for r in registrations_period],
+            "logins_30d": [dict(r) for r in logins_period],
             "sessions": dict(sessions) if sessions else {},
             "views_30d": [dict(r) for r in daily_views],
         }

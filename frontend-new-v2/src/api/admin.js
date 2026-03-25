@@ -23,7 +23,7 @@ export const adminApi = {
   updateFeedback: (id, d) => apiClient.put(`/api/admin/feedback/${id}`, d),
 
   getAdminStats: () => apiClient.get('/api/admin/stats'),
-  getAdminAnalytics: () => apiClient.get('/api/admin/analytics'),
+  getAdminAnalytics: (days = 30) => apiClient.get('/api/admin/analytics', { params: { days } }),
   runHHSyncNow: () => apiClient.post('/api/admin/hh-sync/run'),
 
   getProcessedVideos: () => apiClient.get('/api/admin/videos'),
