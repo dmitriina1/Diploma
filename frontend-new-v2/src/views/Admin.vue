@@ -222,17 +222,17 @@
           <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
             <div class="anl-panel card" v-if="registrationChart.length">
               <h4>Регистрации ({{ periodDays }} дней)</h4>
-              <LineChart :points="registrationChart" unit="чел" y-label="Регистрации" x-label="Дни" />
+              <LineChart :points="registrationChart" unit="чел" tooltip-unit="регистраций" y-label="Регистрации" x-label="Дни" />
             </div>
             <div class="anl-panel card" v-if="loginChart.length">
               <h4>Логины ({{ periodDays }} дней)</h4>
-              <LineChart :points="loginChart" unit="входов" y-label="Логины" x-label="Дни" />
+              <LineChart :points="loginChart" unit="входов" tooltip-unit="входов" y-label="Логины" x-label="Дни" />
             </div>
           </div>
 
           <div class="anl-panel card" v-if="viewsChart.length">
             <h4>Просмотры вопросов ({{ periodDays }} дней)</h4>
-            <LineChart :points="viewsChart" unit="просмотров" y-label="Просмотры" x-label="Дни" />
+            <LineChart :points="viewsChart" unit="просмотров" tooltip-unit="просмотров" y-label="Просмотры" x-label="Дни" />
           </div>
 
           <!-- Topic distribution -->
@@ -554,6 +554,7 @@ const fmtTime = (t) => t ? new Date(t).toLocaleString('ru-RU', { hour: '2-digit'
 const fmtLogTime = (t) => t ? new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
 
 onMounted(async () => {
+  if (!localStorage.getItem('auth_token')) return
   await Promise.all([
     questionsStore.fetchQuestions(),
     questionsStore.fetchAdminQuestions(),
@@ -565,7 +566,9 @@ onMounted(async () => {
   tasksStore.startGlobalPolling()
   for (const t of tasksStore.activeTasks) tasksStore.startPolling(t.task_id)
 })
-onUnmounted(() => tasksStore.stopGlobalPolling())
+onUnmounted(() => {
+  tasksStore.stopGlobalPolling()
+})
 </script>
 
 <style scoped>

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useTasksStore } from '../store'
 
 const routes = [
   { path: '/',                    name: 'Home',                 component: () => import('../views/Home.vue'),                 meta: { title: 'InterviewHub' } },
@@ -27,7 +28,13 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.guest && isAuth) return next('/')
   if (to.meta.requiresAuth && !isAuth) return next({ name: 'Login', query: { redirect: to.fullPath } })
-  if (to.meta.requiresAdmin && !isAdmin) return next({ name: 'Login', query: { redirect: to.fullPath } })
+  if (to.meta.requiresAdmin && !isAdmin) {
+    try {
+      const tasksStore = useTasksStore()
+      tasksStore.stopGlobalPolling()
+    } catch {}
+    return next({ name: 'Login', query: { redirect: to.fullPath } })
+  }
   next()
 })
 

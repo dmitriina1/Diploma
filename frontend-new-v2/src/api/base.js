@@ -15,6 +15,8 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
+let redirectingToLogin = false
+
 apiClient.interceptors.request.use((config) => {
   if (config.baseURL?.endsWith('/api') && typeof config.url === 'string' && config.url.startsWith('/api/')) {
     config.url = config.url.slice(4)
@@ -31,8 +33,9 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !error.config.url?.includes('/api/auth/')) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_user')
-      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      if (!redirectingToLogin && window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        redirectingToLogin = true
+        window.location.replace('/login')
       }
     }
     return Promise.reject(error)
