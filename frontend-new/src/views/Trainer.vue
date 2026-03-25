@@ -5,8 +5,14 @@
 
       <!-- Mode Select -->
       <div v-if="mode === 'select'" class="mode-select">
-        <h1 class="page-heading">Тренажёр SM-2</h1>
-        <p class="page-desc">Интервальные повторения по алгоритму SuperMemo 2</p>
+        <h1 class="page-heading h-page">Тренажёр SM-2</h1>
+        <p class="page-desc p-muted">Интервальные повторения по алгоритму SuperMemo 2</p>
+
+        <div v-if="loadError" class="state-panel" style="margin:0 auto 1.2rem; max-width:680px;">
+          <h3>Часть данных недоступна</h3>
+          <p>{{ loadError }}</p>
+          <button class="btn btn-secondary btn-sm" style="margin-top:.7rem" @click="loadStats">Повторить</button>
+        </div>
 
         <div v-if="sm2Stats.total > 0" class="sm2-row">
           <div class="sm2-pill new"><span>{{ sm2Stats.new }}</span> новых</div>
@@ -14,9 +20,9 @@
           <div class="sm2-pill learned"><span>{{ sm2Stats.learned }}</span> выучено</div>
         </div>
 
-        <div class="mode-grid">
-          <div class="mode-card card card-hover" @click="startFlashcards">
-            <div class="mc-icon">📚</div>
+        <div class="mode-grid stagger">
+          <div class="mode-card card card-hover interactive-card" @click="startFlashcards">
+            <div class="mc-icon"><BrandIcon name="flashcards" :size="72" /></div>
             <h3>Проработка вопросов</h3>
             <p>Карточки с SM-2. Отмечайте «Знаю» или «На повтор».</p>
             <div class="mc-footer">
@@ -24,8 +30,8 @@
               <span v-if="repeatCount > 0" class="badge badge-warn">{{ repeatCount }} на повтор</span>
             </div>
           </div>
-          <div class="mode-card card card-hover" @click="startInterview">
-            <div class="mc-icon">🎤</div>
+          <div class="mode-card card card-hover interactive-card" @click="startInterview">
+            <div class="mc-icon"><BrandIcon name="interview" :size="72" /></div>
             <h3>Реальное собеседование</h3>
             <p>Вопросы из настоящих собеседований в хронологическом порядке.</p>
             <div class="mc-footer">
@@ -134,7 +140,12 @@
         <button class="btn btn-ghost btn-sm" @click="mode = 'select'" style="margin-bottom:1rem">← Назад</button>
         <h2 class="page-heading" style="font-size:1.25rem">Выберите запись</h2>
 
-        <div v-if="loadingInterviews" class="center-block"><div class="spinner"></div></div>
+        <div v-if="loadingInterviews" class="iv-list">
+          <div v-for="i in 4" :key="i" class="skeleton-card" style="padding:1rem;">
+            <div class="skeleton-line lg" style="margin-bottom:.5rem"></div>
+            <div class="skeleton-line" style="width:40%"></div>
+          </div>
+        </div>
         <div v-else class="iv-list">
           <div v-for="iv in interviewVideos" :key="iv.id" class="iv-item card card-hover" @click="startInterviewSession(iv)">
             <div class="iv-info">
@@ -171,7 +182,7 @@
         </div>
 
         <div v-if="interviewIndex >= interviewQuestions.length - 1 && showInterviewAnswer" class="iv-done">
-          <p>✅ Все вопросы пройдены!</p>
+          <p>Все вопросы пройдены!</p>
           <button class="btn btn-secondary" @click="mode = 'select'">Вернуться</button>
         </div>
       </div>
@@ -185,6 +196,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
 
 const mode = ref('select')
@@ -255,11 +267,13 @@ const showInterviewAnswer = ref(false)
 const currentInterviewTitle = ref('')
 const currentInterviewQuestion = computed(() => interviewQuestions.value[interviewIndex.value])
 const nextInterviewQuestion = () => { showInterviewAnswer.value = false; if (interviewIndex.value < interviewQuestions.value.length - 1) interviewIndex.value++ }
+const loadError = ref('')
 
 const loadStats = async () => {
-  try { const r = await api.getQuestions(); const qs = r.data.questions || []; totalQuestions.value = r.data.total || qs.length; topics.value = [...new Set(qs.map(q => q.topic).filter(Boolean))].sort() } catch {}
-  try { const r = await api.getSM2Cards({}); sm2Stats.value = r.data.stats || { total: 0, new: 0, review: 0, learned: 0 }; repeatCount.value = sm2Stats.value.review } catch {}
-  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || []; availableInterviews.value = interviewVideos.value.length } catch { availableInterviews.value = 0 }
+  loadError.value = ''
+  try { const r = await api.getQuestions(); const qs = r.data.questions || []; totalQuestions.value = r.data.total || qs.length; topics.value = [...new Set(qs.map(q => q.topic).filter(Boolean))].sort() } catch { loadError.value = 'Не удалось загрузить список вопросов' }
+  try { const r = await api.getSM2Cards({}); sm2Stats.value = r.data.stats || { total: 0, new: 0, review: 0, learned: 0 }; repeatCount.value = sm2Stats.value.review } catch { loadError.value = loadError.value || 'Не удалось загрузить статистику SM-2' }
+  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || []; availableInterviews.value = interviewVideos.value.length } catch { availableInterviews.value = 0; loadError.value = loadError.value || 'Не удалось загрузить записи' }
 }
 
 const loadFlashcards = async () => {
@@ -274,19 +288,19 @@ const loadFlashcards = async () => {
     flashcards.value = cards.slice(0, cardCount.value)
     currentCardIndex.value = 0; knownCount.value = 0; repeatQueue.value = []; cardFlipped.value = false; sessionComplete.value = false
     mode.value = 'flashcard'
-  } catch (e) { console.error(e) }
+  } catch (e) { console.error(e); loadError.value = 'Не удалось подготовить карточки. Попробуйте снова.' }
   loadingCards.value = false
 }
 
 const startFlashcards = () => { mode.value = 'flashcard-setup' }
 const startInterview = async () => {
   mode.value = 'interview-setup'; loadingInterviews.value = true
-  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || [] } catch {}
+  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || [] } catch { loadError.value = 'Не удалось получить список записей.' }
   loadingInterviews.value = false
 }
 const startInterviewSession = async (v) => {
   currentInterviewTitle.value = v.title || 'Собеседование'
-  try { const r = await api.getVideoQuestions(v.id); interviewQuestions.value = r.data?.questions || [] } catch {}
+  try { const r = await api.getVideoQuestions(v.id); interviewQuestions.value = r.data?.questions || [] } catch { loadError.value = 'Не удалось загрузить вопросы выбранной записи.' }
   interviewIndex.value = 0; showInterviewAnswer.value = false; mode.value = 'interview'
 }
 </script>
@@ -306,7 +320,19 @@ const startInterviewSession = async (v) => {
 /* Mode cards */
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .mode-card { padding: 2rem; text-align: center; cursor: pointer; }
-.mc-icon { font-size: 3rem; margin-bottom: .85rem; }
+.mode-card { position: relative; overflow: hidden; }
+.mode-card::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  top: -34px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(130deg, color-mix(in srgb, var(--c-brand) 40%, transparent), transparent);
+  opacity: .34;
+}
+.mc-icon { margin-bottom: .85rem; display:flex; justify-content:center; }
 .mode-card h3 { font-size: 1.22rem; font-weight: 600; margin-bottom: .4rem; }
 .mode-card p { font-size: .97rem; color: var(--c-text-3); line-height: 1.55; margin-bottom: .85rem; }
 .mc-footer { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; }
@@ -356,6 +382,7 @@ const startInterviewSession = async (v) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  box-shadow: var(--shadow-md);
 }
 .fc-back {
   transform: rotateY(180deg);

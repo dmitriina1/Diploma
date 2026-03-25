@@ -6,12 +6,31 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
         На главную
       </button>
-      <h1 class="sec-title" style="font-size:1.4rem;margin-bottom:1.5rem">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <h1 class="sec-title h-page" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem">
+        <BrandIcon name="profile" :size="28" />
         Профиль
       </h1>
 
-      <div v-if="loading" class="center-block"><div class="spinner"></div></div>
+      <div v-if="loading" class="profile-card card">
+        <div style="display:grid;grid-template-columns:100px 1fr;gap:1.5rem;width:100%">
+          <div class="skeleton" style="width:100px;height:100px;border-radius:50%"></div>
+          <div style="display:grid;gap:.6rem">
+            <div class="skeleton-line lg"></div>
+            <div class="skeleton-line" style="width:60%"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+      </div>
+
+      <StatePanel
+        v-else-if="loadError"
+        icon="warning"
+        type="error"
+        title="Не удалось загрузить профиль"
+        :description="loadError"
+      >
+        <button class="btn btn-secondary btn-sm" @click="reloadProfile">Повторить</button>
+      </StatePanel>
 
       <template v-else>
         <!-- User Card -->
@@ -67,7 +86,7 @@
                 <span v-if="bm.difficulty" class="badge" :class="diffBadge(bm.difficulty)">{{ bm.difficulty }}</span>
               </div>
               <div class="bm-q">{{ bm.question }}</div>
-              <div v-if="bm.note" class="bm-note">📝 {{ bm.note }}</div>
+               <div v-if="bm.note" class="bm-note">{{ bm.note }}</div>
               <div class="bm-date">{{ fmtDate(bm.created_at) }}</div>
             </router-link>
           </div>
@@ -83,6 +102,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '../store/auth'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
+import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 
 const auth = useAuthStore()
@@ -90,22 +111,27 @@ const loading = ref(true)
 const saving = ref(false)
 const msg = ref('')
 const msgType = ref('ok')
+const loadError = ref('')
 const profile = reactive({ username: '', display_name: '', role: 'user', avatar_url: null, github_url: null, created_at: null, bookmarks: [], trainer_stats: null })
 const form = reactive({ display_name: '', github_url: '', avatar_url: '' })
 
 const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
-onMounted(async () => {
+const reloadProfile = async () => {
+  loadError.value = ''
+  loading.value = true
   try {
     const r = await api.getProfile()
     Object.assign(profile, r.data)
     form.display_name = profile.display_name || ''
     form.github_url = profile.github_url || ''
     form.avatar_url = profile.avatar_url || ''
-  } catch (e) { console.error(e) }
+  } catch (e) { console.error(e); loadError.value = 'Сервис профиля недоступен, попробуй позже.' }
   loading.value = false
-})
+}
+
+onMounted(reloadProfile)
 
 async function save() {
   saving.value = true; msg.value = ''

@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading">📊 Навыки из вакансий</h1>
+      <h1 class="heading h-page"><BrandIcon name="skills" :size="30" /> Навыки из вакансий</h1>
       <p class="sub">Какие навыки требуют работодатели и как часто они встречаются</p>
 
       <!-- Professions -->
@@ -12,7 +12,19 @@
                 @click="selectProfession(p.profession)">{{ p.profession }}</button>
       </div>
 
-      <div v-if="loading" class="center-block"><div class="spinner"></div></div>
+      <div v-if="loading" class="chart">
+        <div v-for="i in 8" :key="i" class="skeleton-card"><div class="skeleton-line lg" style="margin-bottom:.45rem"></div><div class="skeleton-line" style="width:72%"></div></div>
+      </div>
+
+      <StatePanel
+        v-else-if="loadError"
+        icon="warning"
+        type="error"
+        title="Не удалось загрузить HH-аналитику"
+        :description="loadError"
+      >
+        <button class="btn btn-secondary btn-sm" @click="loadSkills">Повторить</button>
+      </StatePanel>
 
       <template v-else-if="skills.length > 0">
         <div class="skills-head">
@@ -41,13 +53,18 @@
 
         <!-- Summary -->
         <div class="summary-grid">
-          <div class="sum-card must"><h4>🔥 Must-have (&gt;50%)</h4><div class="sum-tags"><span v-for="s in mustHave" :key="s.skill" class="badge badge-err">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
-          <div class="sum-card nice"><h4>⭐ Nice-to-have (20–50%)</h4><div class="sum-tags"><span v-for="s in niceToHave" :key="s.skill" class="badge badge-warn">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
-          <div class="sum-card bonus"><h4>➕ Бонус (&lt;20%)</h4><div class="sum-tags"><span v-for="s in bonusSkills" :key="s.skill" class="badge badge-info">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
+          <div class="sum-card must"><h4>Must-have (&gt;50%)</h4><div class="sum-tags"><span v-for="s in mustHave" :key="s.skill" class="badge badge-err">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
+          <div class="sum-card nice"><h4>Nice-to-have (20–50%)</h4><div class="sum-tags"><span v-for="s in niceToHave" :key="s.skill" class="badge badge-warn">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
+          <div class="sum-card bonus"><h4>Дополнительно (&lt;20%)</h4><div class="sum-tags"><span v-for="s in bonusSkills" :key="s.skill" class="badge badge-info">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
         </div>
       </template>
 
-      <div v-else class="empty-state">Выберите профессию для просмотра навыков</div>
+      <StatePanel
+        v-else
+        icon="empty"
+        title="Нет данных для отображения"
+        description="Выберите профессию для просмотра навыков"
+      />
     </div>
     <AppFooter />
   </div>
@@ -57,6 +74,8 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
+import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 
 const loading = ref(false)
@@ -66,6 +85,7 @@ const selected = ref(null)
 const page = ref(1)
 const perPage = ref(30)
 const totalSkills = ref(0)
+const loadError = ref('')
 
 const mustHave = computed(() => skills.value.filter(s => s.percentage > 50))
 const niceToHave = computed(() => skills.value.filter(s => s.percentage >= 20 && s.percentage <= 50))
@@ -82,11 +102,12 @@ const selectProfession = async (p) => { selected.value = p; page.value = 1; awai
 
 const loadSkills = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const r = await api.getHHSkills(selected.value, page.value, perPage.value)
     skills.value = (r.data.skills || []).sort((a, b) => b.percentage - a.percentage)
     totalSkills.value = r.data.total || 0
-  } catch (e) { console.error(e) }
+  } catch (e) { console.error(e); loadError.value = 'Проверь подключение к backend и повтори позже.' }
   loading.value = false
 }
 
@@ -100,7 +121,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .prof-row { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-bottom: 1.5rem; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }

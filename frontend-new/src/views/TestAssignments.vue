@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading">📝 Тестовые задания</h1>
+      <h1 class="heading h-page"><BrandIcon name="assignments" :size="30" /> Тестовые задания</h1>
       <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
 
       <!-- Filters -->
@@ -33,7 +33,7 @@
           </div>
           <router-link :to="'/test-assignments/' + a.id" class="ta-title">{{ a.title }}</router-link>
           <p class="ta-desc">{{ a.description }}</p>
-          <div v-if="a.profession" class="ta-prof">👤 {{ a.profession }}</div>
+          <div v-if="a.profession" class="ta-prof">{{ a.profession }}</div>
           <div v-if="a.skills_list?.length" class="ta-skills">
             <span v-for="s in a.skills_list" :key="s" class="badge badge-info">{{ s }}</span>
           </div>
@@ -66,6 +66,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
 
 const router = useRouter()
@@ -104,7 +105,7 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .filters { display: flex; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center; }
 .filters .input { min-width: 180px; }

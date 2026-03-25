@@ -14,18 +14,18 @@
         <h1 class="title">{{ a.title }}</h1>
         <div class="meta">
           <span class="badge" :class="diffBadge(a.difficulty)">{{ a.difficulty }}</span>
-          <span v-if="a.company" class="meta-item">🏢 {{ a.company }}</span>
-          <span v-if="a.profession" class="meta-item">👤 {{ a.profession }}</span>
-          <span v-if="a.source" class="meta-item">🔗 {{ a.source }}</span>
+          <span v-if="a.company" class="meta-item">{{ a.company }}</span>
+          <span v-if="a.profession" class="meta-item">{{ a.profession }}</span>
+          <span v-if="a.source" class="meta-item">{{ a.source }}</span>
         </div>
 
         <div v-if="a.skills_list?.length" class="section">
-          <h3 class="sec-title" style="font-size:1rem">🏷️ Навыки</h3>
+          <h3 class="sec-title" style="font-size:1rem">Навыки</h3>
           <div class="skills-wrap"><span v-for="s in a.skills_list" :key="s" class="badge badge-info">{{ s }}</span></div>
         </div>
 
         <div class="section">
-          <h3 class="sec-title" style="font-size:1rem">📄 Описание</h3>
+          <h3 class="sec-title" style="font-size:1rem">Описание</h3>
           <div class="desc card" v-html="fmtDesc"></div>
         </div>
 

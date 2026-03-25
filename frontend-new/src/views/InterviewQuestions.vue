@@ -6,8 +6,8 @@
       <!-- Header -->
       <div class="page-top">
         <div>
-          <h1 class="page-heading">{{ pageHeading }}</h1>
-          <p class="page-desc">Реальные вопросы с IT-собеседований</p>
+          <h1 class="page-heading h-page">{{ pageHeading }}</h1>
+          <p class="page-desc p-muted">Реальные вопросы с IT-собеседований</p>
         </div>
         <button v-if="professionSlug" class="btn btn-ghost btn-sm" @click="clearProfession">✕ Сбросить профессию</button>
       </div>
@@ -41,7 +41,20 @@
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="center-block"><div class="spinner"></div></div>
+      <div v-if="loading" class="q-list">
+        <div v-for="i in 8" :key="i" class="q-row card">
+          <div class="q-body" style="width:100%">
+            <div class="skeleton-line lg" style="margin-bottom:.55rem"></div>
+            <div class="skeleton-line" style="width:65%"></div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="loadError" class="state-panel">
+        <h3>Ошибка загрузки</h3>
+        <p>{{ loadError }}</p>
+        <button class="btn btn-secondary btn-sm" style="margin-top:.7rem" @click="loadQuestions">Повторить</button>
+      </div>
 
       <!-- Empty -->
       <div v-else-if="filteredQuestions.length === 0" class="empty-state">
@@ -50,11 +63,11 @@
       </div>
 
       <!-- List -->
-      <div v-else class="q-list">
+      <div v-else class="q-list stagger">
         <router-link
           v-for="q in paginatedQuestions" :key="q.id"
           :to="`/question/${q.id}`"
-          class="q-row card"
+          class="q-row card interactive-card"
         >
           <div class="q-body">
             <p class="q-text">{{ q.question }}</p>
@@ -98,6 +111,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const professionSlug = ref(null)
 const professionTitle = ref('')
+const loadError = ref('')
 
 const pageHeading = computed(() => professionTitle.value ? `Вопросы: ${professionTitle.value}` : 'Вопросы с собеседований')
 
@@ -127,13 +141,14 @@ watch(() => route.query.profession, (p) => { if (p) { professionSlug.value = p; 
 
 const loadQuestions = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const r = professionSlug.value
       ? await api.getProfessionQuestions(professionSlug.value, { limit: 1000 })
       : await api.getQuestions({ status: 'approved', limit: 1000 })
     questions.value = r.data.questions || r.data || []
     topics.value = [...new Set(questions.value.map(q => q.topic).filter(Boolean))].sort()
-  } catch (e) { console.error(e) }
+  } catch (e) { console.error(e); loadError.value = 'Не удалось получить вопросы. Проверь соединение с сервером.' }
   loading.value = false
 }
 
@@ -149,21 +164,30 @@ onMounted(async () => {
 .page-heading { font-size: 1.85rem; font-weight: 700; }
 .page-desc { color: var(--c-text-3); font-size: 1rem; margin-top: .3rem; }
 
+.page-top { position: relative; }
+.page-top::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -10px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c-brand) 60%, transparent), transparent);
+}
+
 .filters {
   display: flex;
   gap: .6rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
   position: sticky;
-  top: var(--nav-h);
+  top: calc(var(--nav-h) + .45rem);
   z-index: 20;
-  background: rgba(12,12,15,.85);
+  background: color-mix(in srgb, var(--c-surface) 64%, transparent);
   backdrop-filter: blur(12px);
-  padding: .75rem 0;
-  margin-left: -1.5rem;
-  margin-right: -1.5rem;
-  padding-left: 1.5rem;
-  padding-right: 1.5rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: .75rem;
 }
 .search-wrap {
   position: relative;
@@ -199,8 +223,22 @@ onMounted(async () => {
   padding: 1.1rem 1.3rem;
   text-decoration: none;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.q-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background: linear-gradient(180deg, var(--c-brand), var(--c-accent));
+  opacity: 0;
+  transition: opacity var(--dur);
 }
 .q-row:hover { background: var(--c-surface-h); border-color: var(--c-border-h); }
+.q-row:hover::before { opacity: 1; }
 .q-body { flex: 1; min-width: 0; }
 .q-text { font-size: 1.05rem; color: var(--c-text); line-height: 1.5; margin-bottom: .4rem; }
 .q-tags { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }

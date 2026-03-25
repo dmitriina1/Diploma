@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading">🎥 Записи собеседований</h1>
+      <h1 class="heading h-page"><BrandIcon name="recordings" :size="30" /> Записи собеседований</h1>
       <p class="sub">Реальные записи IT-собеседований с извлечёнными вопросами</p>
 
       <!-- Filters -->
@@ -17,11 +17,30 @@
         </div>
       </div>
 
-      <div v-if="loading" class="center-block"><div class="spinner"></div></div>
-
-      <div v-else-if="filtered.length === 0" class="empty-state">
-        <p>Записи не найдены</p>
+      <div v-if="loading" class="grid">
+        <div v-for="i in 6" :key="i" class="skeleton-card">
+          <div class="skeleton-line lg" style="margin-bottom:.55rem"></div>
+          <div class="skeleton-line" style="width:50%;margin-bottom:.85rem"></div>
+          <div class="skeleton-line" style="width:75%"></div>
+        </div>
       </div>
+
+      <StatePanel
+        v-else-if="loadError"
+        icon="warning"
+        type="error"
+        title="Не удалось загрузить записи"
+        :description="loadError"
+      >
+        <button class="btn btn-secondary btn-sm" @click="reload">Повторить</button>
+      </StatePanel>
+
+      <StatePanel
+        v-else-if="filtered.length === 0"
+        icon="empty"
+        title="Записи не найдены"
+        description="Измени фильтры или попробуй другой поисковый запрос"
+      />
 
       <div v-else class="grid">
         <div v-for="v in filtered" :key="v.id" class="rec-card card card-hover">
@@ -30,9 +49,9 @@
             <span class="rec-date">{{ fmtDate(v.processed_at || v.created_at) }}</span>
           </div>
           <h3>{{ v.title || 'Без названия' }}</h3>
-          <p class="rec-meta">❓ {{ v.question_count || 0 }} вопросов</p>
+          <p class="rec-meta">{{ v.question_count || 0 }} вопросов</p>
           <div class="rec-actions">
-            <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm">Смотреть ↗</a>
+            <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm">Смотреть</a>
             <button class="btn btn-secondary btn-sm" @click="viewQuestions(v)">Вопросы</button>
           </div>
         </div>
@@ -44,7 +63,7 @@
           <div class="dialog card">
             <div class="dialog-head">
               <h3>{{ selectedVideo?.title || 'Вопросы' }}</h3>
-              <button class="btn btn-ghost btn-icon btn-sm" @click="showDialog = false">✕</button>
+              <button class="btn btn-ghost btn-icon btn-sm" @click="showDialog = false">×</button>
             </div>
             <div v-if="videoQuestions.length === 0" class="dialog-empty">Нет извлечённых вопросов</div>
             <div v-else class="q-list">
@@ -54,7 +73,7 @@
                   <router-link :to="'/question/' + q.id" class="q-link" @click="showDialog = false">{{ q.question }}</router-link>
                   <div class="q-meta">
                     <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
-                    <span v-if="q.timecode" class="tc">🕐 {{ q.timecode }}</span>
+                    <span v-if="q.timecode" class="tc">{{ q.timecode }}</span>
                   </div>
                 </div>
               </div>
@@ -71,6 +90,8 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
+import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 
 const loading = ref(true)
@@ -81,6 +102,7 @@ const platforms = ['YouTube', 'RuTube', 'VK']
 const showDialog = ref(false)
 const selectedVideo = ref(null)
 const videoQuestions = ref([])
+const loadError = ref('')
 
 const filtered = computed(() => videos.value.filter(v => {
   const ms = !search.value || (v.title || '').toLowerCase().includes(search.value.toLowerCase())
@@ -96,14 +118,21 @@ const viewQuestions = async (v) => {
   try { const r = await api.getVideoQuestions(v.id); videoQuestions.value = r.data?.questions || [] } catch (e) { console.error(e) }
 }
 
-onMounted(async () => {
-  try { const r = await api.getProcessedVideos(); videos.value = r.data?.videos || [] } catch (e) { console.error(e) }
+const reload = async () => {
+  loading.value = true
+  loadError.value = ''
+  try { const r = await api.getProcessedVideos(); videos.value = r.data?.videos || [] }
+  catch (e) { console.error(e); loadError.value = 'Сервис записей временно недоступен.' }
   loading.value = false
+}
+
+onMounted(async () => {
+  await reload()
 })
 </script>
 
 <style scoped>
-.heading { font-size: 1.65rem; font-weight: 700; text-align: center; margin-bottom: .35rem; }
+.heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
 .filters { display: flex; gap: .75rem; justify-content: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .filters .input { min-width: 180px; }
