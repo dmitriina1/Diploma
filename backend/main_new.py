@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from contextlib import asynccontextmanager
 from datetime import datetime
-import time
 
 from fastapi import (
     FastAPI,
@@ -42,282 +41,61 @@ import redis.asyncio as redis
 import asyncpg
 import yt_dlp
 
+from core.config import (
+    DATABASE_URL,
+    REDIS_URL,
+    WHISPER_BASE_URL,
+    MAX_WHISPER_WORKERS,
+    WORKER_IDLE_TIMEOUT,
+    GROQ_API_KEY,
+    GEMINI_API_KEY,
+    OPENROUTER_API_KEY,
+    LLM_PROVIDER,
+    TEMP_DIR,
+    REDIS_TTL,
+    AUTO_MIGRATE_DB,
+    DB_POOL_MIN_SIZE,
+    DB_POOL_MAX_SIZE,
+    CORS_ALLOW_ORIGINS,
+)
+from core.db import (
+    init_pool,
+    close_pool,
+    get_pool,
+    get_raw_connect,
+    pooled_connect,
+    db_connect,
+    db_release,
+)
 from similarity_search import get_similar_questions as search_similar_questions
 from video_downloader import VideoDownloader
 from services.task_runtime import TaskRuntime
+from services.whisper_orchestrator import WhisperOrchestrator
+from services.ws_manager import ConnectionManager
+from api.routes.auth import router as auth_router
+from api.routes.status import (
+    router as status_router,
+    configure_status_routes,
+)
+from api.routes.public import router as public_router
+from api.routes.admin import router as admin_router
+from api.routes.processing import router as processing_router
+from api.deps import configure_resources, configure_handlers
 from auth import (
     create_users_table,
-    get_user_by_username,
-    create_user,
-    update_last_login,
-    verify_password,
-    create_access_token,
     require_auth,
     require_admin,
-    get_current_user,
-    update_user_profile,
-    UserRegister,
-    UserLogin,
-    TokenResponse,
     set_db_pool as set_auth_db_pool,
 )
-
-# ============== Конфигурация ==============
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep"
-)
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-WHISPER_BASE_URL = os.getenv(
-    "WHISPER_BASE_URL", "http://whisper-worker"
-)  # Базовый URL для воркеров
-MAX_WHISPER_WORKERS = int(
-    os.getenv("MAX_WHISPER_WORKERS", "2")
-)  # Максимум воркеров одновременно
-WORKER_IDLE_TIMEOUT = int(
-    os.getenv("WORKER_IDLE_TIMEOUT", "600")
-)  # Время жизни простаивающего воркера (10 мин)
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")
-TEMP_DIR = Path("/app/temp")
-TEMP_DIR.mkdir(exist_ok=True)
-REDIS_TTL = 86400  # 24 часа
-APP_ENV = os.getenv("APP_ENV", "development").lower()
-IS_PRODUCTION = APP_ENV in {"production", "prod"}
-AUTO_MIGRATE_DB = (
-    os.getenv("AUTO_MIGRATE_DB", "true" if not IS_PRODUCTION else "false").lower()
-    == "true"
-)
-DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
-DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
-
-
-def _parse_origins(value: str) -> List[str]:
-    if not value:
-        return []
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
-DEFAULT_CORS = "http://localhost:3000,http://localhost:3001"
-CORS_ALLOW_ORIGINS = _parse_origins(os.getenv("CORS_ALLOW_ORIGINS", DEFAULT_CORS))
 
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
 whisper_orchestrator: Optional["WhisperOrchestrator"] = None
 video_downloader: Optional[VideoDownloader] = None
-db_pool: Optional[asyncpg.Pool] = None
 task_runtime: Optional[TaskRuntime] = None
-_raw_asyncpg_connect = asyncpg.connect
 
 
-class PooledConnectionProxy:
-    def __init__(self, pool: asyncpg.Pool, conn: asyncpg.Connection):
-        self._pool = pool
-        self._conn = conn
-        self._released = False
-
-    def __getattr__(self, item):
-        return getattr(self._conn, item)
-
-    async def close(self):
-        if not self._released:
-            self._released = True
-            await self._pool.release(self._conn)
-
-
-async def pooled_connect(*args, **kwargs):
-    if db_pool is None:
-        return await _raw_asyncpg_connect(*args, **kwargs)
-
-    if not args and not kwargs:
-        conn = await db_pool.acquire()
-        return PooledConnectionProxy(db_pool, conn)
-
-    if len(args) == 1 and args[0] == DATABASE_URL and not kwargs:
-        conn = await db_pool.acquire()
-        return PooledConnectionProxy(db_pool, conn)
-
-    return await _raw_asyncpg_connect(*args, **kwargs)
-
-
-async def db_connect():
-    if db_pool is not None:
-        conn = await db_pool.acquire()
-        return PooledConnectionProxy(db_pool, conn)
-    return await _raw_asyncpg_connect(DATABASE_URL)
-
-
-async def db_release(conn):
-    if conn is None:
-        return
-    await conn.close()
-
-
-# ============== WhisperOrchestrator — управление Whisper-воркерами ==============
-class WhisperWorker:
-    """Один Whisper-воркер, обрабатывающий одну задачу полностью"""
-
-    def __init__(self, worker_id: str, port: int):
-        self.worker_id = worker_id
-        self.port = port
-        # Используем WHISPER_BASE_URL для подключения к единственному worker контейнеру
-        self.url = (
-            f"{WHISPER_BASE_URL}:{port}"
-            if ":" not in WHISPER_BASE_URL
-            else WHISPER_BASE_URL
-        )
-        self.is_busy = False
-        self.current_task_id: Optional[str] = None
-        self.last_used = time.time()
-        self.is_ready = False
-
-    async def health_check(self) -> bool:
-        """Проверка доступности воркера"""
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{self.url}/health")
-                if response.status_code == 200:
-                    self.is_ready = True
-                    return True
-        except:
-            pass
-        self.is_ready = False
-        return False
-
-    async def transcribe(
-        self, audio_path: Path, language: str = "ru"
-    ) -> Dict[str, Any]:
-        """Транскрибация полного аудиофайла (БЕЗ разделения на части!)"""
-        if not self.is_ready:
-            raise Exception(f"Worker {self.worker_id} not ready")
-
-        self.is_busy = True
-        self.last_used = time.time()
-
-        try:
-            async with httpx.AsyncClient(
-                timeout=7200.0
-            ) as client:  # 2 часа для длинных видео
-                response = await client.post(
-                    f"{self.url}/transcribe-path",
-                    params={"audio_path": str(audio_path), "language": language},
-                )
-
-                if response.status_code != 200:
-                    raise Exception(f"Transcription failed: {response.text}")
-
-                return response.json()
-        finally:
-            self.is_busy = False
-            self.last_used = time.time()
-
-
-class WhisperOrchestrator:
-    """
-    Оркестратор Whisper-воркеров с per-task моделью масштабирования
-
-    Принцип работы:
-    1. Приходит задача → ищем свободный воркер
-    2. Если есть → отправляем на него
-    3. Если нет свободных и можно создать новый → создаем
-    4. Если нет ресурсов → ставим в очередь
-    5. После обработки воркер остается warm (готов к следующей задаче)
-    6. Если простаивает 10 мин → можно остановить для экономии ресурсов
-
-    Каждый воркер обрабатывает ПОЛНОЕ аудио целиком (БЕЗ разделения)!
-    """
-
-    def __init__(self, max_workers: int = 2):
-        self.max_workers = max_workers
-        self.workers: Dict[str, WhisperWorker] = {}
-        self.task_queue: asyncio.Queue = asyncio.Queue()
-        self._lock = asyncio.Lock()
-        self.next_worker_id = 1
-
-    async def initialize(self):
-        """Инициализация без блокировки API-старта"""
-        print(f"🚀 Initializing WhisperOrchestrator (max_workers={self.max_workers})")
-        asyncio.create_task(self._create_worker())
-        print("✅ WhisperOrchestrator ready (worker warmup in background)")
-
-    async def _create_worker(self) -> Optional[WhisperWorker]:
-        """Создание нового Whisper-воркера"""
-        if len(self.workers) >= self.max_workers:
-            print(f"⚠️ Already at max workers ({self.max_workers})")
-            return None
-
-        async with self._lock:
-            worker_id = f"w{self.next_worker_id}"
-            self.next_worker_id += 1
-            port = 8001
-
-            worker = WhisperWorker(worker_id, port)
-
-            # В production здесь был бы Docker API для запуска контейнера
-            # Сейчас используем статический контейнер из docker-compose
-            print(f"📦 Creating worker {worker_id}...")
-
-            # Ждем готовности воркера (максимум 2 минуты)
-            for i in range(24):  # 24 * 5 = 120 sec
-                if await worker.health_check():
-                    print(f"✅ Worker {worker_id} ready!")
-                    self.workers[worker_id] = worker
-                    return worker
-                await asyncio.sleep(5)
-
-            print(f"❌ Worker {worker_id} failed to start")
-            return None
-
-    async def get_available_worker(self) -> Optional[WhisperWorker]:
-        """Получить свободный воркер или создать новый"""
-        # Ищем свободный воркер
-        for worker in self.workers.values():
-            if not worker.is_busy and worker.is_ready:
-                return worker
-
-        # Нет свободных — пытаемся создать новый
-        if len(self.workers) < self.max_workers:
-            return await self._create_worker()
-
-        # Все воркеры заняты и нельзя создать новый
-        return None
-
-    async def transcribe_audio(
-        self, audio_path: Path, task_id: str, language: str = "ru"
-    ) -> Dict[str, Any]:
-        """
-        Транскрибация аудио через доступный воркер
-
-        ВАЖНО: Воркер обрабатывает ПОЛНОЕ аудио целиком!
-        Никакого разделения на части!
-        """
-        print(f"🎤 Requesting transcription for task {task_id}: {audio_path.name}")
-
-        # Получаем воркер
-        worker = await self.get_available_worker()
-
-        if not worker:
-            print(f"⏳ No available workers, waiting...")
-            # Ждем пока освободится воркер (максимум 1 час)
-            for i in range(720):  # 720 * 5 = 3600 sec = 1 hour
-                await asyncio.sleep(5)
-                worker = await self.get_available_worker()
-                if worker:
-                    break
-
-            if not worker:
-                raise Exception("No available workers after 1 hour wait")
-
-        print(f"🎯 Using worker {worker.worker_id} for task {task_id}")
-        worker.current_task_id = task_id
-
-        try:
-            result = await worker.transcribe(audio_path, language)
-            print(f"✅ Transcription complete on worker {worker.worker_id}")
-            return result
-        finally:
-            worker.current_task_id = None
+# ============== External services (moved to backend/services) ==============
 
 
 # ============== Pydantic Models ==============
@@ -386,22 +164,32 @@ async def recover_pending_tasks():
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_orchestrator, video_downloader, db_pool, task_runtime
+    global redis_client, whisper_orchestrator, video_downloader, task_runtime
 
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-
-    db_pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=DB_POOL_MIN_SIZE,
-        max_size=DB_POOL_MAX_SIZE,
-        command_timeout=120,
+    configure_resources(redis_client=redis_client)
+    configure_handlers(
+        is_valid_video_url=is_valid_video_url,
+        persist_task_snapshot=persist_task_snapshot,
+        queue_processing_job=queue_processing_job,
     )
-    set_auth_db_pool(db_pool)
+
+    await init_pool(DATABASE_URL, min_size=DB_POOL_MIN_SIZE, max_size=DB_POOL_MAX_SIZE)
+    set_auth_db_pool(get_pool())
     asyncpg.connect = pooled_connect
 
     task_runtime = TaskRuntime(
-        db_connect=db_connect, db_release=db_release, redis_ttl=REDIS_TTL
+        db_connect=lambda: db_connect(DATABASE_URL),
+        db_release=db_release,
+        redis_ttl=REDIS_TTL,
+    )
+    configure_status_routes(
+        redis_client=redis_client,
+        load_task_snapshot=load_task_snapshot,
+        db_connect=lambda: db_connect(DATABASE_URL),
+        db_release=db_release,
+        redis_ttl=REDIS_TTL,
     )
 
     await ensure_runtime_tables()
@@ -435,12 +223,9 @@ async def lifespan(app: FastAPI):
         await task_runtime.stop_worker()
         task_runtime = None
 
-    asyncpg.connect = _raw_asyncpg_connect
+    asyncpg.connect = get_raw_connect()
     set_auth_db_pool(None)
-
-    if db_pool is not None:
-        await db_pool.close()
-        db_pool = None
+    await close_pool()
 
     if redis_client:
         await redis_client.close()
@@ -486,39 +271,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ============== WebSocket Manager ==============
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-
-    async def connect(self, websocket: WebSocket, client_id: str):
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-        print(f"✅ Client {client_id} connected. Total: {len(self.active_connections)}")
-
-    def disconnect(self, client_id: str):
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
-            print(
-                f"❌ Client {client_id} disconnected. Total: {len(self.active_connections)}"
-            )
-
-    async def send_progress(self, client_id: str, data: dict):
-        if client_id in self.active_connections:
-            try:
-                await self.active_connections[client_id].send_json(data)
-            except:
-                self.disconnect(client_id)
-
-    async def broadcast_to_task(self, task_id: str, data: dict):
-        if redis_client:
-            client_id = await redis_client.get(f"task:{task_id}:client")
-            if client_id:
-                await self.send_progress(client_id, data)
+app.include_router(auth_router)
+app.include_router(status_router)
+app.include_router(public_router)
+app.include_router(admin_router)
+app.include_router(processing_router)
 
 
 manager = ConnectionManager()
+
+
+async def broadcast_to_task(task_id: str, data: dict):
+    if redis_client:
+        client_id = await redis_client.get(f"task:{task_id}:client")
+        if client_id:
+            await manager.send_progress(client_id, data)
 
 
 # ============== WebSocket Endpoint ==============
@@ -673,7 +440,7 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
             await persist_task_snapshot(task)
 
         # Отправляем результат через WebSocket
-        await manager.broadcast_to_task(
+        await broadcast_to_task(
             task_id,
             {
                 "type": "completed",
@@ -721,7 +488,7 @@ async def update_task_progress(task_id: str, progress: int, status: str, step: s
         await persist_task_snapshot(task)
 
     # Отправляем через WebSocket
-    await manager.broadcast_to_task(
+    await broadcast_to_task(
         task_id,
         {
             "type": "progress",
@@ -744,7 +511,7 @@ async def update_task_error(task_id: str, error_msg: str):
         await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
         await persist_task_snapshot(task)
 
-    await manager.broadcast_to_task(
+    await broadcast_to_task(
         task_id, {"type": "error", "task_id": task_id, "error": error_msg}
     )
 
@@ -932,152 +699,7 @@ async def save_questions_to_db(
         await conn.close()
 
 
-# ============== Auth Endpoints ==============
-@app.post("/api/auth/register", tags=["Auth"], response_model=TokenResponse)
-async def register(data: UserRegister):
-    """Регистрация нового пользователя"""
-    user = await create_user(data.username, data.password, data.display_name)
-
-    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
-    await update_last_login(user["id"])
-
-    return TokenResponse(
-        access_token=token,
-        user={
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-            "role": user["role"],
-        },
-    )
-
-
-@app.post("/api/auth/login", tags=["Auth"], response_model=TokenResponse)
-async def login(data: UserLogin):
-    """Авторизация пользователя"""
-    user = await get_user_by_username(data.username)
-
-    if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль"
-        )
-
-    if not user.get("is_active"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт деактивирован"
-        )
-
-    token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
-    await update_last_login(user["id"])
-
-    return TokenResponse(
-        access_token=token,
-        user={
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-            "role": user["role"],
-        },
-    )
-
-
-@app.get("/api/auth/me", tags=["Auth"])
-async def get_me(user: dict = Depends(require_auth)):
-    """Получить информацию о текущем пользователе"""
-    return {
-        "id": user["id"],
-        "username": user["username"],
-        "display_name": user["display_name"],
-        "role": user["role"],
-        "avatar_url": user.get("avatar_url"),
-        "github_url": user.get("github_url"),
-        "created_at": user.get("created_at"),
-    }
-
-
-@app.get("/api/profile", tags=["Auth"])
-async def get_profile(user: dict = Depends(require_auth)):
-    """Получить профиль текущего пользователя с закладками и записями"""
-    conn = await asyncpg.connect(DATABASE_URL)
-    try:
-        # Закладки пользователя (по user_session = username для привязки)
-        bookmarks = await conn.fetch(
-            """
-            SELECT b.id, b.note, b.created_at,
-                   q.id as question_id, q.question, q.topic, q.difficulty
-            FROM bookmarks b
-            JOIN questions q ON b.question_id = q.id
-            WHERE b.user_session = $1
-            ORDER BY b.created_at DESC
-            LIMIT 50
-        """,
-            user["username"],
-        )
-
-        bookmarks_list = []
-        for b in bookmarks:
-            row = dict(b)
-            for k in row:
-                if hasattr(row[k], "isoformat"):
-                    row[k] = row[k].isoformat()
-            bookmarks_list.append(row)
-
-        # SM-2 статистика тренажёра
-        try:
-            trainer_stats = await conn.fetchrow(
-                """
-                SELECT COUNT(*) as total_cards,
-                       COUNT(*) FILTER (WHERE repetitions > 0) as reviewed,
-                       ROUND(AVG(easiness_factor)::numeric, 2) as avg_easiness
-                FROM sr_cards
-                WHERE user_session = $1
-            """,
-                user["username"],
-            )
-            trainer_stats = dict(trainer_stats) if trainer_stats else None
-            if trainer_stats and trainer_stats.get("avg_easiness") is not None:
-                trainer_stats["avg_easiness"] = float(trainer_stats["avg_easiness"])
-        except Exception:
-            trainer_stats = None
-
-        return {
-            "id": user["id"],
-            "username": user["username"],
-            "display_name": user["display_name"],
-            "role": user["role"],
-            "avatar_url": user.get("avatar_url"),
-            "github_url": user.get("github_url"),
-            "created_at": user.get("created_at"),
-            "bookmarks": bookmarks_list,
-            "trainer_stats": trainer_stats,
-        }
-    finally:
-        await conn.close()
-
-
-@app.put("/api/profile", tags=["Auth"])
-async def update_profile(data: dict = Body(...), user: dict = Depends(require_auth)):
-    """Обновить профиль пользователя (имя, github, аватар)"""
-    updated = await update_user_profile(
-        user_id=user["id"],
-        display_name=data.get("display_name"),
-        github_url=data.get("github_url"),
-        avatar_url=data.get("avatar_url"),
-    )
-    if not updated:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-
-    # Sync localStorage data: return fresh user info
-    return {
-        "id": updated["id"],
-        "username": updated["username"],
-        "display_name": updated["display_name"],
-        "role": updated["role"],
-        "avatar_url": updated.get("avatar_url"),
-        "github_url": updated.get("github_url"),
-        "created_at": updated.get("created_at"),
-        "message": "Профиль обновлён",
-    }
+# ============== Auth Endpoints (moved to backend/api/routes/auth.py) ==============
 
 
 # ============== API Endpoints ==============
@@ -1128,7 +750,7 @@ async def health():
     }
 
 
-@app.post("/api/process-video", tags=["Processing"])
+# moved to backend/api/routes/processing.py
 async def process_video(request: YouTubeRequest):
     """
     Запуск обработки видео
@@ -1195,7 +817,7 @@ async def process_video(request: YouTubeRequest):
     return {"task_id": task_id, "status": "started"}
 
 
-@app.post("/api/process-video/{client_id}", tags=["Processing"])
+# moved to backend/api/routes/processing.py
 async def process_video_with_client(client_id: str, request: YouTubeRequest):
     """Запуск обработки с привязкой к WebSocket клиенту"""
     task_id = str(uuid.uuid4())
@@ -1267,145 +889,10 @@ async def process_video_with_client(client_id: str, request: YouTubeRequest):
     return {"task_id": task_id, "status": "started"}
 
 
-@app.get("/api/task/{task_id}", tags=["Status"])
-async def get_task_status(task_id: str):
-    """Получение статуса задачи по task_id"""
-    task_data = await redis_client.get(f"task:{task_id}")
-    if not task_data:
-        restored = await load_task_snapshot(task_id)
-        if not restored:
-            raise HTTPException(status_code=404, detail="Task not found")
-        await redis_client.set(f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL)
-        return restored
-    return json.loads(task_data)
+# ============== Status Task Endpoints (moved to backend/api/routes/status.py) ==============
 
 
-@app.get("/api/last-result/{client_id}", tags=["Status"])
-async def get_last_result(client_id: str):
-    """Получение последнего результата для WebSocket клиента"""
-    task_id = await redis_client.get(f"client:{client_id}:last_task")
-    if not task_id:
-        raise HTTPException(status_code=404, detail="No tasks for this client")
-
-    task_data = await redis_client.get(f"task:{task_id}")
-    if not task_data:
-        restored = await load_task_snapshot(task_id)
-        if not restored:
-            raise HTTPException(status_code=404, detail="Task not found")
-        await redis_client.set(f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL)
-        return restored
-
-    return json.loads(task_data)
-
-
-@app.get("/api/tasks/{client_id}", tags=["Status"])
-async def get_client_tasks(client_id: str):
-    """Получение всех задач клиента"""
-    tasks_key = f"client:{client_id}:tasks"
-    task_ids = await redis_client.lrange(tasks_key, 0, 19)
-
-    tasks = []
-    for task_id in task_ids:
-        task_data = await redis_client.get(f"task:{task_id}")
-        if task_data:
-            task = json.loads(task_data)
-            tasks.append(
-                {
-                    "task_id": task_id,
-                    "status": task.get("status"),
-                    "progress": task.get("progress"),
-                    "video_title": task.get("result", {}).get(
-                        "video_title", "Processing..."
-                    ),
-                }
-            )
-        else:
-            restored = await load_task_snapshot(task_id)
-            if restored:
-                await redis_client.set(
-                    f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL
-                )
-                tasks.append(
-                    {
-                        "task_id": task_id,
-                        "status": restored.get("status"),
-                        "progress": restored.get("progress"),
-                        "video_title": restored.get("result", {}).get(
-                            "video_title", "Processing..."
-                        ),
-                    }
-                )
-
-    return {"tasks": tasks, "count": len(tasks)}
-
-
-@app.get("/api/all-tasks", tags=["Status"])
-async def get_all_tasks():
-    """Получение всех задач (глобальный список для админки)"""
-    task_ids = await redis_client.lrange("global:tasks", 0, 99)
-    if task_ids:
-        seen = set()
-        unique_ids = []
-        for task_id in task_ids:
-            if task_id in seen:
-                continue
-            seen.add(task_id)
-            unique_ids.append(task_id)
-        task_ids = unique_ids
-
-    if not task_ids:
-        conn = await db_connect()
-        try:
-            db_ids = await conn.fetch(
-                "SELECT id::text AS id FROM processing_tasks ORDER BY created_at DESC LIMIT 100"
-            )
-            task_ids = [row["id"] for row in db_ids]
-        finally:
-            await db_release(conn)
-
-    tasks = []
-    for task_id in task_ids:
-        task_data = await redis_client.get(f"task:{task_id}")
-        if task_data:
-            task = json.loads(task_data)
-            tasks.append(
-                {
-                    "task_id": task_id,
-                    "video_url": task.get("video_url") or task.get("youtube_url", ""),
-                    "status": task.get("status", "unknown"),
-                    "progress": task.get("progress", 0),
-                    "step": task.get("step", ""),
-                    "logs": task.get("logs", []),
-                    "created_at": task.get("created_at"),
-                    "result": task.get("result"),
-                    "error": task.get("error"),
-                }
-            )
-        else:
-            restored = await load_task_snapshot(task_id)
-            if restored:
-                await redis_client.set(
-                    f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL
-                )
-                tasks.append(
-                    {
-                        "task_id": task_id,
-                        "video_url": restored.get("video_url")
-                        or restored.get("youtube_url", ""),
-                        "status": restored.get("status", "unknown"),
-                        "progress": restored.get("progress", 0),
-                        "step": restored.get("step", ""),
-                        "logs": restored.get("logs", []),
-                        "created_at": restored.get("created_at"),
-                        "result": restored.get("result"),
-                        "error": restored.get("error"),
-                    }
-                )
-
-    return {"tasks": tasks, "count": len(tasks)}
-
-
-@app.get("/api/questions", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
     """Получение всех одобренных вопросов"""
 
@@ -1454,7 +941,7 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
         await conn.close()
 
 
-@app.get("/api/questions/{question_id}", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_public_question_detail(question_id: int):
     """Получить детали одобренного вопроса для публичной части (с видео)"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -1536,7 +1023,7 @@ async def get_public_question_detail(question_id: int):
         await conn.close()
 
 
-@app.get("/api/questions/similar", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_similar_questions_api(query: str, limit: int = 5):
     """Поиск похожих вопросов"""
     try:
@@ -1550,7 +1037,7 @@ async def get_similar_questions_api(query: str, limit: int = 5):
 
 
 # ============== Export Endpoints ==============
-@app.get("/api/export/{task_id}", tags=["Export"])
+# moved to backend/api/routes/processing.py
 async def export_questions_json(task_id: str):
     """Скачать вопросы задачи в формате JSON"""
     task_data = await redis_client.get(f"task:{task_id}")
@@ -1575,7 +1062,7 @@ async def export_questions_json(task_id: str):
     )
 
 
-@app.get("/api/transcript/{task_id}", tags=["Export"])
+# moved to backend/api/routes/processing.py
 async def get_transcript(task_id: str):
     """Скачать транскрипцию"""
     transcript_data = await redis_client.get(f"transcript:{task_id}")
@@ -1591,7 +1078,7 @@ async def get_transcript(task_id: str):
     )
 
 
-@app.get("/api/full-export/{task_id}", tags=["Export"])
+# moved to backend/api/routes/processing.py
 async def full_export(task_id: str):
     """Полный экспорт данных задачи"""
     transcript_data = await redis_client.get(f"transcript:{task_id}")
@@ -1619,7 +1106,7 @@ async def full_export(task_id: str):
 
 
 # ============== Admin Panel Endpoints ==============
-@app.get("/api/admin/questions", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_admin_questions(_admin: dict = Depends(require_admin)):
     """Получить все вопросы для админа с video_count и total_videos"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -1782,7 +1269,7 @@ async def revoke_questions(
         await conn.close()
 
 
-@app.get("/api/admin/questions/{question_id}", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_question_detail(question_id: int, _admin: dict = Depends(require_admin)):
     """Получить полную карточку вопроса: данные + video_count + похожие вопросы"""
     from similarity_search import get_similar_questions as find_similar
@@ -2467,7 +1954,7 @@ async def generate_answers_bulk(
 
 
 # ============== Предложения видео ==============
-@app.post("/api/suggestions", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def create_suggestion(data: dict = Body(...)):
     """Пользователь предлагает видео для обработки"""
     url = data.get("url", "").strip()
@@ -2500,7 +1987,7 @@ async def create_suggestion(data: dict = Body(...)):
         await conn.close()
 
 
-@app.get("/api/suggestions", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_suggestions(status: Optional[str] = None):
     """Список предложений видео"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -2653,7 +2140,7 @@ async def create_feedback(data: dict = Body(...)):
         await conn.close()
 
 
-@app.get("/api/admin/feedback", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_admin_feedback(
     is_resolved: Optional[bool] = None, _admin: dict = Depends(require_admin)
 ):
@@ -2681,7 +2168,7 @@ async def get_admin_feedback(
         await conn.close()
 
 
-@app.put("/api/admin/feedback/{feedback_id}", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def resolve_feedback(
     feedback_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
 ):
@@ -3086,7 +2573,7 @@ async def remove_question_tag(
         await conn.close()
 
 
-@app.get("/api/tags", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_all_tags():
     """Все используемые теги"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3100,7 +2587,7 @@ async def get_all_tags():
 
 
 # ============== Статистика ==============
-@app.get("/api/stats", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_public_stats():
     """Публичная статистика"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3146,7 +2633,7 @@ async def get_public_stats():
         await conn.close()
 
 
-@app.get("/api/admin/stats", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_admin_stats(_admin: dict = Depends(require_admin)):
     """Расширенная статистика для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3206,7 +2693,7 @@ async def get_admin_stats(_admin: dict = Depends(require_admin)):
         await conn.close()
 
 
-@app.get("/api/admin/analytics", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_admin_analytics(_admin: dict = Depends(require_admin)):
     """Комплексная аналитика для панели администратора"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3509,7 +2996,7 @@ async def export_questions_csv(_admin: dict = Depends(require_admin)):
 
 
 # ============== Обработанные видео ==============
-@app.get("/api/admin/videos", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_processed_videos(_admin: dict = Depends(require_admin)):
     """Список обработанных видео"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3532,7 +3019,7 @@ async def get_processed_videos(_admin: dict = Depends(require_admin)):
         await conn.close()
 
 
-@app.get("/api/admin/videos/{video_id}/questions", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def get_video_questions(video_id: int, _admin: dict = Depends(require_admin)):
     """Вопросы, извлечённые из конкретного видео"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3560,7 +3047,7 @@ async def get_video_questions(video_id: int, _admin: dict = Depends(require_admi
         await conn.close()
 
 
-@app.delete("/api/admin/videos/{video_id}", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def delete_processed_video(video_id: int, _admin: dict = Depends(require_admin)):
     """Удалить обработанное видео"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3577,7 +3064,7 @@ async def delete_processed_video(video_id: int, _admin: dict = Depends(require_a
         await conn.close()
 
 
-@app.patch("/api/admin/videos/{video_id}", tags=["Admin"])
+# moved to backend/api/routes/admin.py
 async def update_processed_video(
     video_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
 ):
@@ -3605,7 +3092,7 @@ async def update_processed_video(
 # ============================================
 
 
-@app.get("/api/professions", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_professions():
     """Список профессий с привязанными технологиями"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3643,7 +3130,7 @@ async def get_professions():
         await conn.close()
 
 
-@app.get("/api/professions/{slug}/questions", tags=["Public"])
+# moved to backend/api/routes/public.py
 async def get_profession_questions(
     slug: str,
     difficulty: Optional[str] = None,
