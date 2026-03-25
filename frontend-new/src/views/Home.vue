@@ -60,6 +60,7 @@ const stats = computed(() => [
 const features = [
   { emoji: '📝', title: 'Вопросы с собеседований', desc: 'Полная база с фильтрацией по технологии, сложности и вероятности', to: '/interview-questions', color: 'rgba(96,165,250,.12)' },
   { emoji: '⚡', title: 'Тренажёр SM-2', desc: 'Запоминай вопросы с алгоритмом интервального повторения', to: '/trainer', color: 'rgba(124,92,252,.12)' },
+  { emoji: '🎯', title: 'Mock Interview', desc: 'Симуляция интервью с итоговым скором и историей попыток', to: '/mock-interview', color: 'rgba(31,138,112,.12)' },
   { emoji: '🎬', title: 'Записи собеседований', desc: 'Реальные видео с извлечёнными вопросами и таймкодами', to: '/recordings', color: 'rgba(248,113,113,.12)' },
   { emoji: '📋', title: 'Тестовые задания', desc: 'Практические задания от IT-компаний с описанием и ссылками', to: '/test-assignments', color: 'rgba(251,191,36,.12)' },
   { emoji: '📊', title: 'Навыки из вакансий', desc: 'Что требуют работодатели — аналитика на основе HeadHunter', to: '/hh-requirements', color: 'rgba(52,211,153,.12)' },

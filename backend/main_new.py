@@ -1,4 +1,4 @@
-﻿"""
+"""
 Interview Prep API v2.0
 =======================
 
@@ -22,7 +22,18 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 import time
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, Body, UploadFile, File, Form, Depends, status
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    HTTPException,
+    Body,
+    UploadFile,
+    File,
+    Form,
+    Depends,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -33,18 +44,38 @@ import yt_dlp
 
 from similarity_search import get_similar_questions as search_similar_questions
 from video_downloader import VideoDownloader
+from services.task_runtime import TaskRuntime
 from auth import (
-    create_users_table, get_user_by_username, create_user, update_last_login,
-    verify_password, create_access_token, require_auth, require_admin,
-    get_current_user, update_user_profile, UserRegister, UserLogin, TokenResponse
+    create_users_table,
+    get_user_by_username,
+    create_user,
+    update_last_login,
+    verify_password,
+    create_access_token,
+    require_auth,
+    require_admin,
+    get_current_user,
+    update_user_profile,
+    UserRegister,
+    UserLogin,
+    TokenResponse,
+    set_db_pool as set_auth_db_pool,
 )
 
 # ============== Конфигурация ==============
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://diploma:diploma123@localhost:5432/interview_prep"
+)
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-WHISPER_BASE_URL = os.getenv("WHISPER_BASE_URL", "http://whisper-worker")  # Базовый URL для воркеров
-MAX_WHISPER_WORKERS = int(os.getenv("MAX_WHISPER_WORKERS", "2"))  # Максимум воркеров одновременно
-WORKER_IDLE_TIMEOUT = int(os.getenv("WORKER_IDLE_TIMEOUT", "600"))  # Время жизни простаивающего воркера (10 мин)
+WHISPER_BASE_URL = os.getenv(
+    "WHISPER_BASE_URL", "http://whisper-worker"
+)  # Базовый URL для воркеров
+MAX_WHISPER_WORKERS = int(
+    os.getenv("MAX_WHISPER_WORKERS", "2")
+)  # Максимум воркеров одновременно
+WORKER_IDLE_TIMEOUT = int(
+    os.getenv("WORKER_IDLE_TIMEOUT", "600")
+)  # Время жизни простаивающего воркера (10 мин)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -52,27 +83,95 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto")
 TEMP_DIR = Path("/app/temp")
 TEMP_DIR.mkdir(exist_ok=True)
 REDIS_TTL = 86400  # 24 часа
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+IS_PRODUCTION = APP_ENV in {"production", "prod"}
+AUTO_MIGRATE_DB = (
+    os.getenv("AUTO_MIGRATE_DB", "true" if not IS_PRODUCTION else "false").lower()
+    == "true"
+)
+DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
+DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
+
+
+def _parse_origins(value: str) -> List[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+DEFAULT_CORS = "http://localhost:3000,http://localhost:3001"
+CORS_ALLOW_ORIGINS = _parse_origins(os.getenv("CORS_ALLOW_ORIGINS", DEFAULT_CORS))
 
 # ============== Глобальные объекты ==============
 redis_client: Optional[redis.Redis] = None
 whisper_orchestrator: Optional["WhisperOrchestrator"] = None
 video_downloader: Optional[VideoDownloader] = None
+db_pool: Optional[asyncpg.Pool] = None
+task_runtime: Optional[TaskRuntime] = None
+_raw_asyncpg_connect = asyncpg.connect
+
+
+class PooledConnectionProxy:
+    def __init__(self, pool: asyncpg.Pool, conn: asyncpg.Connection):
+        self._pool = pool
+        self._conn = conn
+        self._released = False
+
+    def __getattr__(self, item):
+        return getattr(self._conn, item)
+
+    async def close(self):
+        if not self._released:
+            self._released = True
+            await self._pool.release(self._conn)
+
+
+async def pooled_connect(*args, **kwargs):
+    if db_pool is None:
+        return await _raw_asyncpg_connect(*args, **kwargs)
+
+    if not args and not kwargs:
+        conn = await db_pool.acquire()
+        return PooledConnectionProxy(db_pool, conn)
+
+    if len(args) == 1 and args[0] == DATABASE_URL and not kwargs:
+        conn = await db_pool.acquire()
+        return PooledConnectionProxy(db_pool, conn)
+
+    return await _raw_asyncpg_connect(*args, **kwargs)
+
+
+async def db_connect():
+    if db_pool is not None:
+        conn = await db_pool.acquire()
+        return PooledConnectionProxy(db_pool, conn)
+    return await _raw_asyncpg_connect(DATABASE_URL)
+
+
+async def db_release(conn):
+    if conn is None:
+        return
+    await conn.close()
 
 
 # ============== WhisperOrchestrator — управление Whisper-воркерами ==============
 class WhisperWorker:
     """Один Whisper-воркер, обрабатывающий одну задачу полностью"""
-    
+
     def __init__(self, worker_id: str, port: int):
         self.worker_id = worker_id
         self.port = port
         # Используем WHISPER_BASE_URL для подключения к единственному worker контейнеру
-        self.url = f"{WHISPER_BASE_URL}:{port}" if ":" not in WHISPER_BASE_URL else WHISPER_BASE_URL
+        self.url = (
+            f"{WHISPER_BASE_URL}:{port}"
+            if ":" not in WHISPER_BASE_URL
+            else WHISPER_BASE_URL
+        )
         self.is_busy = False
         self.current_task_id: Optional[str] = None
         self.last_used = time.time()
         self.is_ready = False
-    
+
     async def health_check(self) -> bool:
         """Проверка доступности воркера"""
         try:
@@ -85,25 +184,29 @@ class WhisperWorker:
             pass
         self.is_ready = False
         return False
-    
-    async def transcribe(self, audio_path: Path, language: str = "ru") -> Dict[str, Any]:
+
+    async def transcribe(
+        self, audio_path: Path, language: str = "ru"
+    ) -> Dict[str, Any]:
         """Транскрибация полного аудиофайла (БЕЗ разделения на части!)"""
         if not self.is_ready:
             raise Exception(f"Worker {self.worker_id} not ready")
-        
+
         self.is_busy = True
         self.last_used = time.time()
-        
+
         try:
-            async with httpx.AsyncClient(timeout=7200.0) as client:  # 2 часа для длинных видео
+            async with httpx.AsyncClient(
+                timeout=7200.0
+            ) as client:  # 2 часа для длинных видео
                 response = await client.post(
                     f"{self.url}/transcribe-path",
-                    params={"audio_path": str(audio_path), "language": language}
+                    params={"audio_path": str(audio_path), "language": language},
                 )
-                
+
                 if response.status_code != 200:
                     raise Exception(f"Transcription failed: {response.text}")
-                
+
                 return response.json()
         finally:
             self.is_busy = False
@@ -113,7 +216,7 @@ class WhisperWorker:
 class WhisperOrchestrator:
     """
     Оркестратор Whisper-воркеров с per-task моделью масштабирования
-    
+
     Принцип работы:
     1. Приходит задача → ищем свободный воркер
     2. Если есть → отправляем на него
@@ -121,42 +224,40 @@ class WhisperOrchestrator:
     4. Если нет ресурсов → ставим в очередь
     5. После обработки воркер остается warm (готов к следующей задаче)
     6. Если простаивает 10 мин → можно остановить для экономии ресурсов
-    
+
     Каждый воркер обрабатывает ПОЛНОЕ аудио целиком (БЕЗ разделения)!
     """
-    
+
     def __init__(self, max_workers: int = 2):
         self.max_workers = max_workers
         self.workers: Dict[str, WhisperWorker] = {}
         self.task_queue: asyncio.Queue = asyncio.Queue()
         self._lock = asyncio.Lock()
         self.next_worker_id = 1
-    
+
     async def initialize(self):
-        """Инициализация — запускаем 1 воркер для быстрого старта"""
+        """Инициализация без блокировки API-старта"""
         print(f"🚀 Initializing WhisperOrchestrator (max_workers={self.max_workers})")
-        
-        # Запускаем первый воркер сразу (будет готов к работе)
-        await self._create_worker()
-        print("✅ WhisperOrchestrator ready!")
-    
+        asyncio.create_task(self._create_worker())
+        print("✅ WhisperOrchestrator ready (worker warmup in background)")
+
     async def _create_worker(self) -> Optional[WhisperWorker]:
         """Создание нового Whisper-воркера"""
         if len(self.workers) >= self.max_workers:
             print(f"⚠️ Already at max workers ({self.max_workers})")
             return None
-        
+
         async with self._lock:
             worker_id = f"w{self.next_worker_id}"
             self.next_worker_id += 1
             port = 8001
-            
+
             worker = WhisperWorker(worker_id, port)
-            
+
             # В production здесь был бы Docker API для запуска контейнера
             # Сейчас используем статический контейнер из docker-compose
             print(f"📦 Creating worker {worker_id}...")
-            
+
             # Ждем готовности воркера (максимум 2 минуты)
             for i in range(24):  # 24 * 5 = 120 sec
                 if await worker.health_check():
@@ -164,36 +265,38 @@ class WhisperOrchestrator:
                     self.workers[worker_id] = worker
                     return worker
                 await asyncio.sleep(5)
-            
+
             print(f"❌ Worker {worker_id} failed to start")
             return None
-    
+
     async def get_available_worker(self) -> Optional[WhisperWorker]:
         """Получить свободный воркер или создать новый"""
         # Ищем свободный воркер
         for worker in self.workers.values():
             if not worker.is_busy and worker.is_ready:
                 return worker
-        
+
         # Нет свободных — пытаемся создать новый
         if len(self.workers) < self.max_workers:
             return await self._create_worker()
-        
+
         # Все воркеры заняты и нельзя создать новый
         return None
-    
-    async def transcribe_audio(self, audio_path: Path, task_id: str, language: str = "ru") -> Dict[str, Any]:
+
+    async def transcribe_audio(
+        self, audio_path: Path, task_id: str, language: str = "ru"
+    ) -> Dict[str, Any]:
         """
         Транскрибация аудио через доступный воркер
-        
+
         ВАЖНО: Воркер обрабатывает ПОЛНОЕ аудио целиком!
         Никакого разделения на части!
         """
         print(f"🎤 Requesting transcription for task {task_id}: {audio_path.name}")
-        
+
         # Получаем воркер
         worker = await self.get_available_worker()
-        
+
         if not worker:
             print(f"⏳ No available workers, waiting...")
             # Ждем пока освободится воркер (максимум 1 час)
@@ -202,13 +305,13 @@ class WhisperOrchestrator:
                 worker = await self.get_available_worker()
                 if worker:
                     break
-            
+
             if not worker:
                 raise Exception("No available workers after 1 hour wait")
-        
+
         print(f"🎯 Using worker {worker.worker_id} for task {task_id}")
         worker.current_task_id = task_id
-        
+
         try:
             result = await worker.transcribe(audio_path, language)
             print(f"✅ Transcription complete on worker {worker.worker_id}")
@@ -232,171 +335,113 @@ class TaskStatus(BaseModel):
     result: Optional[Dict[str, Any]] = None
 
 
+async def ensure_runtime_tables():
+    if task_runtime is None:
+        raise RuntimeError("Task runtime is not initialized")
+    await task_runtime.ensure_runtime_tables()
+
+
+async def persist_task_snapshot(task: dict, client_id: Optional[str] = None):
+    if task_runtime is None:
+        raise RuntimeError("Task runtime is not initialized")
+    await task_runtime.persist_task_snapshot(task, client_id=client_id)
+
+
+async def load_task_snapshot(task_id: str) -> Optional[dict]:
+    if task_runtime is None:
+        return None
+    return await task_runtime.load_task_snapshot(task_id)
+
+
+async def queue_processing_job(job: dict):
+    if task_runtime is None:
+        raise RuntimeError("Task runtime is not initialized")
+    await task_runtime.enqueue(job)
+
+
+async def processing_worker_loop():
+    if task_runtime is None:
+        raise RuntimeError("Task runtime is not initialized")
+    await task_runtime.start_worker(process_video_pipeline, process_local_video)
+
+
+async def recover_pending_tasks():
+    if task_runtime is None:
+        return
+
+    async def enqueue_video(task_id: str, video_url: str, topic: str, level: str):
+        await queue_processing_job(
+            {
+                "kind": "video",
+                "task_id": task_id,
+                "video_url": video_url,
+                "topic": topic,
+                "level": level,
+            }
+        )
+
+    await task_runtime.recover_pending_tasks(redis_client, enqueue_video)
+
+
 # ============== Lifecycle ==============
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global redis_client, whisper_orchestrator, video_downloader
-    
-    # Startup
+    global redis_client, whisper_orchestrator, video_downloader, db_pool, task_runtime
+
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-    
-    # Auto-migrate: создаём v2 таблицы если их нет
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS video_suggestions (
-                    id SERIAL PRIMARY KEY, url VARCHAR(500) NOT NULL, platform VARCHAR(50) DEFAULT 'youtube',
-                    title VARCHAR(500), topic VARCHAR(100), difficulty VARCHAR(20) DEFAULT 'middle',
-                    comment TEXT, user_name VARCHAR(100), user_email VARCHAR(200),
-                    status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','processing','completed')),
-                    admin_comment TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS feedback (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE SET NULL,
-                    feedback_type VARCHAR(30) NOT NULL CHECK (feedback_type IN ('like','dislike','report','suggestion','answer_quality')),
-                    rating INTEGER CHECK (rating >= 1 AND rating <= 5), comment TEXT,
-                    user_name VARCHAR(100), user_email VARCHAR(200), user_session VARCHAR(100),
-                    is_resolved BOOLEAN DEFAULT FALSE, admin_response TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS bookmarks (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    user_session VARCHAR(100) NOT NULL, note TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(question_id, user_session)
-                );
-                CREATE TABLE IF NOT EXISTS question_tags (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    tag VARCHAR(50) NOT NULL, UNIQUE(question_id, tag)
-                );
-                CREATE TABLE IF NOT EXISTS mock_interviews (
-                    id SERIAL PRIMARY KEY, user_session VARCHAR(100) NOT NULL, topic VARCHAR(100),
-                    difficulty VARCHAR(20), total_questions INTEGER DEFAULT 0, correct_answers INTEGER DEFAULT 0,
-                    score FLOAT DEFAULT 0.0, duration_seconds INTEGER DEFAULT 0, answers JSONB DEFAULT '[]',
-                    completed_at TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS uploaded_videos (
-                    id SERIAL PRIMARY KEY, filename VARCHAR(500) NOT NULL, original_name VARCHAR(500),
-                    file_size BIGINT, mime_type VARCHAR(100), topic VARCHAR(100),
-                    difficulty VARCHAR(20) DEFAULT 'middle',
-                    status VARCHAR(30) DEFAULT 'pending' CHECK (status IN ('pending','processing','completed','error')),
-                    task_id VARCHAR(100), uploaded_by VARCHAR(100) DEFAULT 'admin', error_message TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS question_views (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    user_session VARCHAR(100), viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS user_notes (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    user_session VARCHAR(100) NOT NULL, note TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(question_id, user_session)
-                );
-            """)
-            print("✅ Database v2 tables ensured")
 
-            # v3: Профессии, SM-2, UGC, тестовые задания, HH навыки
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS professions (
-                    id SERIAL PRIMARY KEY, slug VARCHAR(100) UNIQUE NOT NULL, title VARCHAR(200) NOT NULL,
-                    icon VARCHAR(50) DEFAULT 'pi pi-code', color VARCHAR(100) DEFAULT '#667eea',
-                    sort_order INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS profession_topics (
-                    id SERIAL PRIMARY KEY, profession_id INTEGER REFERENCES professions(id) ON DELETE CASCADE,
-                    topic VARCHAR(100) NOT NULL, UNIQUE(profession_id, topic)
-                );
-                CREATE TABLE IF NOT EXISTS sr_cards (
-                    id SERIAL PRIMARY KEY, user_session VARCHAR(100) NOT NULL,
-                    question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    easiness_factor FLOAT DEFAULT 2.5, interval_days FLOAT DEFAULT 0,
-                    repetitions INTEGER DEFAULT 0, next_review TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_quality INTEGER DEFAULT 0, total_reviews INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_session, question_id)
-                );
-                CREATE TABLE IF NOT EXISTS user_answers (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    user_session VARCHAR(100) NOT NULL, user_name VARCHAR(100) DEFAULT 'Аноним',
-                    answer_text TEXT NOT NULL, votes INTEGER DEFAULT 0, is_selected BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS answer_votes (
-                    id SERIAL PRIMARY KEY, answer_id INTEGER REFERENCES user_answers(id) ON DELETE CASCADE,
-                    user_session VARCHAR(100) NOT NULL, vote_type VARCHAR(10) NOT NULL CHECK (vote_type IN ('up','down')),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE(answer_id, user_session)
-                );
-                CREATE TABLE IF NOT EXISTS test_assignments (
-                    id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL, description TEXT,
-                    company VARCHAR(200), profession VARCHAR(200),
-                    difficulty VARCHAR(20) DEFAULT 'middle' CHECK (difficulty IN ('junior','middle','senior')),
-                    skills TEXT, link VARCHAR(500), source VARCHAR(200),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE TABLE IF NOT EXISTS hh_skills (
-                    id SERIAL PRIMARY KEY, profession VARCHAR(200) NOT NULL,
-                    skill VARCHAR(200) NOT NULL, vacancy_count INTEGER DEFAULT 0,
-                    total_vacancies INTEGER DEFAULT 0, percentage FLOAT DEFAULT 0.0,
-                    source VARCHAR(50) DEFAULT 'hh.ru', updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(profession, skill)
-                );
-                CREATE TABLE IF NOT EXISTS question_timecodes (
-                    id SERIAL PRIMARY KEY, question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                    video_id INTEGER REFERENCES processed_videos(id) ON DELETE CASCADE,
-                    timecode_start VARCHAR(20), timecode_seconds INTEGER DEFAULT 0,
-                    UNIQUE(question_id, video_id)
-                );
-            """)
+    db_pool = await asyncpg.create_pool(
+        DATABASE_URL,
+        min_size=DB_POOL_MIN_SIZE,
+        max_size=DB_POOL_MAX_SIZE,
+        command_timeout=120,
+    )
+    set_auth_db_pool(db_pool)
+    asyncpg.connect = pooled_connect
 
-            # Наполнение профессий
-            await conn.execute("""
-                INSERT INTO professions (slug, title, icon, color, sort_order) VALUES
-                    ('frontend-developer', 'Frontend разработчик', 'pi pi-palette', '#f093fb', 1),
-                    ('backend-developer', 'Backend разработчик', 'pi pi-server', '#667eea', 2),
-                    ('python-developer', 'Python разработчик', 'pi pi-code', '#4facfe', 3),
-                    ('java-developer', 'Java разработчик', 'pi pi-code', '#fa709a', 4),
-                    ('fullstack-developer', 'Fullstack разработчик', 'pi pi-th-large', '#43e97b', 5),
-                    ('devops', 'DevOps инженер', 'pi pi-cloud', '#fcb69f', 6),
-                    ('qa-engineer', 'QA инженер', 'pi pi-check-circle', '#a8edea', 7),
-                    ('data-scientist', 'Data Scientist', 'pi pi-chart-bar', '#fbc2eb', 8),
-                    ('mobile-developer', 'Mobile разработчик', 'pi pi-mobile', '#84fab0', 9),
-                    ('golang-developer', 'Golang разработчик', 'pi pi-code', '#ffecd2', 10)
-                ON CONFLICT (slug) DO NOTHING
-            """)
-            print("✅ Database v3 tables ensured (professions, SM-2, UGC, assignments, HH)")
-        finally:
-            await conn.close()
-    except Exception as e:
-        print(f"⚠️ Auto-migration warning: {e}")
-    
-    # Инициализируем таблицу пользователей и admin
+    task_runtime = TaskRuntime(
+        db_connect=db_connect, db_release=db_release, redis_ttl=REDIS_TTL
+    )
+
+    await ensure_runtime_tables()
+    if AUTO_MIGRATE_DB:
+        print("ℹ️ Runtime auto-migration is enabled (legacy compatibility mode)")
+    else:
+        print("ℹ️ Runtime auto-migration is disabled; rely on SQL migration scripts")
+
     try:
         await create_users_table()
     except Exception as e:
         print(f"⚠️ Users table warning: {e}")
-    
-    # Инициализируем VideoDownloader
+
     video_downloader = VideoDownloader(TEMP_DIR)
-    print("📥 VideoDownloader initialized (supports YouTube, VK.video, Rutube, OK.ru, etc.)")
-    
-    # Инициализируем WhisperOrchestrator
+    print(
+        "📥 VideoDownloader initialized (supports YouTube, VK.video, Rutube, OK.ru, etc.)"
+    )
+
     whisper_orchestrator = WhisperOrchestrator(max_workers=MAX_WHISPER_WORKERS)
     await whisper_orchestrator.initialize()
-    
-    # Инициализируем систему поиска похожих вопросов
-    from similarity_search import initialize_similarity_search
-    try:
-        await initialize_similarity_search()
-    except Exception as e:
-        print(f"⚠️ Similarity search initialization failed: {e}")
-        print("   (Will initialize on first use)")
-    print("🔍 Similarity search initialized")
-    
+
+    print("ℹ️ Similarity search uses lazy initialization on first request")
+
+    await processing_worker_loop()
+    await recover_pending_tasks()
+
     yield
-    
-    # Shutdown
+
     print("🛑 Shutting down...")
+    if task_runtime is not None:
+        await task_runtime.stop_worker()
+        task_runtime = None
+
+    asyncpg.connect = _raw_asyncpg_connect
+    set_auth_db_pool(None)
+
+    if db_pool is not None:
+        await db_pool.close()
+        db_pool = None
+
     if redis_client:
         await redis_client.close()
 
@@ -428,41 +473,44 @@ app = FastAPI(
         {"name": "Status", "description": "Статус и мониторинг"},
         {"name": "Export", "description": "Экспорт данных"},
         {"name": "Public", "description": "Публичные данные"},
-        {"name": "Admin", "description": "Административная панель"}
-    ]
+        {"name": "Admin", "description": "Административная панель"},
+    ],
 )
 
 # ============== CORS ==============
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ============== WebSocket Manager ==============
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
-    
+
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
         self.active_connections[client_id] = websocket
         print(f"✅ Client {client_id} connected. Total: {len(self.active_connections)}")
-    
+
     def disconnect(self, client_id: str):
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-            print(f"❌ Client {client_id} disconnected. Total: {len(self.active_connections)}")
-    
+            print(
+                f"❌ Client {client_id} disconnected. Total: {len(self.active_connections)}"
+            )
+
     async def send_progress(self, client_id: str, data: dict):
         if client_id in self.active_connections:
             try:
                 await self.active_connections[client_id].send_json(data)
             except:
                 self.disconnect(client_id)
-    
+
     async def broadcast_to_task(self, task_id: str, data: dict):
         if redis_client:
             client_id = await redis_client.get(f"task:{task_id}:client")
@@ -490,7 +538,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 async def process_video_pipeline(task_id: str, video_url: str, topic: str, level: str):
     """
     Главный pipeline обработки видео.
-    
+
     Поддерживаемые платформы:
     - YouTube
     - VK.video
@@ -499,7 +547,7 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
     - Dailymotion
     - Vimeo
     - и другие
-    
+
     Этапы:
     1. Скачивание аудио и субтитров (yt-dlp)
     2. Транскрибация через Whisper (ПОЛНОЕ аудио, без разделения)
@@ -508,14 +556,18 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
     """
     try:
         # ========== Этап 1: Скачивание аудио ==========
-        await update_task_progress(task_id, 5, "downloading", "Начинаем скачивание видео...")
-        
+        await update_task_progress(
+            task_id, 5, "downloading", "Начинаем скачивание видео..."
+        )
+
         try:
             download_result = await download_video_audio(video_url, task_id)
         except Exception as download_err:
-            await update_task_progress(task_id, 5, "error", f"Ошибка скачивания: {download_err}")
+            await update_task_progress(
+                task_id, 5, "error", f"Ошибка скачивания: {download_err}"
+            )
             raise
-        
+
         audio_path = Path(download_result["audio_path"])
         video_title = download_result["video_title"]
         video_id = download_result["video_id"]
@@ -523,33 +575,42 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
         subtitles = download_result.get("subtitles", [])
         has_subtitles = download_result.get("has_subtitles", False)
         duration = download_result.get("duration", 0)
-        
-        await update_task_progress(task_id, 20, "downloaded", f"Скачано: {video_title} ({duration}с)")
-        
+
+        await update_task_progress(
+            task_id, 20, "downloaded", f"Скачано: {video_title} ({duration}с)"
+        )
+
         # ========== Этап 2: Транскрибация ==========
-        await update_task_progress(task_id, 25, "transcribing", "Транскрибация аудио через Whisper...")
-        
+        await update_task_progress(
+            task_id, 25, "transcribing", "Транскрибация аудио через Whisper..."
+        )
+
         try:
             whisper_result = await whisper_orchestrator.transcribe_audio(
-                audio_path=audio_path,
-                task_id=task_id,
-                language="ru"
+                audio_path=audio_path, task_id=task_id, language="ru"
             )
         except Exception as whisper_err:
-            await update_task_progress(task_id, 30, "error", f"Ошибка транскрибации: {whisper_err}")
+            await update_task_progress(
+                task_id, 30, "error", f"Ошибка транскрибации: {whisper_err}"
+            )
             raise
-        
+
         transcript = whisper_result["text"]
         whisper_segments = whisper_result["segments"]
-        
-        await update_task_progress(task_id, 60, "transcribed", f"Транскрибация завершена: {len(whisper_segments)} сегментов, {len(transcript)} символов")
-        
+
+        await update_task_progress(
+            task_id,
+            60,
+            "transcribed",
+            f"Транскрибация завершена: {len(whisper_segments)} сегментов, {len(transcript)} символов",
+        )
+
         # Слияние с субтитрами (если есть)
         merged_segments = whisper_segments
         if has_subtitles and subtitles:
             merged_segments = merge_subtitles_with_whisper(subtitles, whisper_segments)
             transcript = " ".join([s["text"] for s in merged_segments])
-        
+
         # Сохраняем транскрипцию в Redis
         transcript_data = {
             "transcript": transcript,
@@ -558,37 +619,47 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
             "whisper_raw": whisper_result["text"],
             "whisper_segments": whisper_segments,
             "youtube_subtitles": subtitles,
-            "has_subtitles": has_subtitles
+            "has_subtitles": has_subtitles,
         }
-        await redis_client.set(f"transcript:{task_id}", json.dumps(transcript_data), ex=REDIS_TTL)
-        
+        await redis_client.set(
+            f"transcript:{task_id}", json.dumps(transcript_data), ex=REDIS_TTL
+        )
+
         # ========== Этап 3: Извлечение вопросов ==========
-        await update_task_progress(task_id, 65, "extracting", "Извлечение вопросов через LLM...")
-        
+        await update_task_progress(
+            task_id, 65, "extracting", "Извлечение вопросов через LLM..."
+        )
+
         try:
-            questions = await extract_questions_from_transcript(transcript, topic, level)
+            questions = await extract_questions_from_transcript(
+                transcript, topic, level
+            )
         except Exception as llm_err:
             await update_task_progress(task_id, 70, "error", f"Ошибка LLM: {llm_err}")
             raise
-        
+
         # Фильтрация и дедупликация
         questions = filter_low_quality_questions(questions)
         questions = deduplicate_questions(questions)
-        
-        await update_task_progress(task_id, 85, "extracted", f"Извлечено {len(questions)} вопросов")
-        
+
+        await update_task_progress(
+            task_id, 85, "extracted", f"Извлечено {len(questions)} вопросов"
+        )
+
         # ========== Этап 4: Сохранение в БД ==========
         await update_task_progress(task_id, 90, "saving", "Сохранение в базу данных...")
-        
+
         try:
-            await save_questions_to_db(questions, video_url, video_title, video_id, task_id, platform)
+            await save_questions_to_db(
+                questions, video_url, video_title, video_id, task_id, platform
+            )
         except Exception as db_err:
             await update_task_progress(task_id, 90, "error", f"Ошибка БД: {db_err}")
             raise
-        
+
         # ========== Завершение ==========
         await update_task_progress(task_id, 100, "completed", "Готово!")
-        
+
         task_data = await redis_client.get(f"task:{task_id}")
         if task_data:
             task = json.loads(task_data)
@@ -596,27 +667,31 @@ async def process_video_pipeline(task_id: str, video_url: str, topic: str, level
             task["result"] = {
                 "video_title": video_title,
                 "questions_count": len(questions),
-                "questions": questions
+                "questions": questions,
             }
             await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
-        
+            await persist_task_snapshot(task)
+
         # Отправляем результат через WebSocket
-        await manager.broadcast_to_task(task_id, {
-            "type": "completed",
-            "task_id": task_id,
-            "video_title": video_title,
-            "questions_count": len(questions)
-        })
-        
+        await manager.broadcast_to_task(
+            task_id,
+            {
+                "type": "completed",
+                "task_id": task_id,
+                "video_title": video_title,
+                "questions_count": len(questions),
+            },
+        )
+
         # Очистка временных файлов
         cleanup_temp_files(video_id)
-        
+
         print(f"✅ Task {task_id} completed successfully!")
-        
+
     except Exception as e:
         error_msg = str(e)
         print(f"❌ Task {task_id} failed: {error_msg}")
-        
+
         await update_task_error(task_id, error_msg)
 
 
@@ -631,25 +706,31 @@ async def update_task_progress(task_id: str, progress: int, status: str, step: s
         # Добавляем запись в лог
         if "logs" not in task:
             task["logs"] = []
-        task["logs"].append({
-            "time": datetime.now().isoformat(),
-            "progress": progress,
-            "status": status,
-            "message": step
-        })
+        task["logs"].append(
+            {
+                "time": datetime.now().isoformat(),
+                "progress": progress,
+                "status": status,
+                "message": step,
+            }
+        )
         # Ограничиваем размер лога
         if len(task["logs"]) > 50:
             task["logs"] = task["logs"][-50:]
         await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
-    
+        await persist_task_snapshot(task)
+
     # Отправляем через WebSocket
-    await manager.broadcast_to_task(task_id, {
-        "type": "progress",
-        "task_id": task_id,
-        "progress": progress,
-        "status": status,
-        "step": step
-    })
+    await manager.broadcast_to_task(
+        task_id,
+        {
+            "type": "progress",
+            "task_id": task_id,
+            "progress": progress,
+            "status": status,
+            "step": step,
+        },
+    )
     print(f"📊 Task {task_id}: [{status}] {progress}% — {step}")
 
 
@@ -661,38 +742,41 @@ async def update_task_error(task_id: str, error_msg: str):
         task["status"] = "error"
         task["error"] = error_msg
         await redis_client.set(f"task:{task_id}", json.dumps(task), ex=REDIS_TTL)
-    
-    await manager.broadcast_to_task(task_id, {
-        "type": "error",
-        "task_id": task_id,
-        "error": error_msg
-    })
+        await persist_task_snapshot(task)
+
+    await manager.broadcast_to_task(
+        task_id, {"type": "error", "task_id": task_id, "error": error_msg}
+    )
 
 
 # ============== Processing Functions ==============
 async def download_video_audio(video_url: str, task_id: str) -> Dict[str, Any]:
     """Скачивание аудио и субтитров с любой платформы (YouTube, VK.video, Rutube, и т.д.)"""
     global video_downloader
-    
+
     if not video_downloader:
         raise Exception("VideoDownloader not initialized")
-    
+
     try:
         result = await video_downloader.download_video_audio(video_url)
-        
+
         # Добавляем информацию о платформе (для логов)
         platform_info = video_downloader.get_platform_info(video_url)
-        print(f"{platform_info['platform_icon']} Loaded from {platform_info['platform_name']}: {result['video_title']}")
-        
+        print(
+            f"{platform_info['platform_icon']} Loaded from {platform_info['platform_name']}: {result['video_title']}"
+        )
+
         return result
     except Exception as e:
         print(f"❌ Download failed: {e}")
         raise
 
 
-async def extract_questions_from_transcript(transcript: str, topic: str, level: str) -> List[Dict[str, Any]]:
+async def extract_questions_from_transcript(
+    transcript: str, topic: str, level: str
+) -> List[Dict[str, Any]]:
     """Извлечение вопросов из транскрипции через LLM"""
-    
+
     prompt = f"""Ты — эксперт по анализу технических интервью. Проанализируй транскрипцию видео с собеседованием и извлеки ВСЕ вопросы, которые задаются кандидату.
 
 ВАЖНО:
@@ -718,11 +802,18 @@ async def extract_questions_from_transcript(transcript: str, topic: str, level: 
 
 Если таймкод неизвестен, поставь null в поле timecode.
 Только JSON, без дополнительного текста!"""
-    
+
     return await call_llm_api(prompt)
 
 
-async def save_questions_to_db(questions: List[Dict], video_url: str, video_title: str, video_id: str, task_id: str, platform: str = "youtube"):
+async def save_questions_to_db(
+    questions: List[Dict],
+    video_url: str,
+    video_title: str,
+    video_id: str,
+    task_id: str,
+    platform: str = "youtube",
+):
     """Сохранение вопросов в базу данных"""
 
     def parse_timecode_to_seconds(tc):
@@ -730,7 +821,7 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
         if not tc:
             return 0
         try:
-            parts = str(tc).split(':')
+            parts = str(tc).split(":")
             parts = [int(p) for p in parts]
             if len(parts) == 3:
                 return parts[0] * 3600 + parts[1] * 60 + parts[2]
@@ -739,46 +830,50 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
             return int(tc)
         except (ValueError, TypeError):
             return 0
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         # Проверяем, обрабатывалось ли это видео
         existing_video = await conn.fetchval(
             "SELECT id FROM processed_videos WHERE video_id = $1", video_id
         )
-        
+
         if existing_video:
             print(f"⚠️ Video {video_id} already processed, skipping save")
             return
-        
+
         # Сохраняем видео с указанием платформы
         db_video_id = await conn.fetchval(
             """INSERT INTO processed_videos (video_id, youtube_url, title, platform, processed_at)
                VALUES ($1, $2, $3, $4, NOW())
                RETURNING id""",
-            video_id, video_url, video_title, platform
+            video_id,
+            video_url,
+            video_title,
+            platform,
         )
-        
+
         # Сохраняем вопросы
         saved_count = 0
         for q in questions:
             question_text = q.get("question", "").strip()
             if not question_text or len(question_text) < 5:
                 continue
-            
+
             # Проверяем дубликат
             existing = await conn.fetchval(
                 "SELECT id FROM questions WHERE LOWER(question) = LOWER($1)",
-                question_text
+                question_text,
             )
-            
+
             if existing:
                 # Добавляем связь с видео
                 await conn.execute(
                     """INSERT INTO question_video (question_id, video_id)
                        VALUES ($1, $2)
                        ON CONFLICT DO NOTHING""",
-                    existing, db_video_id
+                    existing,
+                    db_video_id,
                 )
                 # Сохраняем таймкод для этого видео
                 tc = q.get("timecode")
@@ -788,7 +883,10 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
                         """INSERT INTO question_timecodes (question_id, video_id, timecode_start, timecode_seconds)
                            VALUES ($1, $2, $3, $4) ON CONFLICT (question_id, video_id) DO UPDATE
                            SET timecode_start = $3, timecode_seconds = $4""",
-                        existing, db_video_id, str(tc), tc_seconds
+                        existing,
+                        db_video_id,
+                        str(tc),
+                        tc_seconds,
                     )
             else:
                 # Создаём новый вопрос
@@ -800,14 +898,15 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
                     question_text,
                     q.get("topic", "General"),
                     q.get("difficulty", "middle"),
-                    tc or None
+                    tc or None,
                 )
-                
+
                 # Связываем с видео
                 await conn.execute(
                     """INSERT INTO question_video (question_id, video_id)
                        VALUES ($1, $2)""",
-                    question_id, db_video_id
+                    question_id,
+                    db_video_id,
                 )
 
                 # Сохраняем таймкод для видео
@@ -816,16 +915,19 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
                     await conn.execute(
                         """INSERT INTO question_timecodes (question_id, video_id, timecode_start, timecode_seconds)
                            VALUES ($1, $2, $3, $4) ON CONFLICT (question_id, video_id) DO NOTHING""",
-                        question_id, db_video_id, str(tc), tc_seconds
+                        question_id,
+                        db_video_id,
+                        str(tc),
+                        tc_seconds,
                     )
-            
+
             saved_count += 1
-        
+
         # Обновляем вероятности
         await update_probabilities(conn)
-        
+
         print(f"✅ Saved {saved_count} questions for video {video_title}")
-        
+
     finally:
         await conn.close()
 
@@ -835,14 +937,18 @@ async def save_questions_to_db(questions: List[Dict], video_url: str, video_titl
 async def register(data: UserRegister):
     """Регистрация нового пользователя"""
     user = await create_user(data.username, data.password, data.display_name)
-    
+
     token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
     await update_last_login(user["id"])
-    
+
     return TokenResponse(
         access_token=token,
-        user={"id": user["id"], "username": user["username"], 
-              "display_name": user["display_name"], "role": user["role"]}
+        user={
+            "id": user["id"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "role": user["role"],
+        },
     )
 
 
@@ -850,26 +956,28 @@ async def register(data: UserRegister):
 async def login(data: UserLogin):
     """Авторизация пользователя"""
     user = await get_user_by_username(data.username)
-    
+
     if not user or not verify_password(data.password, user["password_hash"]):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный логин или пароль"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль"
         )
-    
+
     if not user.get("is_active"):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Аккаунт деактивирован"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Аккаунт деактивирован"
         )
-    
+
     token = create_access_token({"sub": str(user["id"]), "role": user["role"]})
     await update_last_login(user["id"])
-    
+
     return TokenResponse(
         access_token=token,
-        user={"id": user["id"], "username": user["username"],
-              "display_name": user["display_name"], "role": user["role"]}
+        user={
+            "id": user["id"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "role": user["role"],
+        },
     )
 
 
@@ -883,7 +991,7 @@ async def get_me(user: dict = Depends(require_auth)):
         "role": user["role"],
         "avatar_url": user.get("avatar_url"),
         "github_url": user.get("github_url"),
-        "created_at": user.get("created_at")
+        "created_at": user.get("created_at"),
     }
 
 
@@ -893,7 +1001,8 @@ async def get_profile(user: dict = Depends(require_auth)):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         # Закладки пользователя (по user_session = username для привязки)
-        bookmarks = await conn.fetch("""
+        bookmarks = await conn.fetch(
+            """
             SELECT b.id, b.note, b.created_at,
                    q.id as question_id, q.question, q.topic, q.difficulty
             FROM bookmarks b
@@ -901,28 +1010,33 @@ async def get_profile(user: dict = Depends(require_auth)):
             WHERE b.user_session = $1
             ORDER BY b.created_at DESC
             LIMIT 50
-        """, user["username"])
+        """,
+            user["username"],
+        )
 
         bookmarks_list = []
         for b in bookmarks:
             row = dict(b)
             for k in row:
-                if hasattr(row[k], 'isoformat'):
+                if hasattr(row[k], "isoformat"):
                     row[k] = row[k].isoformat()
             bookmarks_list.append(row)
 
         # SM-2 статистика тренажёра
         try:
-            trainer_stats = await conn.fetchrow("""
+            trainer_stats = await conn.fetchrow(
+                """
                 SELECT COUNT(*) as total_cards,
                        COUNT(*) FILTER (WHERE repetitions > 0) as reviewed,
-                       ROUND(AVG(easiness)::numeric, 2) as avg_easiness
-                FROM sm2_cards
+                       ROUND(AVG(easiness_factor)::numeric, 2) as avg_easiness
+                FROM sr_cards
                 WHERE user_session = $1
-            """, user["username"])
+            """,
+                user["username"],
+            )
             trainer_stats = dict(trainer_stats) if trainer_stats else None
-            if trainer_stats and trainer_stats.get('avg_easiness') is not None:
-                trainer_stats['avg_easiness'] = float(trainer_stats['avg_easiness'])
+            if trainer_stats and trainer_stats.get("avg_easiness") is not None:
+                trainer_stats["avg_easiness"] = float(trainer_stats["avg_easiness"])
         except Exception:
             trainer_stats = None
 
@@ -935,7 +1049,7 @@ async def get_profile(user: dict = Depends(require_auth)):
             "github_url": user.get("github_url"),
             "created_at": user.get("created_at"),
             "bookmarks": bookmarks_list,
-            "trainer_stats": trainer_stats
+            "trainer_stats": trainer_stats,
         }
     finally:
         await conn.close()
@@ -948,7 +1062,7 @@ async def update_profile(data: dict = Body(...), user: dict = Depends(require_au
         user_id=user["id"],
         display_name=data.get("display_name"),
         github_url=data.get("github_url"),
-        avatar_url=data.get("avatar_url")
+        avatar_url=data.get("avatar_url"),
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
@@ -962,7 +1076,7 @@ async def update_profile(data: dict = Body(...), user: dict = Depends(require_au
         "avatar_url": updated.get("avatar_url"),
         "github_url": updated.get("github_url"),
         "created_at": updated.get("created_at"),
-        "message": "Профиль обновлён"
+        "message": "Профиль обновлён",
     }
 
 
@@ -973,7 +1087,7 @@ async def root():
     return {
         "message": "Interview Prep API v2.0",
         "status": "running",
-        "architecture": "per-task Whisper scaling (no chunking)"
+        "architecture": "per-task Whisper scaling (no chunking)",
     }
 
 
@@ -981,45 +1095,51 @@ async def root():
 async def health():
     """Проверка здоровья сервиса"""
     global whisper_orchestrator
-    
+
     workers_status = []
     if whisper_orchestrator:
         for wid, worker in whisper_orchestrator.workers.items():
-            workers_status.append({
-                "id": wid,
-                "is_ready": worker.is_ready,
-                "is_busy": worker.is_busy,
-                "current_task": worker.current_task_id
-            })
-    
+            workers_status.append(
+                {
+                    "id": wid,
+                    "is_ready": worker.is_ready,
+                    "is_busy": worker.is_busy,
+                    "current_task": worker.current_task_id,
+                }
+            )
+
     temp_files = list(TEMP_DIR.glob("*"))
-    temp_size_mb = sum(f.stat().st_size for f in temp_files if f.is_file()) / (1024 * 1024)
-    
+    temp_size_mb = sum(f.stat().st_size for f in temp_files if f.is_file()) / (
+        1024 * 1024
+    )
+
     return {
         "status": "healthy",
         "whisper_orchestrator": {
             "max_workers": MAX_WHISPER_WORKERS,
-            "active_workers": len(whisper_orchestrator.workers) if whisper_orchestrator else 0,
-            "workers": workers_status
+            "active_workers": len(whisper_orchestrator.workers)
+            if whisper_orchestrator
+            else 0,
+            "workers": workers_status,
         },
         "architecture": "per-task scaling (1 worker = 1 full audio, no chunking)",
         "temp_files_count": len(temp_files),
-        "temp_size_mb": round(temp_size_mb, 2)
+        "temp_size_mb": round(temp_size_mb, 2),
     }
 
 
 @app.post("/api/process-video", tags=["Processing"])
-async def process_video(request: YouTubeRequest, background_tasks: BackgroundTasks):
+async def process_video(request: YouTubeRequest):
     """
     Запуск обработки видео
-    
+
     Поддерживаемые платформы:
     - YouTube (youtube.com, youtu.be)
     - VK Video (vk.com/video, vkvideo.ru)
     - Rutube (rutube.ru)
     - OK.ru (ok.ru/video)
     - Dailymotion, Vimeo и др.
-    
+
     Pipeline:
     1. Скачивание аудио (yt-dlp)
     2. Транскрибация полного аудио через Whisper (БЕЗ разделения!)
@@ -1027,10 +1147,13 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
     4. Сохранение в БД
     """
     task_id = str(uuid.uuid4())
-    
+
     if not is_valid_video_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.",
+        )
+
     # Сохраняем задачу в Redis
     task_data = {
         "task_id": task_id,
@@ -1041,49 +1164,57 @@ async def process_video(request: YouTubeRequest, background_tasks: BackgroundTas
         "status": "pending",
         "progress": 0,
         "step": "В очереди...",
-        "logs": [{"time": datetime.now().isoformat(), "progress": 0, "status": "pending", "message": "Задача создана"}],
-        "created_at": datetime.now().isoformat()
+        "logs": [
+            {
+                "time": datetime.now().isoformat(),
+                "progress": 0,
+                "status": "pending",
+                "message": "Задача создана",
+            }
+        ],
+        "created_at": datetime.now().isoformat(),
     }
     await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
-    
+    await persist_task_snapshot(task_data)
+
     # Добавляем в глобальный список задач
     await redis_client.lpush("global:tasks", task_id)
     await redis_client.ltrim("global:tasks", 0, 99)
     await redis_client.expire("global:tasks", REDIS_TTL)
-    
-    # Запускаем обработку в фоне
-    background_tasks.add_task(
-        process_video_pipeline,
-        task_id,
-        request.youtube_url,
-        request.topic,
-        request.level
+
+    await queue_processing_job(
+        {
+            "kind": "video",
+            "task_id": task_id,
+            "video_url": request.youtube_url,
+            "topic": request.topic,
+            "level": request.level,
+        }
     )
-    
+
     return {"task_id": task_id, "status": "started"}
 
 
 @app.post("/api/process-video/{client_id}", tags=["Processing"])
-async def process_video_with_client(
-    client_id: str,
-    request: YouTubeRequest,
-    background_tasks: BackgroundTasks
-):
+async def process_video_with_client(client_id: str, request: YouTubeRequest):
     """Запуск обработки с привязкой к WebSocket клиенту"""
     task_id = str(uuid.uuid4())
-    
+
     if not is_valid_video_url(request.youtube_url):
-        raise HTTPException(status_code=400, detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid video URL. Supported: YouTube, VK.video, Rutube, OK.ru, etc.",
+        )
+
     # Связываем task с client
     await redis_client.set(f"task:{task_id}:client", client_id, ex=REDIS_TTL)
     await redis_client.set(f"client:{client_id}:last_task", task_id, ex=REDIS_TTL)
-    
+
     tasks_key = f"client:{client_id}:tasks"
     await redis_client.lpush(tasks_key, task_id)
     await redis_client.ltrim(tasks_key, 0, 19)
     await redis_client.expire(tasks_key, REDIS_TTL)
-    
+
     task_data = {
         "task_id": task_id,
         "youtube_url": request.youtube_url,
@@ -1093,32 +1224,46 @@ async def process_video_with_client(
         "status": "pending",
         "progress": 0,
         "step": "В очереди...",
-        "logs": [{"time": datetime.now().isoformat(), "progress": 0, "status": "pending", "message": "Задача создана"}],
-        "created_at": datetime.now().isoformat()
+        "logs": [
+            {
+                "time": datetime.now().isoformat(),
+                "progress": 0,
+                "status": "pending",
+                "message": "Задача создана",
+            }
+        ],
+        "created_at": datetime.now().isoformat(),
+        "client_id": client_id,
     }
     await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
-    
+    await persist_task_snapshot(task_data, client_id=client_id)
+
     # Добавляем в глобальный список задач
     await redis_client.lpush("global:tasks", task_id)
     await redis_client.ltrim("global:tasks", 0, 99)
     await redis_client.expire("global:tasks", REDIS_TTL)
-    
-    await manager.send_progress(client_id, {
-        "type": "progress",
-        "task_id": task_id,
-        "progress": 0,
-        "status": "pending",
-        "step": "Запуск обработки..."
-    })
-    
-    background_tasks.add_task(
-        process_video_pipeline,
-        task_id,
-        request.youtube_url,
-        request.topic,
-        request.level
+
+    await manager.send_progress(
+        client_id,
+        {
+            "type": "progress",
+            "task_id": task_id,
+            "progress": 0,
+            "status": "pending",
+            "step": "Запуск обработки...",
+        },
     )
-    
+
+    await queue_processing_job(
+        {
+            "kind": "video",
+            "task_id": task_id,
+            "video_url": request.youtube_url,
+            "topic": request.topic,
+            "level": request.level,
+        }
+    )
+
     return {"task_id": task_id, "status": "started"}
 
 
@@ -1127,7 +1272,11 @@ async def get_task_status(task_id: str):
     """Получение статуса задачи по task_id"""
     task_data = await redis_client.get(f"task:{task_id}")
     if not task_data:
-        raise HTTPException(status_code=404, detail="Task not found")
+        restored = await load_task_snapshot(task_id)
+        if not restored:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await redis_client.set(f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL)
+        return restored
     return json.loads(task_data)
 
 
@@ -1137,11 +1286,15 @@ async def get_last_result(client_id: str):
     task_id = await redis_client.get(f"client:{client_id}:last_task")
     if not task_id:
         raise HTTPException(status_code=404, detail="No tasks for this client")
-    
+
     task_data = await redis_client.get(f"task:{task_id}")
     if not task_data:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
+        restored = await load_task_snapshot(task_id)
+        if not restored:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await redis_client.set(f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL)
+        return restored
+
     return json.loads(task_data)
 
 
@@ -1150,19 +1303,39 @@ async def get_client_tasks(client_id: str):
     """Получение всех задач клиента"""
     tasks_key = f"client:{client_id}:tasks"
     task_ids = await redis_client.lrange(tasks_key, 0, 19)
-    
+
     tasks = []
     for task_id in task_ids:
         task_data = await redis_client.get(f"task:{task_id}")
         if task_data:
             task = json.loads(task_data)
-            tasks.append({
-                "task_id": task_id,
-                "status": task.get("status"),
-                "progress": task.get("progress"),
-                "video_title": task.get("result", {}).get("video_title", "Processing...")
-            })
-    
+            tasks.append(
+                {
+                    "task_id": task_id,
+                    "status": task.get("status"),
+                    "progress": task.get("progress"),
+                    "video_title": task.get("result", {}).get(
+                        "video_title", "Processing..."
+                    ),
+                }
+            )
+        else:
+            restored = await load_task_snapshot(task_id)
+            if restored:
+                await redis_client.set(
+                    f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL
+                )
+                tasks.append(
+                    {
+                        "task_id": task_id,
+                        "status": restored.get("status"),
+                        "progress": restored.get("progress"),
+                        "video_title": restored.get("result", {}).get(
+                            "video_title", "Processing..."
+                        ),
+                    }
+                )
+
     return {"tasks": tasks, "count": len(tasks)}
 
 
@@ -1170,31 +1343,72 @@ async def get_client_tasks(client_id: str):
 async def get_all_tasks():
     """Получение всех задач (глобальный список для админки)"""
     task_ids = await redis_client.lrange("global:tasks", 0, 99)
-    
+    if task_ids:
+        seen = set()
+        unique_ids = []
+        for task_id in task_ids:
+            if task_id in seen:
+                continue
+            seen.add(task_id)
+            unique_ids.append(task_id)
+        task_ids = unique_ids
+
+    if not task_ids:
+        conn = await db_connect()
+        try:
+            db_ids = await conn.fetch(
+                "SELECT id::text AS id FROM processing_tasks ORDER BY created_at DESC LIMIT 100"
+            )
+            task_ids = [row["id"] for row in db_ids]
+        finally:
+            await db_release(conn)
+
     tasks = []
     for task_id in task_ids:
         task_data = await redis_client.get(f"task:{task_id}")
         if task_data:
             task = json.loads(task_data)
-            tasks.append({
-                "task_id": task_id,
-                "video_url": task.get("video_url") or task.get("youtube_url", ""),
-                "status": task.get("status", "unknown"),
-                "progress": task.get("progress", 0),
-                "step": task.get("step", ""),
-                "logs": task.get("logs", []),
-                "created_at": task.get("created_at"),
-                "result": task.get("result"),
-                "error": task.get("error"),
-            })
-    
+            tasks.append(
+                {
+                    "task_id": task_id,
+                    "video_url": task.get("video_url") or task.get("youtube_url", ""),
+                    "status": task.get("status", "unknown"),
+                    "progress": task.get("progress", 0),
+                    "step": task.get("step", ""),
+                    "logs": task.get("logs", []),
+                    "created_at": task.get("created_at"),
+                    "result": task.get("result"),
+                    "error": task.get("error"),
+                }
+            )
+        else:
+            restored = await load_task_snapshot(task_id)
+            if restored:
+                await redis_client.set(
+                    f"task:{task_id}", json.dumps(restored), ex=REDIS_TTL
+                )
+                tasks.append(
+                    {
+                        "task_id": task_id,
+                        "video_url": restored.get("video_url")
+                        or restored.get("youtube_url", ""),
+                        "status": restored.get("status", "unknown"),
+                        "progress": restored.get("progress", 0),
+                        "step": restored.get("step", ""),
+                        "logs": restored.get("logs", []),
+                        "created_at": restored.get("created_at"),
+                        "result": restored.get("result"),
+                        "error": restored.get("error"),
+                    }
+                )
+
     return {"tasks": tasks, "count": len(tasks)}
 
 
 @app.get("/api/questions", tags=["Public"])
 async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = None):
     """Получение всех одобренных вопросов"""
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         query = """
@@ -1203,20 +1417,22 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
             WHERE approved = TRUE
         """
         params = []
-        
+
         if topic:
             query += " AND topic = $1"
             params.append(topic)
-        
+
         if level:
             idx = len(params) + 1
             query += f" AND difficulty = ${idx}"
             params.append(level)
-        
+
         query += " ORDER BY probability DESC NULLS LAST, created_at DESC"
-        
-        questions = await conn.fetch(query, *params) if params else await conn.fetch(query)
-        
+
+        questions = (
+            await conn.fetch(query, *params) if params else await conn.fetch(query)
+        )
+
         result = [
             {
                 "id": q["id"],
@@ -1225,14 +1441,14 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
                 "topic": q["topic"],
                 "difficulty": q["difficulty"],
                 "probability": float(q["probability"]) if q["probability"] else 0.0,
-                "timecode": q["timecode"]
+                "timecode": q["timecode"],
             }
             for q in questions
         ]
-        
+
         return JSONResponse(
             content={"questions": result, "total": len(result)},
-            media_type="application/json; charset=utf-8"
+            media_type="application/json; charset=utf-8",
         )
     finally:
         await conn.close()
@@ -1244,8 +1460,9 @@ async def get_public_question_detail(question_id: int):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
-        
-        q = await conn.fetchrow("""
+
+        q = await conn.fetchrow(
+            """
             SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability,
                    q.timecode, q.source_url, q.video_title, q.created_at,
                    COALESCE(vc.cnt, 0) AS video_count
@@ -1255,13 +1472,16 @@ async def get_public_question_detail(question_id: int):
                 FROM question_video GROUP BY question_id
             ) vc ON vc.question_id = q.id
             WHERE q.id = $1 AND q.approved = TRUE
-        """, question_id)
-        
+        """,
+            question_id,
+        )
+
         if not q:
             raise HTTPException(status_code=404, detail="Question not found")
-        
+
         # Видео, в которых встречался этот вопрос (с таймкодами)
-        videos = await conn.fetch("""
+        videos = await conn.fetch(
+            """
             SELECT pv.id, pv.title, pv.youtube_url, pv.platform,
                    qt.timecode_start, qt.timecode_seconds
             FROM question_video qv
@@ -1269,8 +1489,10 @@ async def get_public_question_detail(question_id: int):
             LEFT JOIN question_timecodes qt ON qt.question_id = qv.question_id AND qt.video_id = qv.video_id
             WHERE qv.question_id = $1
             ORDER BY pv.title
-        """, question_id)
-        
+        """,
+            question_id,
+        )
+
         # Похожие вопросы
         similar = []
         try:
@@ -1279,7 +1501,7 @@ async def get_public_question_detail(question_id: int):
             similar = [s for s in similar if s.get("id") != question_id]
         except Exception as e:
             print(f"⚠️ Similar search failed: {e}")
-        
+
         result = {
             "id": q["id"],
             "question": q["question"],
@@ -1306,8 +1528,10 @@ async def get_public_question_detail(question_id: int):
             ],
             "similar_questions": similar,
         }
-        
-        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+
+        return JSONResponse(
+            content=result, media_type="application/json; charset=utf-8"
+        )
     finally:
         await conn.close()
 
@@ -1319,7 +1543,7 @@ async def get_similar_questions_api(query: str, limit: int = 5):
         similar = await search_similar_questions(query, limit=limit)
         return JSONResponse(
             content={"similar_questions": similar},
-            media_type="application/json; charset=utf-8"
+            media_type="application/json; charset=utf-8",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1332,20 +1556,22 @@ async def export_questions_json(task_id: str):
     task_data = await redis_client.get(f"task:{task_id}")
     if not task_data:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     task = json.loads(task_data)
     result = task.get("result", {})
-    
+
     export_data = {
         "task_id": task_id,
         "video_title": result.get("video_title", "Unknown"),
         "questions_count": result.get("questions_count", 0),
-        "questions": result.get("questions", [])
+        "questions": result.get("questions", []),
     }
-    
+
     return JSONResponse(
         content=export_data,
-        headers={"Content-Disposition": f'attachment; filename="questions_{task_id}.json"'}
+        headers={
+            "Content-Disposition": f'attachment; filename="questions_{task_id}.json"'
+        },
     )
 
 
@@ -1355,11 +1581,13 @@ async def get_transcript(task_id: str):
     transcript_data = await redis_client.get(f"transcript:{task_id}")
     if not transcript_data:
         raise HTTPException(status_code=404, detail="Transcript not found")
-    
+
     data = json.loads(transcript_data)
     return JSONResponse(
         content=data,
-        headers={"Content-Disposition": f'attachment; filename="transcript_{task_id}.json"'}
+        headers={
+            "Content-Disposition": f'attachment; filename="transcript_{task_id}.json"'
+        },
     )
 
 
@@ -1368,10 +1596,10 @@ async def full_export(task_id: str):
     """Полный экспорт данных задачи"""
     transcript_data = await redis_client.get(f"transcript:{task_id}")
     transcript = json.loads(transcript_data) if transcript_data else {}
-    
+
     task_data = await redis_client.get(f"task:{task_id}")
     task = json.loads(task_data) if task_data else {}
-    
+
     export = {
         "task_id": task_id,
         "transcript": transcript.get("transcript", ""),
@@ -1379,12 +1607,14 @@ async def full_export(task_id: str):
         "video_title": task.get("result", {}).get("video_title", "Unknown"),
         "questions": task.get("result", {}).get("questions", []),
         "questions_count": task.get("result", {}).get("questions_count", 0),
-        "status": task.get("status", "unknown")
+        "status": task.get("status", "unknown"),
     }
-    
+
     return JSONResponse(
         content=export,
-        headers={"Content-Disposition": f'attachment; filename="full_export_{task_id}.json"'}
+        headers={
+            "Content-Disposition": f'attachment; filename="full_export_{task_id}.json"'
+        },
     )
 
 
@@ -1396,7 +1626,7 @@ async def get_admin_questions(_admin: dict = Depends(require_admin)):
     try:
         # Общее число обработанных видео
         total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
-        
+
         questions = await conn.fetch("""
             SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability, 
                    q.timecode, q.approved, q.source_url, q.video_title, q.created_at,
@@ -1409,7 +1639,7 @@ async def get_admin_questions(_admin: dict = Depends(require_admin)):
             ) vc ON vc.question_id = q.id
             ORDER BY q.probability DESC NULLS LAST, q.created_at DESC
         """)
-        
+
         result = [
             {
                 "id": q["id"],
@@ -1427,20 +1657,22 @@ async def get_admin_questions(_admin: dict = Depends(require_admin)):
             }
             for q in questions
         ]
-        
+
         return JSONResponse(
             content={"questions": result, "total_videos": total_videos},
-            media_type="application/json; charset=utf-8"
+            media_type="application/json; charset=utf-8",
         )
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/questions", tags=["Admin"])
-async def create_question(data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def create_question(
+    data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Создать новый вопрос"""
     from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         question_id = await conn.fetchval(
@@ -1451,9 +1683,9 @@ async def create_question(data: dict = Body(...), _admin: dict = Depends(require
             data.get("answer", ""),
             data.get("topic", "General"),
             data.get("difficulty", "middle"),
-            data.get("approved", False)
+            data.get("approved", False),
         )
-        
+
         await invalidate_similarity_cache()
         return {"id": question_id, "message": "Question created"}
     finally:
@@ -1461,10 +1693,12 @@ async def create_question(data: dict = Body(...), _admin: dict = Depends(require
 
 
 @app.put("/api/admin/questions/{question_id}", tags=["Admin"])
-async def update_question(question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def update_question(
+    question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Обновить вопрос (body JSON)"""
     from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute(
@@ -1477,9 +1711,9 @@ async def update_question(question_id: int, data: dict = Body(...), _admin: dict
             data.get("difficulty", "middle"),
             data.get("timecode"),
             data.get("approved", False),
-            question_id
+            question_id,
         )
-        
+
         await invalidate_similarity_cache()
         return {"message": "Question updated"}
     finally:
@@ -1490,7 +1724,7 @@ async def update_question(question_id: int, data: dict = Body(...), _admin: dict
 async def delete_question(question_id: int, _admin: dict = Depends(require_admin)):
     """Удалить вопрос"""
     from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute("DELETE FROM questions WHERE id = $1", question_id)
@@ -1501,44 +1735,48 @@ async def delete_question(question_id: int, _admin: dict = Depends(require_admin
 
 
 @app.post("/api/admin/approve-questions", tags=["Admin"])
-async def approve_questions(data: Dict[str, List[int]], _admin: dict = Depends(require_admin)):
+async def approve_questions(
+    data: Dict[str, List[int]], _admin: dict = Depends(require_admin)
+):
     """Одобрить вопросы"""
     from similarity_search import invalidate_similarity_cache
-    
+
     question_ids = data.get("question_ids", [])
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute(
             "UPDATE questions SET approved = TRUE WHERE id = ANY($1::int[])",
-            question_ids
+            question_ids,
         )
-        
+
         await update_probabilities(conn)
         await invalidate_similarity_cache()
-        
+
         return {"message": f"Approved {len(question_ids)} questions"}
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/revoke-questions", tags=["Admin"])
-async def revoke_questions(data: Dict[str, List[int]], _admin: dict = Depends(require_admin)):
+async def revoke_questions(
+    data: Dict[str, List[int]], _admin: dict = Depends(require_admin)
+):
     """Отозвать утверждение вопросов (approved → false)"""
     from similarity_search import invalidate_similarity_cache
-    
+
     question_ids = data.get("question_ids", [])
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await conn.execute(
             "UPDATE questions SET approved = FALSE WHERE id = ANY($1::int[])",
-            question_ids
+            question_ids,
         )
-        
+
         await update_probabilities(conn)
         await invalidate_similarity_cache()
-        
+
         return {"message": f"Revoked {len(question_ids)} questions"}
     finally:
         await conn.close()
@@ -1548,12 +1786,13 @@ async def revoke_questions(data: Dict[str, List[int]], _admin: dict = Depends(re
 async def get_question_detail(question_id: int, _admin: dict = Depends(require_admin)):
     """Получить полную карточку вопроса: данные + video_count + похожие вопросы"""
     from similarity_search import get_similar_questions as find_similar
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
-        
-        q = await conn.fetchrow("""
+
+        q = await conn.fetchrow(
+            """
             SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.probability,
                    q.timecode, q.approved, q.source_url, q.video_title, q.created_at,
                    COALESCE(vc.cnt, 0) AS video_count
@@ -1563,27 +1802,34 @@ async def get_question_detail(question_id: int, _admin: dict = Depends(require_a
                 FROM question_video GROUP BY question_id
             ) vc ON vc.question_id = q.id
             WHERE q.id = $1
-        """, question_id)
-        
+        """,
+            question_id,
+        )
+
         if not q:
             raise HTTPException(status_code=404, detail="Question not found")
-        
+
         # Видео, в которых встречался этот вопрос
-        videos = await conn.fetch("""
+        videos = await conn.fetch(
+            """
             SELECT pv.id, pv.title, pv.youtube_url, pv.platform, pv.processed_at
             FROM question_video qv
             JOIN processed_videos pv ON pv.id = qv.video_id
             WHERE qv.question_id = $1
             ORDER BY pv.processed_at DESC
-        """, question_id)
-        
+        """,
+            question_id,
+        )
+
         # Похожие вопросы (через FAISS embeddings)
         similar = []
         try:
-            similar = await find_similar(q["question"], question_id=question_id, limit=5)
+            similar = await find_similar(
+                q["question"], question_id=question_id, limit=5
+            )
         except Exception as e:
             print(f"⚠️ Similar search failed: {e}")
-        
+
         result = {
             "id": q["id"],
             "question": q["question"],
@@ -1604,7 +1850,9 @@ async def get_question_detail(question_id: int, _admin: dict = Depends(require_a
                     "title": v["title"],
                     "url": v["youtube_url"],
                     "platform": v["platform"],
-                    "processed_at": v["processed_at"].isoformat() if v["processed_at"] else None,
+                    "processed_at": v["processed_at"].isoformat()
+                    if v["processed_at"]
+                    else None,
                 }
                 for v in videos
             ],
@@ -1620,88 +1868,108 @@ async def get_question_detail(question_id: int, _admin: dict = Depends(require_a
                 for s in similar
             ],
         }
-        
-        return JSONResponse(content=result, media_type="application/json; charset=utf-8")
+
+        return JSONResponse(
+            content=result, media_type="application/json; charset=utf-8"
+        )
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/questions/merge", tags=["Admin"])
-async def merge_questions(data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def merge_questions(
+    data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """
     Объединить вопрос source_id в target_id.
     Все video-связи source переносятся на target, source удаляется.
     Вероятность target пересчитывается.
     """
     from similarity_search import invalidate_similarity_cache
-    
+
     source_id = data.get("source_id")
     target_id = data.get("target_id")
-    
+
     if not source_id or not target_id:
         raise HTTPException(status_code=400, detail="source_id и target_id обязательны")
-    
+
     if source_id == target_id:
-        raise HTTPException(status_code=400, detail="Нельзя объединить вопрос сам с собой")
-    
+        raise HTTPException(
+            status_code=400, detail="Нельзя объединить вопрос сам с собой"
+        )
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         # Проверяем что оба существуют
-        source = await conn.fetchrow("SELECT id, question FROM questions WHERE id = $1", source_id)
-        target = await conn.fetchrow("SELECT id, question FROM questions WHERE id = $1", target_id)
-        
+        source = await conn.fetchrow(
+            "SELECT id, question FROM questions WHERE id = $1", source_id
+        )
+        target = await conn.fetchrow(
+            "SELECT id, question FROM questions WHERE id = $1", target_id
+        )
+
         if not source:
-            raise HTTPException(status_code=404, detail=f"Вопрос source_id={source_id} не найден")
+            raise HTTPException(
+                status_code=404, detail=f"Вопрос source_id={source_id} не найден"
+            )
         if not target:
-            raise HTTPException(status_code=404, detail=f"Вопрос target_id={target_id} не найден")
-        
+            raise HTTPException(
+                status_code=404, detail=f"Вопрос target_id={target_id} не найден"
+            )
+
         # Переносим все video-связи с source на target (игнорируем конфликты)
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO question_video (question_id, video_id)
             SELECT $1, video_id FROM question_video WHERE question_id = $2
             ON CONFLICT DO NOTHING
-        """, target_id, source_id)
-        
+        """,
+            target_id,
+            source_id,
+        )
+
         # Удаляем source
         await conn.execute("DELETE FROM questions WHERE id = $1", source_id)
-        
+
         # Пересчитываем вероятности
         await update_probabilities(conn)
         await invalidate_similarity_cache()
-        
+
         return {
             "message": f"Вопрос #{source_id} объединён с #{target_id}",
-            "target_id": target_id
+            "target_id": target_id,
         }
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/generate-answer/{question_id}", tags=["Admin"])
-async def generate_answer_for_question(question_id: int, _admin: dict = Depends(require_admin)):
+async def generate_answer_for_question(
+    question_id: int, _admin: dict = Depends(require_admin)
+):
     """
     Генерация ответа на вопрос через LLM
-    
+
     Админ может использовать эту функцию для автоматической генерации
     ответов на вопросы через LLM (OpenRouter, Gemini, Groq)
     """
     from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         # Получаем вопрос
         question_data = await conn.fetchrow(
             "SELECT id, question, topic, difficulty FROM questions WHERE id = $1",
-            question_id
+            question_id,
         )
-        
+
         if not question_data:
             raise HTTPException(status_code=404, detail="Question not found")
-        
+
         question_text = question_data["question"]
         topic = question_data["topic"]
         difficulty = question_data["difficulty"]
-        
+
         # Генерируем ответ через LLM
         prompt = f"""Ты — эксперт в области IT и программирования. Дай развёрнутый, но лаконичный ответ на вопрос технического собеседования.
 
@@ -1716,25 +1984,28 @@ async def generate_answer_for_question(question_id: int, _admin: dict = Depends(
 - Структурируй ответ логично
 
 Верни только текст ответа, без дополнительных пояснений."""
-        
+
         # Вызываем LLM
         llm_response = await call_llm_api_for_answer(prompt)
-        
+
         # Обновляем вопрос с ответом
         await conn.execute(
             """UPDATE questions SET answer = $1 WHERE id = $2""",
-            llm_response, question_id
+            llm_response,
+            question_id,
         )
-        
+
         await invalidate_similarity_cache()
-        
+
         return {
             "message": "Answer generated successfully",
             "question_id": question_id,
-            "answer": llm_response
+            "answer": llm_response,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate answer: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate answer: {str(e)}"
+        )
     finally:
         await conn.close()
 
@@ -1743,7 +2014,7 @@ async def generate_answer_for_question(question_id: int, _admin: dict = Depends(
 async def recalculate_probabilities(_admin: dict = Depends(require_admin)):
     """Пересчитать вероятности"""
     from similarity_search import invalidate_similarity_cache
-    
+
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         await update_probabilities(conn)
@@ -1766,9 +2037,9 @@ def is_valid_video_url(url: str) -> bool:
 def extract_video_id(url: str) -> str:
     """Извлечение ID видео из URL"""
     patterns = [
-        r'(?:v=|/)([a-zA-Z0-9_-]{11})',
-        r'youtu\.be/([a-zA-Z0-9_-]{11})',
-        r'shorts/([a-zA-Z0-9_-]{11})'
+        r"(?:v=|/)([a-zA-Z0-9_-]{11})",
+        r"youtu\.be/([a-zA-Z0-9_-]{11})",
+        r"shorts/([a-zA-Z0-9_-]{11})",
     ]
     for pattern in patterns:
         match = re.search(pattern, url)
@@ -1781,93 +2052,96 @@ def parse_vtt_subtitles(vtt_path: Path) -> List[Dict[str, Any]]:
     """Парсинг VTT субтитров"""
     subtitles = []
     try:
-        with open(vtt_path, 'r', encoding='utf-8') as f:
+        with open(vtt_path, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         # Простой парсинг VTT
-        lines = content.split('\n')
+        lines = content.split("\n")
         i = 0
         while i < len(lines):
             line = lines[i].strip()
-            
+
             # Ищем таймкод
-            if '-->' in line:
-                times = line.split('-->')
+            if "-->" in line:
+                times = line.split("-->")
                 start_time = times[0].strip()
                 end_time = times[1].strip()
-                
+
                 # Следующая строка - текст
                 i += 1
                 text_parts = []
-                while i < len(lines) and lines[i].strip() and '-->' not in lines[i]:
+                while i < len(lines) and lines[i].strip() and "-->" not in lines[i]:
                     text_parts.append(lines[i].strip())
                     i += 1
-                
-                text = ' '.join(text_parts)
+
+                text = " ".join(text_parts)
                 if text:
-                    subtitles.append({
-                        "start": start_time,
-                        "end": end_time,
-                        "text": text
-                    })
-            
+                    subtitles.append(
+                        {"start": start_time, "end": end_time, "text": text}
+                    )
+
             i += 1
     except Exception as e:
         print(f"⚠️ VTT parsing error: {e}")
-    
+
     return subtitles
 
 
-def merge_subtitles_with_whisper(subtitles: List[Dict], whisper_segments: List[Dict]) -> List[Dict]:
+def merge_subtitles_with_whisper(
+    subtitles: List[Dict], whisper_segments: List[Dict]
+) -> List[Dict]:
     """Слияние YouTube субтитров с Whisper"""
     merged = []
-    
+
     for sub in subtitles:
         # Ищем соответствующий сегмент Whisper
         best_match = None
         for wseg in whisper_segments:
             # Простое сопоставление по времени
-            if abs(wseg.get("start", 0) - float(sub.get("start", "0").split(':')[-1])) < 2.0:
+            if (
+                abs(wseg.get("start", 0) - float(sub.get("start", "0").split(":")[-1]))
+                < 2.0
+            ):
                 best_match = wseg
                 break
-        
+
         merged_text = sub["text"]
-        if best_match and '?' in best_match["text"]:
+        if best_match and "?" in best_match["text"]:
             # Whisper даёт пунктуацию
             merged_text = best_match["text"]
-        
-        merged.append({
-            "start": sub.get("start"),
-            "end": sub.get("end"),
-            "text": merged_text
-        })
-    
+
+        merged.append(
+            {"start": sub.get("start"), "end": sub.get("end"), "text": merged_text}
+        )
+
     return merged if merged else whisper_segments
 
 
-def filter_low_quality_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def filter_low_quality_questions(
+    questions: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """Фильтрация мусорных вопросов"""
     if not questions:
         return []
-    
+
     garbage_patterns = [
-        r'^(да|нет|ага|угу|ну|ок|м+|хм+|э)\??$',
-        r'^(что|как|а)\??$',
-        r'^.{1,4}\??$',
+        r"^(да|нет|ага|угу|ну|ок|м+|хм+|э)\??$",
+        r"^(что|как|а)\??$",
+        r"^.{1,4}\??$",
     ]
-    
+
     filtered = []
     for q in questions:
         text = q.get("question", "").strip().lower()
-        
+
         if any(re.match(pattern, text) for pattern in garbage_patterns):
             continue
-        
+
         if len(text) < 5:
             continue
-        
+
         filtered.append(q)
-    
+
     return filtered
 
 
@@ -1875,19 +2149,19 @@ def deduplicate_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any
     """Удаление дубликатов"""
     if not questions:
         return []
-    
+
     seen = set()
     unique = []
-    
+
     for q in questions:
         text = q.get("question", "").strip().lower()
-        normalized = re.sub(r'[^\w\s]', '', text)
-        normalized = ' '.join(normalized.split())
-        
+        normalized = re.sub(r"[^\w\s]", "", text)
+        normalized = " ".join(normalized.split())
+
         if normalized and normalized not in seen:
             seen.add(normalized)
             unique.append(q)
-    
+
     return unique
 
 
@@ -1908,25 +2182,28 @@ def cleanup_temp_files(video_id: str):
 async def update_probabilities(conn):
     """Обновить вероятности для всех вопросов (на основе % видео, в которых встречается вопрос)"""
     total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
-    
+
     if total_videos > 0:
         # Обновляем вероятность для ВСЕХ вопросов (не только approved)
         # Вероятность = кол-во видео с этим вопросом / общее кол-во видео * 100
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE questions 
             SET probability = (
                 SELECT COALESCE(COUNT(DISTINCT qv.video_id) * 100.0 / $1, 0)
                 FROM question_video qv
                 WHERE qv.question_id = questions.id
             )
-        """, total_videos)
+        """,
+            total_videos,
+        )
 
 
 # ============== LLM API Calls ==============
 async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
     """Умный выбор LLM провайдера для извлечения вопросов"""
     provider = LLM_PROVIDER.lower()
-    
+
     if provider == "auto":
         if OPENROUTER_API_KEY:
             provider = "openrouter"
@@ -1936,9 +2213,9 @@ async def call_llm_api(prompt: str) -> List[Dict[str, Any]]:
             provider = "groq"
         else:
             raise Exception("No LLM API key configured")
-    
+
     print(f"🤖 Using LLM provider: {provider}")
-    
+
     if provider == "openrouter":
         return await call_openrouter_api(prompt)
     elif provider == "gemini":
@@ -1955,7 +2232,7 @@ async def call_llm_api_for_answer(prompt: str) -> str:
     (используется для генерации ответов на вопросы в админке)
     """
     provider = LLM_PROVIDER.lower()
-    
+
     if provider == "auto":
         if OPENROUTER_API_KEY:
             provider = "openrouter"
@@ -1965,72 +2242,72 @@ async def call_llm_api_for_answer(prompt: str) -> str:
             provider = "groq"
         else:
             raise Exception("No LLM API key configured")
-    
+
     print(f"🤖 Generating answer using: {provider}")
-    
+
     async with httpx.AsyncClient(timeout=120.0) as client:
         if provider == "openrouter":
             response = await client.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={
                     "model": "meta-llama/llama-3.1-70b-instruct",
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7
-                }
+                    "temperature": 0.7,
+                },
             )
-            
+
             if response.status_code != 200:
                 raise Exception(f"OpenRouter error: {response.text}")
-            
+
             result = response.json()
             return result["choices"][0]["message"]["content"]
-        
+
         elif provider == "gemini":
             models = ["gemini-2.0-flash", "gemini-1.5-flash"]
-            
+
             for model in models:
                 try:
                     response = await client.post(
                         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
                         json={
                             "contents": [{"parts": [{"text": prompt}]}],
-                            "generationConfig": {"temperature": 0.7}
-                        }
+                            "generationConfig": {"temperature": 0.7},
+                        },
                     )
-                    
+
                     if response.status_code == 200:
                         result = response.json()
                         return result["candidates"][0]["content"]["parts"][0]["text"]
                 except Exception as e:
                     print(f"⚠️ Gemini {model} failed: {e}")
                     continue
-            
+
             raise Exception("All Gemini models failed")
-        
+
         elif provider == "groq":
             response = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={
                     "model": "llama-3.1-70b-versatile",
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7
-                }
+                    "temperature": 0.7,
+                },
             )
-            
+
             if response.status_code != 200:
                 raise Exception(f"Groq error: {response.text}")
-            
+
             result = response.json()
             return result["choices"][0]["message"]["content"]
-        
+
         else:
             raise Exception(f"Unknown provider: {provider}")
 
@@ -2042,27 +2319,27 @@ async def call_openrouter_api(prompt: str) -> List[Dict[str, Any]]:
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             json={
                 "model": "meta-llama/llama-3.1-70b-instruct",
-                "messages": [{"role": "user", "content": prompt}]
-            }
+                "messages": [{"role": "user", "content": prompt}],
+            },
         )
-        
+
         if response.status_code != 200:
             raise Exception(f"OpenRouter error: {response.text}")
-        
+
         result = response.json()
         text = result["choices"][0]["message"]["content"]
-        
+
         return parse_questions_from_llm(text)
 
 
 async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
     """Google Gemini API"""
     models = ["gemini-2.0-flash", "gemini-1.5-flash"]
-    
+
     for model in models:
         try:
             async with httpx.AsyncClient(timeout=180.0) as client:
@@ -2070,10 +2347,10 @@ async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
                     f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
                     json={
                         "contents": [{"parts": [{"text": prompt}]}],
-                        "generationConfig": {"temperature": 0.3}
-                    }
+                        "generationConfig": {"temperature": 0.3},
+                    },
                 )
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     text = result["candidates"][0]["content"]["parts"][0]["text"]
@@ -2081,7 +2358,7 @@ async def call_gemini_api(prompt: str) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"⚠️ Gemini {model} failed: {e}")
             continue
-    
+
     # Fallback to Groq
     return await call_groq_api(prompt)
 
@@ -2090,7 +2367,7 @@ async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
     """Groq API с retry при rate limiting"""
     max_retries = 5
     base_delay = 10
-    
+
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=180.0) as client:
@@ -2098,21 +2375,21 @@ async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
                     "https://api.groq.com/openai/v1/chat/completions",
                     headers={
                         "Authorization": f"Bearer {GROQ_API_KEY}",
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
                     json={
                         "model": "llama-3.1-70b-versatile",
                         "messages": [{"role": "user", "content": prompt}],
-                        "temperature": 0.3
-                    }
+                        "temperature": 0.3,
+                    },
                 )
-                
+
                 if response.status_code == 200:
                     result = response.json()
                     text = result["choices"][0]["message"]["content"]
                     return parse_questions_from_llm(text)
                 elif response.status_code == 429:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     print(f"⚠️ Groq rate limit, retrying in {delay}s...")
                     await asyncio.sleep(delay)
                 else:
@@ -2120,7 +2397,7 @@ async def call_groq_api(prompt: str) -> List[Dict[str, Any]]:
         except Exception as e:
             if attempt == max_retries - 1:
                 raise
-    
+
     raise Exception("Groq API error after retries")
 
 
@@ -2128,10 +2405,10 @@ def parse_questions_from_llm(response: str) -> List[Dict[str, Any]]:
     """Парсинг JSON из ответа LLM"""
     try:
         # Удаляем markdown code blocks
-        response = re.sub(r'```json\s*', '', response)
-        response = re.sub(r'```\s*', '', response)
+        response = re.sub(r"```json\s*", "", response)
+        response = re.sub(r"```\s*", "", response)
         response = response.strip()
-        
+
         questions = json.loads(response)
         return questions if isinstance(questions, list) else []
     except json.JSONDecodeError:
@@ -2143,18 +2420,23 @@ def parse_questions_from_llm(response: str) -> List[Dict[str, Any]]:
 # ============== Дополнительные эндпоинты (v2.1) =====================
 # =====================================================================
 
+
 async def _table_exists(conn, table_name: str) -> bool:
     """Проверка существования таблицы"""
     try:
         return await conn.fetchval(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)", table_name)
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)",
+            table_name,
+        )
     except Exception:
         return False
 
 
 # ============== Массовая генерация ответов ==============
 @app.post("/api/admin/generate-answers-bulk", tags=["Admin"])
-async def generate_answers_bulk(data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def generate_answers_bulk(
+    data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Массовая генерация ответов для вопросов без ответов"""
     question_ids = data.get("question_ids", [])
     max_count = data.get("max_count", 10)
@@ -2164,7 +2446,8 @@ async def generate_answers_bulk(data: dict = Body(...), _admin: dict = Depends(r
         if not question_ids:
             rows = await conn.fetch(
                 "SELECT id FROM questions WHERE (answer IS NULL OR answer = '') AND approved = TRUE LIMIT $1",
-                max_count)
+                max_count,
+            )
             question_ids = [r["id"] for r in rows]
 
         generated = 0
@@ -2191,21 +2474,28 @@ async def create_suggestion(data: dict = Body(...)):
     if not url:
         raise HTTPException(status_code=400, detail="URL обязателен")
 
-    platform = video_downloader.detect_platform(url) if video_downloader else 'unknown'
+    platform = video_downloader.detect_platform(url) if video_downloader else "unknown"
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        suggestion_id = await conn.fetchval("""
+        suggestion_id = await conn.fetchval(
+            """
             INSERT INTO video_suggestions (url, platform, topic, difficulty, comment, user_name, user_email)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
-        """, url, platform,
+        """,
+            url,
+            platform,
             data.get("topic", "General"),
             data.get("difficulty", "middle"),
             data.get("comment", ""),
             data.get("user_name", ""),
-            data.get("user_email", ""))
-        return {"id": suggestion_id, "message": "Спасибо! Ваше предложение отправлено на рассмотрение."}
+            data.get("user_email", ""),
+        )
+        return {
+            "id": suggestion_id,
+            "message": "Спасибо! Ваше предложение отправлено на рассмотрение.",
+        }
     finally:
         await conn.close()
 
@@ -2217,15 +2507,18 @@ async def get_suggestions(status: Optional[str] = None):
     try:
         if status:
             suggestions = await conn.fetch(
-                "SELECT * FROM video_suggestions WHERE status = $1 ORDER BY created_at DESC", status)
+                "SELECT * FROM video_suggestions WHERE status = $1 ORDER BY created_at DESC",
+                status,
+            )
         else:
             suggestions = await conn.fetch(
-                "SELECT * FROM video_suggestions ORDER BY created_at DESC LIMIT 50")
+                "SELECT * FROM video_suggestions ORDER BY created_at DESC LIMIT 50"
+            )
         result = []
         for s in suggestions:
             row = dict(s)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"suggestions": result}
@@ -2238,12 +2531,14 @@ async def get_admin_suggestions(_admin: dict = Depends(require_admin)):
     """Все предложения видео для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        suggestions = await conn.fetch("SELECT * FROM video_suggestions ORDER BY created_at DESC")
+        suggestions = await conn.fetch(
+            "SELECT * FROM video_suggestions ORDER BY created_at DESC"
+        )
         result = []
         for s in suggestions:
             row = dict(s)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"suggestions": result}
@@ -2252,7 +2547,9 @@ async def get_admin_suggestions(_admin: dict = Depends(require_admin)):
 
 
 @app.put("/api/admin/suggestions/{suggestion_id}", tags=["Admin"])
-async def update_suggestion(suggestion_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def update_suggestion(
+    suggestion_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Обновить статус предложения"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2260,39 +2557,72 @@ async def update_suggestion(suggestion_id: int, data: dict = Body(...), _admin: 
         admin_comment = data.get("admin_comment", "")
         await conn.execute(
             "UPDATE video_suggestions SET status = $1, admin_comment = $2 WHERE id = $3",
-            status, admin_comment, suggestion_id)
+            status,
+            admin_comment,
+            suggestion_id,
+        )
         return {"message": "Предложение обновлено"}
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/suggestions/{suggestion_id}/process", tags=["Admin"])
-async def process_suggestion(suggestion_id: int, background_tasks: BackgroundTasks, _admin: dict = Depends(require_admin)):
+async def process_suggestion(
+    suggestion_id: int,
+    _admin: dict = Depends(require_admin),
+):
     """Обработать предложенное видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        suggestion = await conn.fetchrow("SELECT * FROM video_suggestions WHERE id = $1", suggestion_id)
+        suggestion = await conn.fetchrow(
+            "SELECT * FROM video_suggestions WHERE id = $1", suggestion_id
+        )
         if not suggestion:
             raise HTTPException(status_code=404, detail="Предложение не найдено")
-        await conn.execute("UPDATE video_suggestions SET status = 'processing' WHERE id = $1", suggestion_id)
+        await conn.execute(
+            "UPDATE video_suggestions SET status = 'processing' WHERE id = $1",
+            suggestion_id,
+        )
 
         task_id = str(uuid.uuid4())
-        topic = suggestion.get("topic", "General") if hasattr(suggestion, 'get') else (suggestion["topic"] or "General")
-        difficulty = suggestion.get("difficulty", "middle") if hasattr(suggestion, 'get') else (suggestion["difficulty"] or "middle")
+        topic = (
+            suggestion.get("topic", "General")
+            if hasattr(suggestion, "get")
+            else (suggestion["topic"] or "General")
+        )
+        difficulty = (
+            suggestion.get("difficulty", "middle")
+            if hasattr(suggestion, "get")
+            else (suggestion["difficulty"] or "middle")
+        )
         video_url = suggestion["url"]
 
         task_data = {
             "task_id": task_id,
             "youtube_url": video_url,
+            "video_url": video_url,
             "topic": topic,
             "level": difficulty,
             "status": "pending",
             "progress": 0,
             "step": "Обработка предложенного видео...",
-            "suggestion_id": suggestion_id
+            "suggestion_id": suggestion_id,
+            "created_at": datetime.now().isoformat(),
         }
         await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
-        background_tasks.add_task(process_video_pipeline, task_id, video_url, topic, difficulty)
+        await persist_task_snapshot(task_data)
+        await redis_client.lpush("global:tasks", task_id)
+        await redis_client.ltrim("global:tasks", 0, 99)
+        await redis_client.expire("global:tasks", REDIS_TTL)
+        await queue_processing_job(
+            {
+                "kind": "video",
+                "task_id": task_id,
+                "video_url": video_url,
+                "topic": topic,
+                "level": difficulty,
+            }
+        )
         return {"task_id": task_id, "message": "Видео отправлено на обработку"}
     finally:
         await conn.close()
@@ -2304,7 +2634,8 @@ async def create_feedback(data: dict = Body(...)):
     """Оставить обратную связь"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        feedback_id = await conn.fetchval("""
+        feedback_id = await conn.fetchval(
+            """
             INSERT INTO feedback (question_id, feedback_type, rating, comment, user_name, user_email, user_session)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
@@ -2315,29 +2646,34 @@ async def create_feedback(data: dict = Body(...)):
             data.get("comment", ""),
             data.get("user_name", ""),
             data.get("user_email", ""),
-            data.get("user_session", ""))
+            data.get("user_session", ""),
+        )
         return {"id": feedback_id, "message": "Спасибо за обратную связь!"}
     finally:
         await conn.close()
 
 
 @app.get("/api/admin/feedback", tags=["Admin"])
-async def get_admin_feedback(is_resolved: Optional[bool] = None, _admin: dict = Depends(require_admin)):
+async def get_admin_feedback(
+    is_resolved: Optional[bool] = None, _admin: dict = Depends(require_admin)
+):
     """Вся обратная связь для админа"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         if is_resolved is not None:
             feedbacks = await conn.fetch(
                 "SELECT f.*, q.question as question_text FROM feedback f LEFT JOIN questions q ON f.question_id = q.id WHERE f.is_resolved = $1 ORDER BY f.created_at DESC",
-                is_resolved)
+                is_resolved,
+            )
         else:
             feedbacks = await conn.fetch(
-                "SELECT f.*, q.question as question_text FROM feedback f LEFT JOIN questions q ON f.question_id = q.id ORDER BY f.created_at DESC LIMIT 100")
+                "SELECT f.*, q.question as question_text FROM feedback f LEFT JOIN questions q ON f.question_id = q.id ORDER BY f.created_at DESC LIMIT 100"
+            )
         result = []
         for f in feedbacks:
             row = dict(f)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"feedbacks": result}
@@ -2346,7 +2682,9 @@ async def get_admin_feedback(is_resolved: Optional[bool] = None, _admin: dict = 
 
 
 @app.put("/api/admin/feedback/{feedback_id}", tags=["Admin"])
-async def resolve_feedback(feedback_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def resolve_feedback(
+    feedback_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Разрешить/ответить на обратную связь"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2354,7 +2692,8 @@ async def resolve_feedback(feedback_id: int, data: dict = Body(...), _admin: dic
             "UPDATE feedback SET is_resolved = $1, admin_response = $2 WHERE id = $3",
             data.get("is_resolved", True),
             data.get("admin_response", ""),
-            feedback_id)
+            feedback_id,
+        )
         return {"message": "Обратная связь обновлена"}
     finally:
         await conn.close()
@@ -2369,17 +2708,24 @@ async def toggle_bookmark(data: dict = Body(...)):
         question_id = data.get("question_id")
         user_session = data.get("user_session", "")
         if not question_id or not user_session:
-            raise HTTPException(status_code=400, detail="question_id и user_session обязательны")
+            raise HTTPException(
+                status_code=400, detail="question_id и user_session обязательны"
+            )
         existing = await conn.fetchval(
             "SELECT id FROM bookmarks WHERE question_id = $1 AND user_session = $2",
-            question_id, user_session)
+            question_id,
+            user_session,
+        )
         if existing:
             await conn.execute("DELETE FROM bookmarks WHERE id = $1", existing)
             return {"bookmarked": False, "message": "Закладка удалена"}
         else:
             await conn.execute(
                 "INSERT INTO bookmarks (question_id, user_session, note) VALUES ($1, $2, $3)",
-                question_id, user_session, data.get("note", ""))
+                question_id,
+                user_session,
+                data.get("note", ""),
+            )
             return {"bookmarked": True, "message": "Добавлено в закладки"}
     finally:
         await conn.close()
@@ -2390,19 +2736,22 @@ async def get_bookmarks(user_session: str):
     """Получить закладки пользователя"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        bookmarks = await conn.fetch("""
+        bookmarks = await conn.fetch(
+            """
             SELECT b.id, b.note, b.created_at,
                    q.id as question_id, q.question, q.answer, q.topic, q.difficulty, q.probability
             FROM bookmarks b
             JOIN questions q ON b.question_id = q.id
             WHERE b.user_session = $1
             ORDER BY b.created_at DESC
-        """, user_session)
+        """,
+            user_session,
+        )
         result = []
         for b in bookmarks:
             row = dict(b)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"bookmarks": result}
@@ -2420,11 +2769,16 @@ async def save_note(question_id: int, data: dict = Body(...)):
         note = data.get("note", "")
         if not user_session:
             raise HTTPException(status_code=400, detail="user_session обязателен")
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO user_notes (question_id, user_session, note)
             VALUES ($1, $2, $3)
             ON CONFLICT (question_id, user_session) DO UPDATE SET note = $3, updated_at = CURRENT_TIMESTAMP
-        """, question_id, user_session, note)
+        """,
+            question_id,
+            user_session,
+            note,
+        )
         return {"message": "Заметка сохранена"}
     finally:
         await conn.close()
@@ -2435,18 +2789,21 @@ async def get_notes(user_session: str):
     """Получить все заметки пользователя"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        notes = await conn.fetch("""
+        notes = await conn.fetch(
+            """
             SELECT n.*, q.question, q.topic
             FROM user_notes n
             JOIN questions q ON n.question_id = q.id
             WHERE n.user_session = $1
             ORDER BY n.updated_at DESC
-        """, user_session)
+        """,
+            user_session,
+        )
         result = []
         for n in notes:
             row = dict(n)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"notes": result}
@@ -2456,7 +2813,9 @@ async def get_notes(user_session: str):
 
 # ============== Мок-интервью ==============
 @app.post("/api/mock-interview/start", tags=["Auth"])
-async def start_mock_interview(data: dict = Body(...), _user: dict = Depends(require_auth)):
+async def start_mock_interview(
+    data: dict = Body(...), _user: dict = Depends(require_auth)
+):
     """Начать мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2484,17 +2843,29 @@ async def start_mock_interview(data: dict = Body(...), _user: dict = Depends(req
         questions = await conn.fetch(query, *params)
         questions_list = [dict(q) for q in questions]
 
-        interview_id = await conn.fetchval("""
+        interview_id = await conn.fetchval(
+            """
             INSERT INTO mock_interviews (user_session, topic, difficulty, total_questions)
             VALUES ($1, $2, $3, $4) RETURNING id
-        """, user_session, topic, difficulty, len(questions_list))
-        return {"interview_id": interview_id, "questions": questions_list, "total": len(questions_list)}
+        """,
+            user_session,
+            topic,
+            difficulty,
+            len(questions_list),
+        )
+        return {
+            "interview_id": interview_id,
+            "questions": questions_list,
+            "total": len(questions_list),
+        }
     finally:
         await conn.close()
 
 
 @app.post("/api/mock-interview/{interview_id}/submit", tags=["Auth"])
-async def submit_mock_interview(interview_id: int, data: dict = Body(...), _user: dict = Depends(require_auth)):
+async def submit_mock_interview(
+    interview_id: int, data: dict = Body(...), _user: dict = Depends(require_auth)
+):
     """Завершить мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -2503,30 +2874,47 @@ async def submit_mock_interview(interview_id: int, data: dict = Body(...), _user
         correct = sum(1 for a in answers if a.get("is_correct", False))
         total = len(answers)
         score = (correct / total * 100) if total > 0 else 0
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE mock_interviews
             SET correct_answers = $1, score = $2, duration_seconds = $3, answers = $4::jsonb, completed_at = CURRENT_TIMESTAMP
             WHERE id = $5
-        """, correct, score, duration, json.dumps(answers), interview_id)
-        return {"score": round(score, 1), "correct": correct, "total": total, "duration": duration}
+        """,
+            correct,
+            score,
+            duration,
+            json.dumps(answers),
+            interview_id,
+        )
+        return {
+            "score": round(score, 1),
+            "correct": correct,
+            "total": total,
+            "duration": duration,
+        }
     finally:
         await conn.close()
 
 
 @app.get("/api/mock-interview/history/{user_session}", tags=["Auth"])
-async def get_mock_interview_history(user_session: str, _user: dict = Depends(require_auth)):
+async def get_mock_interview_history(
+    user_session: str, _user: dict = Depends(require_auth)
+):
     """История мок-интервью"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        interviews = await conn.fetch("""
+        interviews = await conn.fetch(
+            """
             SELECT id, topic, difficulty, total_questions, correct_answers, score, duration_seconds, completed_at, created_at
             FROM mock_interviews WHERE user_session = $1 ORDER BY created_at DESC LIMIT 20
-        """, user_session)
+        """,
+            user_session,
+        )
         result = []
         for i in interviews:
             row = dict(i)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"interviews": result}
@@ -2537,11 +2925,10 @@ async def get_mock_interview_history(user_session: str, _user: dict = Depends(re
 # ============== Загрузка локального видео ==============
 @app.post("/api/admin/upload-video-file", tags=["Admin"])
 async def upload_video_file(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     topic: str = Form("General"),
     difficulty: str = Form("middle"),
-    _admin: dict = Depends(require_admin)
+    _admin: dict = Depends(require_admin),
 ):
     """Загрузить видео файл для обработки"""
     task_id = str(uuid.uuid4())
@@ -2559,13 +2946,25 @@ async def upload_video_file(
 
     # Конвертируем в mp3
     import subprocess
+
     audio_path = TEMP_DIR / f"{video_id}.mp3"
     try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", str(video_path),
-            "-vn", "-acodec", "libmp3lame", "-q:a", "2",
-            str(audio_path)
-        ], capture_output=True, timeout=300)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(video_path),
+                "-vn",
+                "-acodec",
+                "libmp3lame",
+                "-q:a",
+                "2",
+                str(audio_path),
+            ],
+            capture_output=True,
+            timeout=300,
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка конвертации: {str(e)}")
     finally:
@@ -2576,42 +2975,73 @@ async def upload_video_file(
     task_data = {
         "task_id": task_id,
         "youtube_url": f"local://{filename}",
+        "video_url": f"local://{filename}",
         "topic": topic,
         "level": difficulty,
         "status": "pending",
         "progress": 0,
         "step": "Загружено, начинаем обработку...",
         "is_local_upload": True,
-        "filename": filename
+        "filename": filename,
+        "created_at": datetime.now().isoformat(),
     }
     await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+    await persist_task_snapshot(task_data)
+    await redis_client.lpush("global:tasks", task_id)
+    await redis_client.ltrim("global:tasks", 0, 99)
+    await redis_client.expire("global:tasks", REDIS_TTL)
 
-    background_tasks.add_task(process_local_video, task_id, str(audio_path), filename, topic, difficulty)
+    await queue_processing_job(
+        {
+            "kind": "local_video",
+            "task_id": task_id,
+            "audio_path": str(audio_path),
+            "filename": filename,
+            "topic": topic,
+            "difficulty": difficulty,
+        }
+    )
     return {"task_id": task_id, "message": "Файл загружен, обработка начата"}
 
 
-async def process_local_video(task_id: str, audio_path: str, filename: str, topic: str, difficulty: str):
+async def process_local_video(
+    task_id: str, audio_path: str, filename: str, topic: str, difficulty: str
+):
     """Обработка локально загруженного видео"""
     try:
-        await update_task_progress(task_id, 20, "transcribing", "Транскрибация аудио...")
+        await update_task_progress(
+            task_id, 20, "transcribing", "Транскрибация аудио..."
+        )
         whisper_result = await whisper_orchestrator.transcribe_audio(
-            audio_path=Path(audio_path), task_id=task_id, language="ru")
+            audio_path=Path(audio_path), task_id=task_id, language="ru"
+        )
         transcript = whisper_result["text"]
 
         await update_task_progress(task_id, 60, "extracting", "Извлечение вопросов...")
-        questions = await extract_questions_from_transcript(transcript, topic, difficulty)
+        questions = await extract_questions_from_transcript(
+            transcript, topic, difficulty
+        )
         questions = filter_low_quality_questions(questions)
         questions = deduplicate_questions(questions)
 
         await update_task_progress(task_id, 85, "saving", "Сохранение в базу данных...")
         video_id = task_id[:16]
-        await save_questions_to_db(questions, f"local://{filename}", filename, video_id, task_id, "local")
+        await save_questions_to_db(
+            questions, f"local://{filename}", filename, video_id, task_id, "local"
+        )
 
-        await update_task_progress(task_id, 100, "completed", f"Готово! Извлечено {len(questions)} вопросов")
+        await update_task_progress(
+            task_id, 100, "completed", f"Готово! Извлечено {len(questions)} вопросов"
+        )
         task_data = json.loads(await redis_client.get(f"task:{task_id}") or "{}")
         task_data["status"] = "completed"
-        task_data["result"] = {"video_title": filename, "questions_count": len(questions), "questions": questions}
+        task_data["result"] = {
+            "video_title": filename,
+            "questions_count": len(questions),
+            "questions": questions,
+        }
         await redis_client.set(f"task:{task_id}", json.dumps(task_data), ex=REDIS_TTL)
+        await persist_task_snapshot(task_data)
 
     except Exception as e:
         print(f"❌ Local video processing error: {e}")
@@ -2620,7 +3050,9 @@ async def process_local_video(task_id: str, audio_path: str, filename: str, topi
 
 # ============== Теги вопросов ==============
 @app.post("/api/admin/questions/{question_id}/tags", tags=["Admin"])
-async def add_question_tag(question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def add_question_tag(
+    question_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Добавить тег к вопросу"""
     tag = data.get("tag", "").strip().lower()
     if not tag:
@@ -2629,18 +3061,26 @@ async def add_question_tag(question_id: int, data: dict = Body(...), _admin: dic
     try:
         await conn.execute(
             "INSERT INTO question_tags (question_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-            question_id, tag)
+            question_id,
+            tag,
+        )
         return {"message": f"Тег '{tag}' добавлен"}
     finally:
         await conn.close()
 
 
 @app.delete("/api/admin/questions/{question_id}/tags/{tag}", tags=["Admin"])
-async def remove_question_tag(question_id: int, tag: str, _admin: dict = Depends(require_admin)):
+async def remove_question_tag(
+    question_id: int, tag: str, _admin: dict = Depends(require_admin)
+):
     """Удалить тег у вопроса"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        await conn.execute("DELETE FROM question_tags WHERE question_id = $1 AND tag = $2", question_id, tag)
+        await conn.execute(
+            "DELETE FROM question_tags WHERE question_id = $1 AND tag = $2",
+            question_id,
+            tag,
+        )
         return {"message": f"Тег '{tag}' удалён"}
     finally:
         await conn.close()
@@ -2651,7 +3091,9 @@ async def get_all_tags():
     """Все используемые теги"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        tags = await conn.fetch("SELECT tag, COUNT(*) as count FROM question_tags GROUP BY tag ORDER BY count DESC")
+        tags = await conn.fetch(
+            "SELECT tag, COUNT(*) as count FROM question_tags GROUP BY tag ORDER BY count DESC"
+        )
         return {"tags": [{"tag": t["tag"], "count": t["count"]} for t in tags]}
     finally:
         await conn.close()
@@ -2663,11 +3105,16 @@ async def get_public_stats():
     """Публичная статистика"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        total_questions = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = TRUE")
-        total_topics = await conn.fetchval("SELECT COUNT(DISTINCT topic) FROM questions WHERE approved = TRUE")
+        total_questions = await conn.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE approved = TRUE"
+        )
+        total_topics = await conn.fetchval(
+            "SELECT COUNT(DISTINCT topic) FROM questions WHERE approved = TRUE"
+        )
         total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
         total_with_answers = await conn.fetchval(
-            "SELECT COUNT(*) FROM questions WHERE approved = TRUE AND answer IS NOT NULL AND answer != ''")
+            "SELECT COUNT(*) FROM questions WHERE approved = TRUE AND answer IS NOT NULL AND answer != ''"
+        )
 
         top_topics = await conn.fetch("""
             SELECT topic, COUNT(*) as count FROM questions WHERE approved = TRUE
@@ -2685,9 +3132,15 @@ async def get_public_stats():
             "total_topics": total_topics,
             "total_videos": total_videos,
             "total_with_answers": total_with_answers,
-            "top_topics": [{"topic": t["topic"], "count": t["count"]} for t in top_topics],
-            "difficulty_distribution": [{"difficulty": l["difficulty"], "count": l["count"]} for l in levels],
-            "platform_distribution": [{"platform": p["platform"], "count": p["count"]} for p in platforms]
+            "top_topics": [
+                {"topic": t["topic"], "count": t["count"]} for t in top_topics
+            ],
+            "difficulty_distribution": [
+                {"difficulty": l["difficulty"], "count": l["count"]} for l in levels
+            ],
+            "platform_distribution": [
+                {"platform": p["platform"], "count": p["count"]} for p in platforms
+            ],
         }
     finally:
         await conn.close()
@@ -2700,23 +3153,48 @@ async def get_admin_stats(_admin: dict = Depends(require_admin)):
     try:
         stats = {}
         stats["total_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions")
-        stats["approved_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = TRUE")
-        stats["pending_questions"] = await conn.fetchval("SELECT COUNT(*) FROM questions WHERE approved = FALSE")
+        stats["approved_questions"] = await conn.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE approved = TRUE"
+        )
+        stats["pending_questions"] = await conn.fetchval(
+            "SELECT COUNT(*) FROM questions WHERE approved = FALSE"
+        )
         stats["with_answers"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL AND answer != ''")
+            "SELECT COUNT(*) FROM questions WHERE answer IS NOT NULL AND answer != ''"
+        )
         stats["without_answers"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM questions WHERE answer IS NULL OR answer = ''")
-        stats["total_videos"] = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
-        stats["total_suggestions"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM video_suggestions") if await _table_exists(conn, 'video_suggestions') else 0
-        stats["pending_suggestions"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'") if await _table_exists(conn, 'video_suggestions') else 0
-        stats["total_feedback"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM feedback") if await _table_exists(conn, 'feedback') else 0
-        stats["unresolved_feedback"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE") if await _table_exists(conn, 'feedback') else 0
+            "SELECT COUNT(*) FROM questions WHERE answer IS NULL OR answer = ''"
+        )
+        stats["total_videos"] = await conn.fetchval(
+            "SELECT COUNT(*) FROM processed_videos"
+        )
+        stats["total_suggestions"] = (
+            await conn.fetchval("SELECT COUNT(*) FROM video_suggestions")
+            if await _table_exists(conn, "video_suggestions")
+            else 0
+        )
+        stats["pending_suggestions"] = (
+            await conn.fetchval(
+                "SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'"
+            )
+            if await _table_exists(conn, "video_suggestions")
+            else 0
+        )
+        stats["total_feedback"] = (
+            await conn.fetchval("SELECT COUNT(*) FROM feedback")
+            if await _table_exists(conn, "feedback")
+            else 0
+        )
+        stats["unresolved_feedback"] = (
+            await conn.fetchval(
+                "SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE"
+            )
+            if await _table_exists(conn, "feedback")
+            else 0
+        )
         stats["questions_last_week"] = await conn.fetchval(
-            "SELECT COUNT(*) FROM questions WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'")
+            "SELECT COUNT(*) FROM questions WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'"
+        )
 
         top_questions = await conn.fetch("""
             SELECT id, question, probability, topic FROM questions
@@ -2738,11 +3216,14 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
         # === 1. Пользователи ===
         users_total = await conn.fetchval("SELECT COUNT(*) FROM users")
         users_active = await conn.fetchval(
-            "SELECT COUNT(*) FROM users WHERE last_login > CURRENT_TIMESTAMP - INTERVAL '30 days'")
+            "SELECT COUNT(*) FROM users WHERE last_login > CURRENT_TIMESTAMP - INTERVAL '30 days'"
+        )
         users_new_week = await conn.fetchval(
-            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'")
+            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'"
+        )
         users_new_month = await conn.fetchval(
-            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'")
+            "SELECT COUNT(*) FROM users WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'"
+        )
 
         # Регистрации по дням (последние 30 дней)
         user_registrations = await conn.fetch("""
@@ -2756,7 +3237,9 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             "active_30d": users_active,
             "new_week": users_new_week,
             "new_month": users_new_month,
-            "registrations_by_day": [{"day": str(r["day"]), "count": r["count"]} for r in user_registrations]
+            "registrations_by_day": [
+                {"day": str(r["day"]), "count": r["count"]} for r in user_registrations
+            ],
         }
 
         # === 2. Популярность технологий (по просмотрам вопросов) ===
@@ -2768,7 +3251,9 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
                 WHERE q.topic IS NOT NULL
                 GROUP BY q.topic ORDER BY views DESC LIMIT 20
             """)
-            analytics["topic_popularity"] = [{"topic": r["topic"], "views": r["views"]} for r in topic_views]
+            analytics["topic_popularity"] = [
+                {"topic": r["topic"], "views": r["views"]} for r in topic_views
+            ]
         except Exception:
             # Считаем по количеству вопросов если нет таблицы просмотров
             topic_counts = await conn.fetch("""
@@ -2776,7 +3261,9 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
                 WHERE topic IS NOT NULL AND approved = TRUE
                 GROUP BY topic ORDER BY count DESC LIMIT 20
             """)
-            analytics["topic_popularity"] = [{"topic": r["topic"], "views": r["count"]} for r in topic_counts]
+            analytics["topic_popularity"] = [
+                {"topic": r["topic"], "views": r["count"]} for r in topic_counts
+            ]
 
         # === 3. Активность по дням (вопросы добавлены за 30 дней) ===
         questions_by_day = await conn.fetch("""
@@ -2784,20 +3271,32 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             FROM questions WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '30 days'
             GROUP BY DATE(created_at) ORDER BY day
         """)
-        analytics["questions_by_day"] = [{"day": str(r["day"]), "count": r["count"]} for r in questions_by_day]
+        analytics["questions_by_day"] = [
+            {"day": str(r["day"]), "count": r["count"]} for r in questions_by_day
+        ]
 
         # === 4. Тренажёр — активность ===
         try:
-            trainer_users = await conn.fetchval("SELECT COUNT(DISTINCT user_session) FROM sr_cards")
-            trainer_reviews = await conn.fetchval("SELECT SUM(total_reviews) FROM sr_cards")
-            trainer_avg_ease = await conn.fetchval("SELECT ROUND(AVG(easiness_factor)::numeric, 2) FROM sr_cards WHERE repetitions > 0")
+            trainer_users = await conn.fetchval(
+                "SELECT COUNT(DISTINCT user_session) FROM sr_cards"
+            )
+            trainer_reviews = await conn.fetchval(
+                "SELECT SUM(total_reviews) FROM sr_cards"
+            )
+            trainer_avg_ease = await conn.fetchval(
+                "SELECT ROUND(AVG(easiness_factor)::numeric, 2) FROM sr_cards WHERE repetitions > 0"
+            )
             analytics["trainer"] = {
                 "unique_users": trainer_users or 0,
                 "total_reviews": trainer_reviews or 0,
-                "avg_easiness": float(trainer_avg_ease) if trainer_avg_ease else 0
+                "avg_easiness": float(trainer_avg_ease) if trainer_avg_ease else 0,
             }
         except Exception:
-            analytics["trainer"] = {"unique_users": 0, "total_reviews": 0, "avg_easiness": 0}
+            analytics["trainer"] = {
+                "unique_users": 0,
+                "total_reviews": 0,
+                "avg_easiness": 0,
+            }
 
         # === 5. Закладки — топ сохранённых вопросов ===
         try:
@@ -2807,17 +3306,27 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
                 GROUP BY q.id, q.question, q.topic
                 ORDER BY saves DESC LIMIT 10
             """)
-            analytics["top_bookmarked"] = [{"id": r["id"], "question": r["question"][:80], "topic": r["topic"], "saves": r["saves"]} for r in top_bookmarked]
+            analytics["top_bookmarked"] = [
+                {
+                    "id": r["id"],
+                    "question": r["question"][:80],
+                    "topic": r["topic"],
+                    "saves": r["saves"],
+                }
+                for r in top_bookmarked
+            ]
         except Exception:
             analytics["top_bookmarked"] = []
 
         # === 6. Ответы сообщества ===
         try:
             community_answers = await conn.fetchval("SELECT COUNT(*) FROM user_answers")
-            community_voters = await conn.fetchval("SELECT COUNT(DISTINCT user_session) FROM answer_votes")
+            community_voters = await conn.fetchval(
+                "SELECT COUNT(DISTINCT user_session) FROM answer_votes"
+            )
             analytics["community"] = {
                 "total_answers": community_answers or 0,
-                "active_voters": community_voters or 0
+                "active_voters": community_voters or 0,
             }
         except Exception:
             analytics["community"] = {"total_answers": 0, "active_voters": 0}
@@ -2834,11 +3343,21 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             """)
             analytics["test_assignments"] = {
                 "total": ta_total or 0,
-                "by_difficulty": [{"difficulty": r["difficulty"], "count": r["count"]} for r in ta_by_diff],
-                "by_company": [{"company": r["company"], "count": r["count"]} for r in ta_by_company]
+                "by_difficulty": [
+                    {"difficulty": r["difficulty"], "count": r["count"]}
+                    for r in ta_by_diff
+                ],
+                "by_company": [
+                    {"company": r["company"], "count": r["count"]}
+                    for r in ta_by_company
+                ],
             }
         except Exception:
-            analytics["test_assignments"] = {"total": 0, "by_difficulty": [], "by_company": []}
+            analytics["test_assignments"] = {
+                "total": 0,
+                "by_difficulty": [],
+                "by_company": [],
+            }
 
         # === 8. Видео и источники ===
         videos_total = await conn.fetchval("SELECT COUNT(*) FROM processed_videos")
@@ -2850,12 +3369,18 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
         except Exception:
             videos_by_platform = []
         avg_questions_per_video = await conn.fetchval(
-            "SELECT ROUND(AVG(questions_count)::numeric, 1) FROM processed_videos WHERE questions_count > 0")
+            "SELECT ROUND(AVG(questions_count)::numeric, 1) FROM processed_videos WHERE questions_count > 0"
+        )
 
         analytics["videos"] = {
             "total": videos_total or 0,
-            "avg_questions": float(avg_questions_per_video) if avg_questions_per_video else 0,
-            "by_platform": [{"platform": r["platform"], "count": r["count"]} for r in videos_by_platform]
+            "avg_questions": float(avg_questions_per_video)
+            if avg_questions_per_video
+            else 0,
+            "by_platform": [
+                {"platform": r["platform"], "count": r["count"]}
+                for r in videos_by_platform
+            ],
         }
 
         # === 9. Уровни вопросов ===
@@ -2864,32 +3389,43 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             FROM questions WHERE approved = TRUE
             GROUP BY difficulty ORDER BY count DESC
         """)
-        analytics["difficulty_distribution"] = [{"difficulty": r["difficulty"], "count": r["count"]} for r in diff_dist]
+        analytics["difficulty_distribution"] = [
+            {"difficulty": r["difficulty"], "count": r["count"]} for r in diff_dist
+        ]
 
         # === 10. Обратная связь ===
         try:
             fb_total = await conn.fetchval("SELECT COUNT(*) FROM feedback")
-            fb_unresolved = await conn.fetchval("SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE")
+            fb_unresolved = await conn.fetchval(
+                "SELECT COUNT(*) FROM feedback WHERE is_resolved = FALSE"
+            )
             fb_by_type = await conn.fetch("""
                 SELECT feedback_type, COUNT(*) as count FROM feedback GROUP BY feedback_type ORDER BY count DESC
             """)
             analytics["feedback"] = {
                 "total": fb_total or 0,
                 "unresolved": fb_unresolved or 0,
-                "by_type": [{"type": r["feedback_type"], "count": r["count"]} for r in fb_by_type]
+                "by_type": [
+                    {"type": r["feedback_type"], "count": r["count"]}
+                    for r in fb_by_type
+                ],
             }
         except Exception:
             analytics["feedback"] = {"total": 0, "unresolved": 0, "by_type": []}
 
-        # === 11. Предложения видео ===  
+        # === 11. Предложения видео ===
         try:
             sug_total = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions")
-            sug_pending = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'")
-            sug_approved = await conn.fetchval("SELECT COUNT(*) FROM video_suggestions WHERE status IN ('approved', 'completed')")
+            sug_pending = await conn.fetchval(
+                "SELECT COUNT(*) FROM video_suggestions WHERE status = 'pending'"
+            )
+            sug_approved = await conn.fetchval(
+                "SELECT COUNT(*) FROM video_suggestions WHERE status IN ('approved', 'completed')"
+            )
             analytics["suggestions"] = {
                 "total": sug_total or 0,
                 "pending": sug_pending or 0,
-                "approved": sug_approved or 0
+                "approved": sug_approved or 0,
             }
         except Exception:
             analytics["suggestions"] = {"total": 0, "pending": 0, "approved": 0}
@@ -2901,7 +3437,12 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
             ORDER BY probability DESC LIMIT 10
         """)
         analytics["top_probable"] = [
-            {"id": r["id"], "question": r["question"][:80], "topic": r["topic"], "probability": round(r["probability"], 2)}
+            {
+                "id": r["id"],
+                "question": r["question"][:80],
+                "topic": r["topic"],
+                "probability": round(r["probability"], 2),
+            }
             for r in top_probable
         ]
 
@@ -2911,7 +3452,9 @@ async def get_admin_analytics(_admin: dict = Depends(require_admin)):
                 SELECT skill, SUM(vacancy_count) as total_vacancies
                 FROM hh_skills GROUP BY skill ORDER BY total_vacancies DESC LIMIT 15
             """)
-            analytics["hh_top_skills"] = [{"skill": r["skill"], "vacancies": r["total_vacancies"]} for r in hh_top]
+            analytics["hh_top_skills"] = [
+                {"skill": r["skill"], "vacancies": r["total_vacancies"]} for r in hh_top
+            ]
         except Exception:
             analytics["hh_top_skills"] = []
 
@@ -2934,28 +3477,33 @@ async def export_questions_csv(_admin: dict = Depends(require_admin)):
             FROM questions ORDER BY id
         """)
         output = io.StringIO()
-        output.write('\ufeff')
-        output.write("ID,Вопрос,Ответ,Тема,Уровень,Вероятность,Таймкод,Одобрен,Источник,Видео,Дата\n")
+        output.write("\ufeff")
+        output.write(
+            "ID,Вопрос,Ответ,Тема,Уровень,Вероятность,Таймкод,Одобрен,Источник,Видео,Дата\n"
+        )
         for q in questions:
             row = [
                 str(q["id"]),
-                f'"{(q["question"] or "").replace(chr(34), chr(34)+chr(34))}"',
-                f'"{(q["answer"] or "").replace(chr(34), chr(34)+chr(34))}"',
+                f'"{(q["question"] or "").replace(chr(34), chr(34) + chr(34))}"',
+                f'"{(q["answer"] or "").replace(chr(34), chr(34) + chr(34))}"',
                 q["topic"] or "",
                 q["difficulty"] or "",
                 str(round(q["probability"] or 0, 2)),
                 q["timecode"] or "",
                 "Да" if q["approved"] else "Нет",
                 q["source_url"] or "",
-                f'"{(q["video_title"] or "").replace(chr(34), chr(34)+chr(34))}"',
-                str(q["created_at"]) if q["created_at"] else ""
+                f'"{(q["video_title"] or "").replace(chr(34), chr(34) + chr(34))}"',
+                str(q["created_at"]) if q["created_at"] else "",
             ]
             output.write(",".join(row) + "\n")
         output.seek(0)
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=questions_export.csv"})
+            headers={
+                "Content-Disposition": "attachment; filename=questions_export.csv"
+            },
+        )
     finally:
         await conn.close()
 
@@ -2976,7 +3524,7 @@ async def get_processed_videos(_admin: dict = Depends(require_admin)):
         for v in videos:
             row = dict(v)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"videos": result}
@@ -2989,19 +3537,22 @@ async def get_video_questions(video_id: int, _admin: dict = Depends(require_admi
     """Вопросы, извлечённые из конкретного видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        questions = await conn.fetch("""
+        questions = await conn.fetch(
+            """
             SELECT q.id, q.question, q.answer, q.topic, q.difficulty, q.timecode,
                    q.probability, q.approved, q.created_at
             FROM questions q
             JOIN question_video qv ON qv.question_id = q.id
             WHERE qv.video_id = $1
             ORDER BY q.timecode, q.id
-        """, video_id)
+        """,
+            video_id,
+        )
         result = []
         for q in questions:
             row = dict(q)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"questions": result}
@@ -3014,7 +3565,9 @@ async def delete_processed_video(video_id: int, _admin: dict = Depends(require_a
     """Удалить обработанное видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        existing = await conn.fetchrow("SELECT id FROM processed_videos WHERE id = $1", video_id)
+        existing = await conn.fetchrow(
+            "SELECT id FROM processed_videos WHERE id = $1", video_id
+        )
         if not existing:
             raise HTTPException(status_code=404, detail="Видео не найдено")
         await conn.execute("DELETE FROM processed_videos WHERE id = $1", video_id)
@@ -3025,15 +3578,23 @@ async def delete_processed_video(video_id: int, _admin: dict = Depends(require_a
 
 
 @app.patch("/api/admin/videos/{video_id}", tags=["Admin"])
-async def update_processed_video(video_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def update_processed_video(
+    video_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Обновить заголовок обработанного видео"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        existing = await conn.fetchrow("SELECT id FROM processed_videos WHERE id = $1", video_id)
+        existing = await conn.fetchrow(
+            "SELECT id FROM processed_videos WHERE id = $1", video_id
+        )
         if not existing:
             raise HTTPException(status_code=404, detail="Видео не найдено")
         if "title" in data:
-            await conn.execute("UPDATE processed_videos SET title = $1 WHERE id = $2", data["title"], video_id)
+            await conn.execute(
+                "UPDATE processed_videos SET title = $1 WHERE id = $2",
+                data["title"],
+                video_id,
+            )
         return {"message": "Видео обновлено"}
     finally:
         await conn.close()
@@ -3042,6 +3603,7 @@ async def update_processed_video(video_id: int, data: dict = Body(...), _admin: 
 # ============================================
 # v3: Профессии
 # ============================================
+
 
 @app.get("/api/professions", tags=["Public"])
 async def get_professions():
@@ -3059,18 +3621,21 @@ async def get_professions():
         result = []
         for p in professions:
             row = dict(p)
-            row['topics'] = list(row.get('topics', []))
+            row["topics"] = list(row.get("topics", []))
             # Считаем количество вопросов по всем топикам профессии
-            if row['topics']:
-                count = await conn.fetchval("""
+            if row["topics"]:
+                count = await conn.fetchval(
+                    """
                     SELECT COUNT(DISTINCT q.id) FROM questions q 
                     WHERE q.approved = TRUE AND q.topic = ANY($1::text[])
-                """, row['topics'])
-                row['question_count'] = count or 0
+                """,
+                    row["topics"],
+                )
+                row["question_count"] = count or 0
             else:
-                row['question_count'] = 0
+                row["question_count"] = 0
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"professions": result}
@@ -3085,7 +3650,7 @@ async def get_profession_questions(
     page: int = 1,
     per_page: int = 20,
     search: Optional[str] = None,
-    sort: Optional[str] = "probability"
+    sort: Optional[str] = "probability",
 ):
     """Вопросы по профессии (все технологии, входящие в профессию)"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3093,10 +3658,11 @@ async def get_profession_questions(
         # Получаем топики профессии
         topics = await conn.fetch(
             "SELECT topic FROM profession_topics pt JOIN professions p ON p.id = pt.profession_id WHERE p.slug = $1",
-            slug)
+            slug,
+        )
         if not topics:
             raise HTTPException(status_code=404, detail="Профессия не найдена")
-        topic_list = [t['topic'] for t in topics]
+        topic_list = [t["topic"] for t in topics]
 
         # Формируем запрос
         query = "SELECT q.* FROM questions q WHERE q.approved = TRUE AND q.topic = ANY($1::text[])"
@@ -3110,8 +3676,12 @@ async def get_profession_questions(
             params.append(difficulty)
             param_idx += 1
         if search:
-            query += f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
-            count_query += f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
+            query += (
+                f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
+            )
+            count_query += (
+                f" AND (q.question ILIKE ${param_idx} OR q.topic ILIKE ${param_idx})"
+            )
             params.append(f"%{search}%")
             param_idx += 1
 
@@ -3134,7 +3704,7 @@ async def get_profession_questions(
         for q in questions:
             row = dict(q)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"questions": result, "total": total, "page": page, "per_page": per_page}
@@ -3145,6 +3715,7 @@ async def get_profession_questions(
 # ============================================
 # v3: SM-2 Spaced Repetition
 # ============================================
+
 
 @app.post("/api/trainer/sm2-review", tags=["Auth"])
 async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)):
@@ -3157,7 +3728,9 @@ async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)
     quality = data.get("quality", 0)  # 0-5
 
     if not question_id or not user_session:
-        raise HTTPException(status_code=400, detail="question_id и user_session обязательны")
+        raise HTTPException(
+            status_code=400, detail="question_id и user_session обязательны"
+        )
     quality = max(0, min(5, quality))
 
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3165,12 +3738,14 @@ async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)
         # Получаем текущую карточку или создаём
         card = await conn.fetchrow(
             "SELECT * FROM sr_cards WHERE user_session = $1 AND question_id = $2",
-            user_session, question_id)
+            user_session,
+            question_id,
+        )
 
         if card:
-            ef = card['easiness_factor']
-            interval = card['interval_days']
-            reps = card['repetitions']
+            ef = card["easiness_factor"]
+            interval = card["interval_days"]
+            reps = card["repetitions"]
         else:
             ef = 2.5
             interval = 0.0
@@ -3193,9 +3768,11 @@ async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)
             interval = 0.04  # ~1 час (в днях)
 
         from datetime import timedelta
+
         next_review = datetime.now() + timedelta(days=interval)
 
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO sr_cards (user_session, question_id, easiness_factor, interval_days, repetitions,
                                   next_review, last_quality, total_reviews)
             VALUES ($1, $2, $3, $4, $5, $6, $7, 1)
@@ -3204,22 +3781,34 @@ async def sm2_review(data: dict = Body(...), _user: dict = Depends(require_auth)
                 next_review = $6, last_quality = $7,
                 total_reviews = sr_cards.total_reviews + 1,
                 updated_at = CURRENT_TIMESTAMP
-        """, user_session, question_id, round(ef, 2), round(interval, 2), reps,
-             next_review, quality)
+        """,
+            user_session,
+            question_id,
+            round(ef, 2),
+            round(interval, 2),
+            reps,
+            next_review,
+            quality,
+        )
 
         return {
             "easiness_factor": round(ef, 2),
             "interval_days": round(interval, 2),
             "repetitions": reps,
             "next_review": next_review.isoformat(),
-            "quality": quality
+            "quality": quality,
         }
     finally:
         await conn.close()
 
 
 @app.get("/api/trainer/sm2-cards/{user_session}", tags=["Auth"])
-async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficulty: Optional[str] = None, _user: dict = Depends(require_auth)):
+async def get_sm2_cards(
+    user_session: str,
+    topic: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    _user: dict = Depends(require_auth),
+):
     """Получить карточки SM-2 для тренажёра (сортировка: нужные для повторения первые)"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -3260,21 +3849,23 @@ async def get_sm2_cards(user_session: str, topic: Optional[str] = None, difficul
         now = datetime.now()
         for c in cards:
             row = dict(c)
-            if row.get('next_review'):
-                row['due'] = row['next_review'] <= now
-                row['next_review'] = row['next_review'].isoformat()
+            if row.get("next_review"):
+                row["due"] = row["next_review"] <= now
+                row["next_review"] = row["next_review"].isoformat()
             else:
-                row['due'] = True  # новые карточки — нужно начать
-            row['status'] = 'new' if row.get('total_reviews') is None else (
-                'review' if row['due'] else 'learned'
+                row["due"] = True  # новые карточки — нужно начать
+            row["status"] = (
+                "new"
+                if row.get("total_reviews") is None
+                else ("review" if row["due"] else "learned")
             )
             result.append(row)
 
         stats = {
-            'total': len(result),
-            'new': sum(1 for r in result if r['status'] == 'new'),
-            'review': sum(1 for r in result if r['status'] == 'review'),
-            'learned': sum(1 for r in result if r['status'] == 'learned')
+            "total": len(result),
+            "new": sum(1 for r in result if r["status"] == "new"),
+            "review": sum(1 for r in result if r["status"] == "review"),
+            "learned": sum(1 for r in result if r["status"] == "learned"),
         }
         return {"cards": result, "stats": stats}
     finally:
@@ -3287,7 +3878,8 @@ async def reset_sm2_progress(user_session: str, _user: dict = Depends(require_au
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         result = await conn.execute(
-            "DELETE FROM sr_cards WHERE user_session = $1", user_session)
+            "DELETE FROM sr_cards WHERE user_session = $1", user_session
+        )
         # result is like 'DELETE 5'
         count = int(result.split()[-1]) if result else 0
         return {"message": f"Прогресс сброшен ({count} карточек)"}
@@ -3299,23 +3891,28 @@ async def reset_sm2_progress(user_session: str, _user: dict = Depends(require_au
 # v3: UGC — Пользовательские ответы
 # ============================================
 
+
 @app.get("/api/user-answers/{question_id}", tags=["Public"])
 async def get_user_answers(question_id: int, user_session: Optional[str] = None):
     """Получить ответы пользователей на вопрос"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        answers = await conn.fetch("""
+        answers = await conn.fetch(
+            """
             SELECT ua.*, 
                    (SELECT vote_type FROM answer_votes av WHERE av.answer_id = ua.id AND av.user_session = $2) as my_vote
             FROM user_answers ua
             WHERE ua.question_id = $1
             ORDER BY ua.is_selected DESC, ua.votes DESC, ua.created_at DESC
-        """, question_id, user_session or '')
+        """,
+            question_id,
+            user_session or "",
+        )
         result = []
         for a in answers:
             row = dict(a)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
         return {"answers": result, "total": len(result)}
@@ -3331,7 +3928,9 @@ async def create_user_answer(question_id: int, data: dict = Body(...)):
     answer_text = data.get("answer_text", "").strip()
 
     if not answer_text or len(answer_text) < 10:
-        raise HTTPException(status_code=400, detail="Ответ должен быть не менее 10 символов")
+        raise HTTPException(
+            status_code=400, detail="Ответ должен быть не менее 10 символов"
+        )
     if not user_session:
         raise HTTPException(status_code=400, detail="user_session обязателен")
 
@@ -3340,14 +3939,24 @@ async def create_user_answer(question_id: int, data: dict = Body(...)):
         # Проверяем лимит (макс 3 ответа от одного юзера на вопрос)
         existing = await conn.fetchval(
             "SELECT COUNT(*) FROM user_answers WHERE question_id = $1 AND user_session = $2",
-            question_id, user_session)
+            question_id,
+            user_session,
+        )
         if existing >= 3:
-            raise HTTPException(status_code=429, detail="Максимум 3 ответа на один вопрос")
+            raise HTTPException(
+                status_code=429, detail="Максимум 3 ответа на один вопрос"
+            )
 
-        answer_id = await conn.fetchval("""
+        answer_id = await conn.fetchval(
+            """
             INSERT INTO user_answers (question_id, user_session, user_name, answer_text)
             VALUES ($1, $2, $3, $4) RETURNING id
-        """, question_id, user_session, user_name, answer_text)
+        """,
+            question_id,
+            user_session,
+            user_name,
+            answer_text,
+        )
         return {"id": answer_id, "message": "Ответ добавлен"}
     finally:
         await conn.close()
@@ -3359,8 +3968,10 @@ async def vote_user_answer(answer_id: int, data: dict = Body(...)):
     user_session = data.get("user_session", "")
     vote_type = data.get("vote_type", "up")  # 'up' или 'down'
 
-    if vote_type not in ('up', 'down'):
-        raise HTTPException(status_code=400, detail="vote_type должен быть 'up' или 'down'")
+    if vote_type not in ("up", "down"):
+        raise HTTPException(
+            status_code=400, detail="vote_type должен быть 'up' или 'down'"
+        )
     if not user_session:
         raise HTTPException(status_code=400, detail="user_session обязателен")
 
@@ -3369,30 +3980,44 @@ async def vote_user_answer(answer_id: int, data: dict = Body(...)):
         # Проверяем, не голосовал ли уже
         existing = await conn.fetchrow(
             "SELECT vote_type FROM answer_votes WHERE answer_id = $1 AND user_session = $2",
-            answer_id, user_session)
+            answer_id,
+            user_session,
+        )
 
         if existing:
-            if existing['vote_type'] == vote_type:
+            if existing["vote_type"] == vote_type:
                 # Отмена голоса
                 await conn.execute(
                     "DELETE FROM answer_votes WHERE answer_id = $1 AND user_session = $2",
-                    answer_id, user_session)
-                delta = -1 if vote_type == 'up' else 1
+                    answer_id,
+                    user_session,
+                )
+                delta = -1 if vote_type == "up" else 1
             else:
                 # Смена голоса
                 await conn.execute(
                     "UPDATE answer_votes SET vote_type = $1 WHERE answer_id = $2 AND user_session = $3",
-                    vote_type, answer_id, user_session)
-                delta = 2 if vote_type == 'up' else -2
+                    vote_type,
+                    answer_id,
+                    user_session,
+                )
+                delta = 2 if vote_type == "up" else -2
         else:
             # Новый голос
             await conn.execute(
                 "INSERT INTO answer_votes (answer_id, user_session, vote_type) VALUES ($1, $2, $3)",
-                answer_id, user_session, vote_type)
-            delta = 1 if vote_type == 'up' else -1
+                answer_id,
+                user_session,
+                vote_type,
+            )
+            delta = 1 if vote_type == "up" else -1
 
-        await conn.execute("UPDATE user_answers SET votes = votes + $1 WHERE id = $2", delta, answer_id)
-        new_votes = await conn.fetchval("SELECT votes FROM user_answers WHERE id = $1", answer_id)
+        await conn.execute(
+            "UPDATE user_answers SET votes = votes + $1 WHERE id = $2", delta, answer_id
+        )
+        new_votes = await conn.fetchval(
+            "SELECT votes FROM user_answers WHERE id = $1", answer_id
+        )
         return {"votes": new_votes}
     finally:
         await conn.close()
@@ -3405,9 +4030,13 @@ async def delete_user_answer(answer_id: int, user_session: str = ""):
     try:
         deleted = await conn.fetchval(
             "DELETE FROM user_answers WHERE id = $1 AND user_session = $2 RETURNING id",
-            answer_id, user_session)
+            answer_id,
+            user_session,
+        )
         if not deleted:
-            raise HTTPException(status_code=404, detail="Ответ не найден или вы не автор")
+            raise HTTPException(
+                status_code=404, detail="Ответ не найден или вы не автор"
+            )
         return {"message": "Ответ удалён"}
     finally:
         await conn.close()
@@ -3417,6 +4046,7 @@ async def delete_user_answer(answer_id: int, user_session: str = ""):
 # v3: Тестовые задания от компаний
 # ============================================
 
+
 @app.get("/api/test-assignments", tags=["Auth"])
 async def get_test_assignments(
     profession: Optional[str] = None,
@@ -3424,7 +4054,7 @@ async def get_test_assignments(
     search: Optional[str] = None,
     page: int = 1,
     per_page: int = 20,
-    _user: dict = Depends(require_auth)
+    _user: dict = Depends(require_auth),
 ):
     """Список тестовых заданий"""
     conn = await asyncpg.connect(DATABASE_URL)
@@ -3459,35 +4089,52 @@ async def get_test_assignments(
         result = []
         for a in assignments:
             row = dict(a)
-            if row.get('skills'):
-                row['skills_list'] = [s.strip() for s in row['skills'].split(',')]
+            if row.get("skills"):
+                row["skills_list"] = [s.strip() for s in row["skills"].split(",")]
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
-        return {"assignments": result, "total": total, "page": page, "per_page": per_page}
+        return {
+            "assignments": result,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/test-assignments", tags=["Admin"])
-async def create_test_assignment(data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def create_test_assignment(
+    data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Создать тестовое задание"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        aid = await conn.fetchval("""
+        aid = await conn.fetchval(
+            """
             INSERT INTO test_assignments (title, description, company, profession, difficulty, skills, link, source)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id
-        """, data.get('title'), data.get('description'), data.get('company'),
-             data.get('profession'), data.get('difficulty', 'middle'),
-             data.get('skills'), data.get('link'), data.get('source'))
+        """,
+            data.get("title"),
+            data.get("description"),
+            data.get("company"),
+            data.get("profession"),
+            data.get("difficulty", "middle"),
+            data.get("skills"),
+            data.get("link"),
+            data.get("source"),
+        )
         return {"id": aid, "message": "Тестовое задание создано"}
     finally:
         await conn.close()
 
 
 @app.delete("/api/admin/test-assignments/{assignment_id}", tags=["Admin"])
-async def delete_test_assignment(assignment_id: int, _admin: dict = Depends(require_admin)):
+async def delete_test_assignment(
+    assignment_id: int, _admin: dict = Depends(require_admin)
+):
     """Удалить тестовое задание"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
@@ -3498,16 +4145,27 @@ async def delete_test_assignment(assignment_id: int, _admin: dict = Depends(requ
 
 
 @app.put("/api/admin/test-assignments/{assignment_id}", tags=["Admin"])
-async def update_test_assignment(assignment_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def update_test_assignment(
+    assignment_id: int, data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Обновить тестовое задание"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        await conn.execute("""
+        await conn.execute(
+            """
             UPDATE test_assignments SET title=$1, description=$2, company=$3, profession=$4,
             difficulty=$5, skills=$6, link=$7, source=$8 WHERE id=$9
-        """, data.get('title'), data.get('description'), data.get('company'),
-             data.get('profession'), data.get('difficulty', 'middle'),
-             data.get('skills'), data.get('link'), data.get('source'), assignment_id)
+        """,
+            data.get("title"),
+            data.get("description"),
+            data.get("company"),
+            data.get("profession"),
+            data.get("difficulty", "middle"),
+            data.get("skills"),
+            data.get("link"),
+            data.get("source"),
+            assignment_id,
+        )
         return {"message": "Обновлено"}
     finally:
         await conn.close()
@@ -3518,14 +4176,16 @@ async def get_test_assignment_detail(assignment_id: int):
     """Получить детали тестового задания"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        row = await conn.fetchrow("SELECT * FROM test_assignments WHERE id = $1", assignment_id)
+        row = await conn.fetchrow(
+            "SELECT * FROM test_assignments WHERE id = $1", assignment_id
+        )
         if not row:
             raise HTTPException(status_code=404, detail="Задание не найдено")
         result = dict(row)
-        if result.get('skills'):
-            result['skills_list'] = [s.strip() for s in result['skills'].split(',')]
+        if result.get("skills"):
+            result["skills_list"] = [s.strip() for s in result["skills"].split(",")]
         for key in result:
-            if hasattr(result[key], 'isoformat'):
+            if hasattr(result[key], "isoformat"):
                 result[key] = result[key].isoformat()
         return result
     finally:
@@ -3536,33 +4196,46 @@ async def get_test_assignment_detail(assignment_id: int):
 # v3: HH Навыки/Требования
 # ============================================
 
+
 @app.get("/api/hh-skills", tags=["Public"])
-async def get_hh_skills(profession: Optional[str] = None, page: int = 1, per_page: int = 30):
+async def get_hh_skills(
+    profession: Optional[str] = None, page: int = 1, per_page: int = 30
+):
     """Навыки/требования из вакансий HH с пагинацией"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         offset = (page - 1) * per_page
-        
+
         if profession:
             total = await conn.fetchval(
-                "SELECT COUNT(*) FROM hh_skills WHERE profession ILIKE $1", f"%{profession}%"
+                "SELECT COUNT(*) FROM hh_skills WHERE profession ILIKE $1",
+                f"%{profession}%",
             )
-            skills = await conn.fetch("""
+            skills = await conn.fetch(
+                """
                 SELECT * FROM hh_skills WHERE profession ILIKE $1 ORDER BY percentage DESC
                 LIMIT $2 OFFSET $3
-            """, f"%{profession}%", per_page, offset)
+            """,
+                f"%{profession}%",
+                per_page,
+                offset,
+            )
         else:
             total = await conn.fetchval("SELECT COUNT(*) FROM hh_skills")
-            skills = await conn.fetch("""
+            skills = await conn.fetch(
+                """
                 SELECT * FROM hh_skills ORDER BY profession, percentage DESC
                 LIMIT $1 OFFSET $2
-            """, per_page, offset)
+            """,
+                per_page,
+                offset,
+            )
 
         result = []
         for s in skills:
             row = dict(s)
             for key in row:
-                if hasattr(row[key], 'isoformat'):
+                if hasattr(row[key], "isoformat"):
                     row[key] = row[key].isoformat()
             result.append(row)
 
@@ -3571,24 +4244,32 @@ async def get_hh_skills(profession: Optional[str] = None, page: int = 1, per_pag
             "total": total,
             "page": page,
             "per_page": per_page,
-            "pages": (total + per_page - 1) // per_page
+            "pages": (total + per_page - 1) // per_page,
         }
     finally:
         await conn.close()
 
 
 @app.post("/api/admin/hh-skills", tags=["Admin"])
-async def upsert_hh_skill(data: dict = Body(...), _admin: dict = Depends(require_admin)):
+async def upsert_hh_skill(
+    data: dict = Body(...), _admin: dict = Depends(require_admin)
+):
     """Добавить/обновить HH навык"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        await conn.execute("""
+        await conn.execute(
+            """
             INSERT INTO hh_skills (profession, skill, vacancy_count, total_vacancies, percentage)
             VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (profession, skill) DO UPDATE SET
                 vacancy_count = $3, total_vacancies = $4, percentage = $5, updated_at = CURRENT_TIMESTAMP
-        """, data['profession'], data['skill'],
-             data.get('vacancy_count', 0), data.get('total_vacancies', 0), data.get('percentage', 0))
+        """,
+            data["profession"],
+            data["skill"],
+            data.get("vacancy_count", 0),
+            data.get("total_vacancies", 0),
+            data.get("percentage", 0),
+        )
         return {"message": "Навык обновлён"}
     finally:
         await conn.close()
@@ -3610,4 +4291,5 @@ async def get_hh_professions():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -39,6 +39,15 @@
           <div class="answer-body" v-html="formatAnswer(question.answer)"></div>
         </section>
 
+        <section class="section">
+          <h2 class="sec-title">Моя заметка</h2>
+          <textarea v-model="note" class="input" rows="3" placeholder="Ваши короткие заметки по вопросу"></textarea>
+          <div class="inline-actions">
+            <button class="btn btn-secondary btn-sm" @click="saveNote" :disabled="savingNote">{{ savingNote ? 'Сохранение...' : 'Сохранить заметку' }}</button>
+            <span v-if="noteMsg" class="meta-prob">{{ noteMsg }}</span>
+          </div>
+        </section>
+
         <!-- Community Answers -->
         <section class="section">
           <h2 class="sec-title">
@@ -67,6 +76,34 @@
                 </div>
                 <button v-if="a.is_own" class="btn btn-ghost btn-sm" @click="deleteAnswer(a.id)" style="color:var(--c-err)">Удалить</button>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="sec-title">Обратная связь</h2>
+          <div class="feedback-wrap card">
+            <div class="feedback-row">
+              <select v-model="feedbackType" class="input">
+                <option value="suggestion">Предложение</option>
+                <option value="report">Ошибка в вопросе</option>
+                <option value="answer_quality">Качество ответа</option>
+                <option value="like">Понравилось</option>
+                <option value="dislike">Не понравилось</option>
+              </select>
+              <select v-model.number="feedbackRating" class="input">
+                <option :value="null">Без рейтинга</option>
+                <option :value="5">5</option>
+                <option :value="4">4</option>
+                <option :value="3">3</option>
+                <option :value="2">2</option>
+                <option :value="1">1</option>
+              </select>
+            </div>
+            <textarea v-model="feedbackComment" class="input" rows="3" placeholder="Что улучшить?" />
+            <div class="inline-actions">
+              <button class="btn btn-primary btn-sm" @click="sendFeedback" :disabled="sendingFeedback || !feedbackComment.trim()">{{ sendingFeedback ? 'Отправка...' : 'Отправить' }}</button>
+              <span v-if="feedbackMsg" class="meta-prob">{{ feedbackMsg }}</span>
             </div>
           </div>
         </section>
@@ -106,6 +143,15 @@ const similar = ref([])
 const userAnswers = ref([])
 const newAnswer = ref('')
 const isBookmarked = ref(false)
+const note = ref('')
+const noteMsg = ref('')
+const savingNote = ref(false)
+
+const feedbackType = ref('suggestion')
+const feedbackRating = ref(null)
+const feedbackComment = ref('')
+const feedbackMsg = ref('')
+const sendingFeedback = ref(false)
 
 const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
 const formatAnswer = (t) => t ? t.replace(/\n/g, '<br>') : ''
@@ -127,6 +173,9 @@ async function loadQuestion() {
 
     // user answers
     try { const ua = await api.getUserAnswers(route.params.id); userAnswers.value = ua.data.answers || [] } catch {}
+
+    // personal note
+    try { const n = await api.getNote(parseInt(route.params.id)); note.value = n.data.note || '' } catch { note.value = '' }
   } catch (e) { console.error(e) }
   loading.value = false
 }
@@ -154,6 +203,43 @@ async function vote(answer, type) {
 
 async function deleteAnswer(id) {
   try { await api.deleteUserAnswer(id); const ua = await api.getUserAnswers(route.params.id); userAnswers.value = ua.data.answers || [] } catch {}
+}
+
+async function saveNote() {
+  savingNote.value = true
+  noteMsg.value = ''
+  try {
+    await api.saveNote(parseInt(route.params.id), note.value)
+    noteMsg.value = 'Сохранено'
+  } catch {
+    noteMsg.value = 'Ошибка сохранения'
+  } finally {
+    savingNote.value = false
+    setTimeout(() => { noteMsg.value = '' }, 2000)
+  }
+}
+
+async function sendFeedback() {
+  if (!feedbackComment.value.trim()) return
+  sendingFeedback.value = true
+  feedbackMsg.value = ''
+  try {
+    await api.createFeedback({
+      question_id: parseInt(route.params.id),
+      feedback_type: feedbackType.value,
+      rating: feedbackRating.value,
+      comment: feedbackComment.value,
+      user_session: api.getUserSession()
+    })
+    feedbackComment.value = ''
+    feedbackRating.value = null
+    feedbackMsg.value = 'Спасибо, отправили!'
+  } catch {
+    feedbackMsg.value = 'Не удалось отправить'
+  } finally {
+    sendingFeedback.value = false
+    setTimeout(() => { feedbackMsg.value = '' }, 2500)
+  }
 }
 
 onMounted(loadQuestion)
@@ -204,6 +290,11 @@ watch(() => route.params.id, loadQuestion)
   font-size: 1.05rem;
 }
 
+.inline-actions { display: flex; align-items: center; gap: .6rem; margin-top: .5rem; }
+
+.feedback-wrap { padding: .9rem; display: flex; flex-direction: column; gap: .5rem; }
+.feedback-row { display: grid; grid-template-columns: 1.2fr .8fr; gap: .5rem; }
+
 /* Community Answers */
 .add-answer { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.25rem; }
 .add-answer .btn { align-self: flex-end; }
@@ -246,5 +337,6 @@ watch(() => route.params.id, loadQuestion)
 
 @media (max-width: 640px) {
   .q-header h1 { font-size: 1.25rem; }
+  .feedback-row { grid-template-columns: 1fr; }
 }
 </style>

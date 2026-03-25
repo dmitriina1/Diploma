@@ -88,7 +88,15 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-auto}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-interview-prep-diploma-secret-2024}
+      - APP_ENV=${APP_ENV:-development}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev-local-jwt-secret-change-me-2026}
+      - ENABLE_DEFAULT_ADMIN=${ENABLE_DEFAULT_ADMIN:-true}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-admin123}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://localhost:3001}
+      - AUTO_MIGRATE_DB=${AUTO_MIGRATE_DB:-true}
+      - DB_POOL_MIN_SIZE=${DB_POOL_MIN_SIZE:-2}
+      - DB_POOL_MAX_SIZE=${DB_POOL_MAX_SIZE:-20}
     ports:
       - "8000:8000"
     volumes:
@@ -111,6 +119,7 @@ services:
     container_name: diploma-frontend-new
     environment:
       - VITE_API_BASE_URL=/api
+      - VITE_PROXY_TARGET=http://backend:8000
     ports:
       - "3000:3000"
     volumes:
@@ -129,6 +138,8 @@ services:
     container_name: diploma-frontend-old
     environment:
       - VITE_API_BASE_URL=/api
+      - VITE_PROXY_TARGET=http://backend:8000
+      - VITE_WS_PROXY_TARGET=ws://backend:8000
     ports:
       - "3001:3000"
     volumes:

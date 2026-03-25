@@ -393,7 +393,7 @@ const rejectSug = async (s) => { try { await api.updateSuggestion(s.id, { status
 
 // Feedback tab
 const fbList = ref([]); const fbLoading = ref(false)
-const loadFeedback = async () => { fbLoading.value = true; try { const r = await api.getAdminFeedback(); fbList.value = r.data.feedback || r.data || [] } catch {} fbLoading.value = false }
+const loadFeedback = async () => { fbLoading.value = true; try { const r = await api.getAdminFeedback(); fbList.value = r.data.feedbacks || r.data.feedback || r.data || [] } catch {} fbLoading.value = false }
 const resolveFb = async (f) => { try { await api.updateFeedback(f.id, { is_resolved: true }); f.is_resolved = true } catch {} }
 
 // Videos tab

@@ -9,6 +9,7 @@
       <div class="nav-links" :class="{ open: menuOpen }">
         <router-link to="/interview-questions" class="nav-link" @click="menuOpen = false">Вопросы</router-link>
         <router-link to="/trainer" class="nav-link" @click="menuOpen = false">Тренажёр</router-link>
+        <router-link to="/mock-interview" class="nav-link" @click="menuOpen = false">Mock</router-link>
         <router-link to="/test-assignments" class="nav-link" @click="menuOpen = false">Задания</router-link>
         <router-link to="/hh-requirements" class="nav-link" @click="menuOpen = false">Навыки</router-link>
         <router-link to="/recordings" class="nav-link" @click="menuOpen = false">Записи</router-link>
@@ -16,6 +17,9 @@
       </div>
 
       <div class="nav-right">
+        <button class="btn btn-ghost btn-sm" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Тёмная тема'">
+          {{ theme.isDark ? '☀️' : '🌙' }}
+        </button>
         <template v-if="auth.isAuthenticated">
           <router-link to="/profile" class="nav-user">
             <div class="nav-avatar">{{ initials }}</div>
@@ -42,8 +46,10 @@
 import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store/auth'
+import { useThemeStore } from '../stores/theme'
 
 const auth = useAuthStore()
+const theme = useThemeStore()
 const route = useRoute()
 const router = useRouter()
 const menuOpen = ref(false)
@@ -66,7 +72,8 @@ function logout() {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(12,12,15,.82);
+  background: var(--c-bg);
+  background: color-mix(in srgb, var(--c-bg) 82%, transparent);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   border-bottom: 1px solid var(--c-border);

@@ -82,7 +82,9 @@ export const useTasksStore = defineStore('tasks', {
     currentTask: null,
     loading: false,
     _pollingIntervals: {},
-    _globalPollInterval: null
+    _globalPollInterval: null,
+    _ws: null,
+    _wsRetryTimer: null
   }),
   getters: {
     activeTasks(state) { return state.tasks.filter(t => t.status !== 'completed' && t.status !== 'error') },
@@ -99,27 +101,83 @@ export const useTasksStore = defineStore('tasks', {
       } catch (e) { console.error('Error fetching tasks:', e) }
     },
     async processVideo(url, topic, level) {
-      const r = await api.processVideo({ youtube_url: url, topic: topic || 'General', level: level || 'middle' })
+      const r = await api.processVideoWithClient({ youtube_url: url, topic: topic || 'General', level: level || 'middle' })
       const taskId = r.data.task_id
       const t = { task_id: taskId, video_url: url, status: 'pending', progress: 0, step: 'Запуск...', logs: [], created_at: new Date().toISOString() }
       this.tasks.unshift(t); this.currentTask = t; this.startPolling(taskId); return taskId
+    },
+    upsertTask(taskPatch) {
+      if (!taskPatch?.task_id) return
+      const idx = this.tasks.findIndex((t) => t.task_id === taskPatch.task_id)
+      if (idx === -1) {
+        this.tasks.unshift({ logs: [], ...taskPatch })
+      } else {
+        this.tasks[idx] = { ...this.tasks[idx], ...taskPatch, logs: taskPatch.logs || this.tasks[idx].logs || [] }
+      }
+      if (this.currentTask?.task_id === taskPatch.task_id) {
+        this.currentTask = this.tasks.find((t) => t.task_id === taskPatch.task_id) || null
+      }
     },
     startPolling(taskId) {
       if (this._pollingIntervals[taskId]) return
       const poll = async () => {
         try {
           const r = await api.getTaskStatus(taskId); const d = r.data
-          const idx = this.tasks.findIndex(t => t.task_id === taskId)
-          if (idx !== -1) this.tasks[idx] = { ...this.tasks[idx], status: d.status, progress: d.progress || 0, step: d.step || '', logs: d.logs || this.tasks[idx].logs || [], result: d.result, error: d.error }
-          if (this.currentTask?.task_id === taskId) this.currentTask = this.tasks[idx]
+          this.upsertTask({ task_id: taskId, status: d.status, progress: d.progress || 0, step: d.step || '', logs: d.logs || [], result: d.result, error: d.error, video_url: d.video_url || d.youtube_url })
           if (d.status === 'completed' || d.status === 'error') this.stopPolling(taskId)
         } catch {}
       }
       poll(); this._pollingIntervals[taskId] = setInterval(poll, 2000)
     },
     stopPolling(id) { if (this._pollingIntervals[id]) { clearInterval(this._pollingIntervals[id]); delete this._pollingIntervals[id] } },
-    startGlobalPolling() { if (this._globalPollInterval) return; this.fetchAllTasks(); this._globalPollInterval = setInterval(() => this.fetchAllTasks(), 5000) },
-    stopGlobalPolling() { if (this._globalPollInterval) { clearInterval(this._globalPollInterval); this._globalPollInterval = null } },
+    connectWs() {
+      if (this._ws && (this._ws.readyState === WebSocket.OPEN || this._ws.readyState === WebSocket.CONNECTING)) return
+      const url = api.getWebSocketUrl()
+      try {
+        this._ws = new WebSocket(url)
+        this._ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            if (!data?.task_id) return
+            if (data.type === 'progress') {
+              this.upsertTask({ task_id: data.task_id, status: data.status, progress: data.progress, step: data.step })
+            } else if (data.type === 'completed') {
+              this.upsertTask({ task_id: data.task_id, status: 'completed', progress: 100, result: { video_title: data.video_title, questions_count: data.questions_count } })
+              this.stopPolling(data.task_id)
+            } else if (data.type === 'error') {
+              this.upsertTask({ task_id: data.task_id, status: 'error', error: data.error })
+              this.stopPolling(data.task_id)
+            }
+          } catch {}
+        }
+        this._ws.onclose = () => {
+          this._ws = null
+          if (this._wsRetryTimer) clearTimeout(this._wsRetryTimer)
+          this._wsRetryTimer = setTimeout(() => this.connectWs(), 3000)
+        }
+      } catch {}
+    },
+    disconnectWs() {
+      if (this._wsRetryTimer) {
+        clearTimeout(this._wsRetryTimer)
+        this._wsRetryTimer = null
+      }
+      if (this._ws) {
+        this._ws.close()
+        this._ws = null
+      }
+    },
+    startGlobalPolling() {
+      if (!this._globalPollInterval) {
+        this.fetchAllTasks()
+        this._globalPollInterval = setInterval(() => this.fetchAllTasks(), 5000)
+      }
+      this.connectWs()
+    },
+    stopGlobalPolling() {
+      if (this._globalPollInterval) { clearInterval(this._globalPollInterval); this._globalPollInterval = null }
+      this.disconnectWs()
+    },
     clearCurrentTask() { this.currentTask = null }
   }
 })
