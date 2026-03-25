@@ -22,7 +22,7 @@
 
         <div class="mode-grid stagger">
           <div class="mode-card card card-hover interactive-card" @click="startFlashcards">
-            <div class="mc-icon"><BrandIcon name="flashcards" :size="72" /></div>
+            <div class="mc-icon"><BrandIcon name="flashcards" :size="78" /></div>
             <h3>Проработка вопросов</h3>
             <p>Карточки с SM-2. Отмечайте «Знаю» или «На повтор».</p>
             <div class="mc-footer">
@@ -31,7 +31,7 @@
             </div>
           </div>
           <div class="mode-card card card-hover interactive-card" @click="startInterview">
-            <div class="mc-icon"><BrandIcon name="interview" :size="72" /></div>
+            <div class="mc-icon"><BrandIcon name="interview" :size="78" /></div>
             <h3>Реальное собеседование</h3>
             <p>Вопросы из настоящих собеседований в хронологическом порядке.</p>
             <div class="mc-footer">

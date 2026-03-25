@@ -97,7 +97,7 @@
 <script setup>
 defineProps({
   name: { type: String, required: true },
-  size: { type: Number, default: 20 }
+  size: { type: Number, default: 22 }
 })
 </script>
 
@@ -111,8 +111,8 @@ defineProps({
   color: var(--c-brand-h);
 }
 .brand-icon svg {
-  width: 62%;
-  height: 62%;
+  width: 72%;
+  height: 72%;
 }
 .brand-icon-mock,
 .brand-icon-skills {

@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="recordings" :size="30" /> Записи собеседований</h1>
+      <h1 class="heading h-page"><BrandIcon name="recordings" :size="34" /> Записи собеседований</h1>
       <p class="sub">Реальные записи IT-собеседований с извлечёнными вопросами</p>
 
       <!-- Filters -->

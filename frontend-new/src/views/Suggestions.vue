@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="sec-title h-page" style="margin-bottom:.25rem;display:flex;align-items:center;gap:.5rem"><BrandIcon name="suggest" :size="28" /> Предложить видео</h1>
+      <h1 class="sec-title h-page" style="margin-bottom:.25rem;display:flex;align-items:center;gap:.5rem"><BrandIcon name="suggest" :size="32" /> Предложить видео</h1>
       <p class="sub">Знаете хорошее видео с IT-собеседованием? Предложите его для обработки!</p>
 
       <div class="card form-card">

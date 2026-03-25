@@ -1,6 +1,6 @@
 <template>
   <div class="state-panel state-theme" :class="`state-${type}`">
-    <BrandIcon :name="icon" :size="56" />
+    <BrandIcon :name="icon" :size="60" />
     <h3>{{ title }}</h3>
     <p>{{ description }}</p>
     <slot />

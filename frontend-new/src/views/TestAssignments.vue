@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="assignments" :size="30" /> Тестовые задания</h1>
+      <h1 class="heading h-page"><BrandIcon name="assignments" :size="34" /> Тестовые задания</h1>
       <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
 
       <!-- Filters -->

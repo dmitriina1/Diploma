@@ -5,7 +5,7 @@
       <!-- Header -->
       <header class="admin-header">
         <div>
-          <h1><BrandIcon name="admin" :size="30" /> Панель управления</h1>
+          <h1><BrandIcon name="admin" :size="34" /> Панель управления</h1>
           <p class="sub">Обработка видео, утверждение вопросов, генерация ответов</p>
         </div>
         <button class="btn btn-primary" @click="showUpload = true">+ Загрузить видео</button>

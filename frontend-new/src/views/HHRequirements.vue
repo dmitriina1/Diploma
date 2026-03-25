@@ -2,7 +2,7 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="skills" :size="30" /> Навыки из вакансий</h1>
+      <h1 class="heading h-page"><BrandIcon name="skills" :size="34" /> Навыки из вакансий</h1>
       <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
 
       <div v-if="auth.isAdmin" class="sync-actions">

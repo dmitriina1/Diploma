@@ -18,7 +18,7 @@
 
       <div class="nav-right">
         <button class="btn btn-ghost btn-sm theme-toggle" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Тёмная тема'">
-          <BrandIcon :name="theme.isDark ? 'theme-light' : 'theme-dark'" :size="20" />
+          <BrandIcon :name="theme.isDark ? 'theme-light' : 'theme-dark'" :size="24" />
         </button>
         <template v-if="auth.isAuthenticated">
           <router-link to="/profile" class="nav-user">

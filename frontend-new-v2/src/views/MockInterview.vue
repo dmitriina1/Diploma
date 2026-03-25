@@ -3,7 +3,7 @@
     <NavBar />
     <div class="container" style="padding-top:2rem;padding-bottom:3rem">
       <div class="mi-head">
-        <h1 class="h-page"><BrandIcon name="mock" :size="30" /> Mock Interview</h1>
+        <h1 class="h-page"><BrandIcon name="mock" :size="34" /> Mock Interview</h1>
         <p>Проверь себя в режиме имитации собеседования.</p>
       </div>
 

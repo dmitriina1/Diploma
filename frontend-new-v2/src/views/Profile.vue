@@ -7,7 +7,7 @@
         На главную
       </button>
       <h1 class="sec-title h-page" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:.5rem">
-        <BrandIcon name="profile" :size="28" />
+        <BrandIcon name="profile" :size="32" />
         Профиль
       </h1>
 
