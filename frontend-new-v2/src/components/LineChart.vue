@@ -19,7 +19,8 @@
         {{ showAverageLine ? 'Средняя линия: вкл' : 'Средняя линия: выкл' }}
       </button>
     </div>
-    <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-label="line-chart">
+    <div class="lc-plot-wrap">
+      <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-label="line-chart">
       <defs>
         <linearGradient :id="gradientId" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="var(--c-brand-h)" stop-opacity="0.32" />
@@ -43,22 +44,16 @@
         <circle :cx="p.x" :cy="p.y" r="1.1" class="dot-hit" />
         <circle :cx="p.x" :cy="p.y" r="0.8" class="dot" />
       </g>
-      <g v-if="tooltip.visible" class="tooltip" :transform="`translate(${tooltip.cx},${tooltip.cy})`">
-        <rect
-          :x="tooltip.alignLeft ? -(tooltip.width + 2.4) : 2.4"
-          :y="tooltip.placeBelow ? 2.2 : -10.6"
-          :width="tooltip.width"
-          height="9"
-          rx="1.1"
-          class="tooltip-bg"
-        />
-        <text
-          :x="tooltip.alignLeft ? -(tooltip.width - 1.8) : 4"
-          :y="tooltip.placeBelow ? 5.6 : -7.3"
-          class="tooltip-text"
-        >{{ tooltip.text }}</text>
-      </g>
-    </svg>
+      </svg>
+      <div
+        v-if="tooltip.visible"
+        class="lc-tooltip"
+        :class="{ left: tooltip.alignLeft, below: tooltip.placeBelow }"
+        :style="{ left: `${tooltip.cx}%`, top: `${(tooltip.cy / 42) * 100}%` }"
+      >
+        {{ tooltip.text }}
+      </div>
+    </div>
     <div class="lc-scale">
       <span>{{ maxValue }} {{ unit }}</span>
       <span>{{ midValue }} {{ unit }}</span>
@@ -143,20 +138,17 @@ const tooltip = ref({
   text: '',
   cx: 0,
   cy: 0,
-  width: 0,
   alignLeft: false,
   placeBelow: false
 })
 
 const showTooltip = (p) => {
   const text = `${p.labelShort} — ${p.value} ${tooltipUnitLabel.value}`
-  const width = Math.max(22, text.length * 0.72)
   tooltip.value = {
     visible: true,
     text,
     cx: p.x,
     cy: p.y,
-    width,
     alignLeft: p.x > 80,
     placeBelow: p.y < 12
   }
@@ -223,10 +215,10 @@ const hideTooltip = () => {
 }
 .avg-swatch.muted { border-top-color: color-mix(in srgb, var(--c-text-4) 45%, transparent); }
 .lc-scale { font-variant-numeric: tabular-nums; }
+.lc-plot-wrap { position: relative; }
 .lc-svg {
   width: 100%;
   height: 160px;
-  overflow: visible;
   background: color-mix(in srgb, var(--c-bg-2) 70%, transparent);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
@@ -254,15 +246,23 @@ const hideTooltip = () => {
 .dot-hit { fill: transparent; }
 .dot { fill: var(--c-accent); transition: r .12s ease; }
 .dot-group:hover .dot { r: 1.05; }
-.tooltip-bg {
-  fill: color-mix(in srgb, var(--c-bg) 82%, var(--c-surface));
-  stroke: color-mix(in srgb, var(--c-border) 74%, transparent);
-  stroke-width: .24;
-}
-.tooltip-text {
-  fill: var(--c-text);
-  font-size: 2.5px;
+.lc-tooltip {
+  position: absolute;
+  z-index: 5;
+  max-width: calc(100% - 12px);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: .76rem;
   font-weight: 600;
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-bg) 92%, var(--c-surface));
+  border: 1px solid color-mix(in srgb, var(--c-border) 74%, transparent);
+  border-radius: var(--r-sm);
+  padding: .22rem .45rem;
+  transform: translate(10px, calc(-100% - 10px));
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .14);
 }
-.tooltip { pointer-events: none; }
+.lc-tooltip.left { transform: translate(calc(-100% - 10px), calc(-100% - 10px)); }
+.lc-tooltip.below { transform: translate(10px, 10px); }
+.lc-tooltip.left.below { transform: translate(calc(-100% - 10px), 10px); }
 </style>
