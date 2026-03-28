@@ -203,8 +203,17 @@ onMounted(async () => {
   pointer-events: none;
 }
 .search-input { padding-left: 2.2rem; }
-.filter-select { max-width: 180px; }
-.filter-sort { max-width: 160px; }
+.filter-select { 
+  min-width: 180px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filter-sort { 
+  min-width: 160px;
+  max-width: 180px;
+}
 
 .list-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
 .count { font-size: .88rem; color: var(--c-text-3); }

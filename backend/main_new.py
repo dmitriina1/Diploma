@@ -82,6 +82,7 @@ from services.task_runtime import TaskRuntime
 from services.whisper_orchestrator import WhisperOrchestrator
 from services.ws_manager import ConnectionManager
 from services.hh_sync import HHSkillsSyncService
+from services.interview_chatbot import InterviewChatbot
 from api.routes.auth import router as auth_router
 from api.routes.status import (
     router as status_router,
@@ -104,6 +105,7 @@ whisper_orchestrator: Optional["WhisperOrchestrator"] = None
 video_downloader: Optional[VideoDownloader] = None
 task_runtime: Optional[TaskRuntime] = None
 hh_sync_service: Optional[HHSkillsSyncService] = None
+interview_chatbot: Optional[InterviewChatbot] = None
 
 
 # ============== External services (moved to backend/services) ==============
@@ -180,7 +182,8 @@ async def lifespan(app: FastAPI):
         whisper_orchestrator, \
         video_downloader, \
         task_runtime, \
-        hh_sync_service
+        hh_sync_service, \
+        interview_chatbot
 
     print("🚀 Starting up...")
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
@@ -240,6 +243,17 @@ async def lifespan(app: FastAPI):
 
     whisper_orchestrator = WhisperOrchestrator(max_workers=MAX_WHISPER_WORKERS)
     await whisper_orchestrator.initialize()
+
+    # Initialize Interview Chatbot
+    interview_chatbot = InterviewChatbot(
+        db_connect=lambda: db_connect(DATABASE_URL),
+        db_release=db_release,
+        similarity_search=search_similar_questions,
+        llm_provider=LLM_PROVIDER,
+        openrouter_api_key=OPENROUTER_API_KEY,
+        gemini_api_key=GEMINI_API_KEY,
+    )
+    print("🤖 Interview Chatbot initialized")
 
     print("ℹ️ Similarity search uses lazy initialization on first request")
 
@@ -3721,37 +3735,82 @@ async def get_test_assignment_detail(assignment_id: int):
 
 @app.get("/api/hh-skills", tags=["Public"])
 async def get_hh_skills(
-    profession: Optional[str] = None, page: int = 1, per_page: int = 30
+    profession: Optional[str] = None, 
+    page: int = 1, 
+    per_page: int = 30,
+    sources: Optional[str] = None  # "skills,description,title"
 ):
-    """Навыки/требования из вакансий HH с пагинацией"""
+    """Навыки/требования из вакансий HH с пагинацией и фильтрацией по источникам"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         offset = (page - 1) * per_page
-
-        if profession:
+        
+        # Parse sources filter
+        source_list = []
+        if sources:
+            source_list = [s.strip() for s in sources.split(",") if s.strip() in ["skills", "description", "title"]]
+        
+        # Use new table if sources filter is provided, otherwise fallback to old table
+        if source_list:
+            # Query hh_tech_mentions with source filter
+            where_clauses = []
+            params = []
+            param_idx = 1
+            
+            if profession:
+                where_clauses.append(f"profession ILIKE ${param_idx}")
+                params.append(f"%{profession}%")
+                param_idx += 1
+            
+            where_clauses.append(f"source = ANY(${param_idx})")
+            params.append(source_list)
+            param_idx += 1
+            
+            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+            
             total = await conn.fetchval(
-                "SELECT COUNT(*) FROM hh_skills WHERE profession ILIKE $1",
-                f"%{profession}%",
+                f"SELECT COUNT(*) FROM hh_tech_mentions WHERE {where_sql}",
+                *params
             )
+            
             skills = await conn.fetch(
-                """
-                SELECT * FROM hh_skills WHERE profession ILIKE $1 ORDER BY percentage DESC
-                LIMIT $2 OFFSET $3
-            """,
-                f"%{profession}%",
+                f"""
+                SELECT profession, technology as skill, source, vacancy_count, total_vacancies, percentage, created_at, updated_at
+                FROM hh_tech_mentions 
+                WHERE {where_sql}
+                ORDER BY percentage DESC
+                LIMIT ${param_idx} OFFSET ${param_idx + 1}
+                """,
+                *params,
                 per_page,
                 offset,
             )
         else:
-            total = await conn.fetchval("SELECT COUNT(*) FROM hh_skills")
-            skills = await conn.fetch(
-                """
-                SELECT * FROM hh_skills ORDER BY profession, percentage DESC
-                LIMIT $1 OFFSET $2
-            """,
-                per_page,
-                offset,
-            )
+            # Fallback to old hh_skills table for backward compatibility
+            if profession:
+                total = await conn.fetchval(
+                    "SELECT COUNT(*) FROM hh_skills WHERE profession ILIKE $1",
+                    f"%{profession}%",
+                )
+                skills = await conn.fetch(
+                    """
+                    SELECT * FROM hh_skills WHERE profession ILIKE $1 ORDER BY percentage DESC
+                    LIMIT $2 OFFSET $3
+                """,
+                    f"%{profession}%",
+                    per_page,
+                    offset,
+                )
+            else:
+                total = await conn.fetchval("SELECT COUNT(*) FROM hh_skills")
+                skills = await conn.fetch(
+                    """
+                    SELECT * FROM hh_skills ORDER BY profession, percentage DESC
+                    LIMIT $1 OFFSET $2
+                """,
+                    per_page,
+                    offset,
+                )
 
         result = []
         for s in skills:
@@ -3809,6 +3868,76 @@ async def get_hh_professions():
         return {"professions": [dict(p) for p in professions]}
     finally:
         await conn.close()
+
+
+# ============== Interview Chatbot API ==============
+
+@app.post("/api/interview-chat/start", tags=["Interview Chat"])
+async def start_interview_chat(data: dict = Body(...)):
+    """Start a new AI interview chat session"""
+    if interview_chatbot is None:
+        raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
+    
+    topic = data.get("topic", "Python")
+    difficulty = data.get("difficulty", "middle")
+    user_session = data.get("user_session", "anonymous")
+    
+    try:
+        result = await interview_chatbot.start_interview(topic, difficulty, user_session)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/interview-chat/{interview_id}/message", tags=["Interview Chat"])
+async def send_chat_message(interview_id: int, data: dict = Body(...)):
+    """Send a message in an interview chat session"""
+    if interview_chatbot is None:
+        raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
+    
+    user_message = data.get("message", "")
+    user_session = data.get("user_session", "anonymous")
+    
+    if not user_message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    
+    try:
+        result = await interview_chatbot.send_message(interview_id, user_message, user_session)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/interview-chat/{interview_id}/end", tags=["Interview Chat"])
+async def end_interview_chat(interview_id: int, data: dict = Body(...)):
+    """End an interview chat session and get summary"""
+    if interview_chatbot is None:
+        raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
+    
+    user_session = data.get("user_session", "anonymous")
+    
+    try:
+        result = await interview_chatbot.end_interview(interview_id, user_session)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/interview-chat/history", tags=["Interview Chat"])
+async def get_interview_history(user_session: str = "anonymous", limit: int = 10):
+    """Get user's interview chat history"""
+    if interview_chatbot is None:
+        raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
+    
+    try:
+        history = await interview_chatbot.get_history(user_session, limit)
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

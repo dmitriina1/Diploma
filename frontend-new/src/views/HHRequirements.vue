@@ -12,6 +12,23 @@
         <span class="muted">Автообновление: примерно раз в 24 часа</span>
       </div>
 
+      <!-- Source Filters -->
+      <div class="source-filters">
+        <div class="sf-label">Источник данных:</div>
+        <label class="sf-check">
+          <input type="checkbox" v-model="sources.skills" @change="loadSkills" />
+          <span>Навыки</span>
+        </label>
+        <label class="sf-check">
+          <input type="checkbox" v-model="sources.description" @change="loadSkills" />
+          <span>Описание</span>
+        </label>
+        <label class="sf-check">
+          <input type="checkbox" v-model="sources.title" @change="loadSkills" />
+          <span>Заголовок</span>
+        </label>
+      </div>
+
       <!-- Professions -->
       <div class="prof-row">
         <button v-for="p in professions" :key="p.profession" class="btn btn-sm"
@@ -97,6 +114,13 @@ const totalSkills = ref(0)
 const loadError = ref('')
 const auth = useAuthStore()
 
+// Source filters
+const sources = ref({
+  skills: true,
+  description: false,
+  title: false
+})
+
 const mustHave = computed(() => skills.value.filter(s => s.percentage > 50))
 const niceToHave = computed(() => skills.value.filter(s => s.percentage >= 20 && s.percentage <= 50))
 const bonusSkills = computed(() => skills.value.filter(s => s.percentage < 20))
@@ -114,10 +138,21 @@ const loadSkills = async () => {
   loading.value = true
   loadError.value = ''
   try {
-    const r = await api.getHHSkills(selected.value, page.value, perPage.value)
+    // Build sources string from checkboxes
+    const selectedSources = []
+    if (sources.value.skills) selectedSources.push('skills')
+    if (sources.value.description) selectedSources.push('description')
+    if (sources.value.title) selectedSources.push('title')
+    
+    const sourcesParam = selectedSources.length > 0 ? selectedSources.join(',') : null
+    
+    const r = await api.getHHSkills(selected.value, page.value, perPage.value, sourcesParam)
     skills.value = (r.data.skills || []).sort((a, b) => b.percentage - a.percentage)
     totalSkills.value = r.data.total || 0
-  } catch (e) { console.error(e); loadError.value = 'Проверь подключение к backend и повтори позже.' }
+  } catch (e) { 
+    console.error(e)
+    loadError.value = 'Проверь подключение к backend и повтори позже.' 
+  }
   loading.value = false
 }
 
@@ -153,6 +188,42 @@ onMounted(async () => {
   justify-content: center;
   flex-wrap: wrap;
   margin: -.5rem 0 1.2rem;
+}
+
+.source-filters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  flex-wrap: wrap;
+}
+.sf-label {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--c-text-2);
+}
+.sf-check {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: pointer;
+  font-size: .9rem;
+  color: var(--c-text-2);
+  transition: color var(--dur);
+}
+.sf-check:hover {
+  color: var(--c-text);
+}
+.sf-check input[type="checkbox"] {
+  accent-color: var(--c-brand);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 .prof-row { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-bottom: 1.5rem; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }

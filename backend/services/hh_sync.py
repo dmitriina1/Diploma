@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from .tech_extractor import extract_from_title, extract_from_description
+
 
 HH_API_BASE = "https://api.hh.ru"
 
@@ -203,7 +205,7 @@ class HHSkillsSyncService:
                 *(wrapped(prof) for prof in professions), return_exceptions=True
             )
 
-        rows_to_upsert: list[tuple[str, str, int, int, float]] = []
+        rows_to_upsert: list[tuple[str, str, str, int, int, float]] = []  # Added source field
         vacancies_scanned = 0
         updated_professions = 0
 
@@ -215,22 +217,35 @@ class HHSkillsSyncService:
                 continue
 
             skills_counter = prof_result.get("skills_counter") or Counter()
+            description_counter = prof_result.get("description_counter") or Counter()
+            title_counter = prof_result.get("title_counter") or Counter()
             total_vacancies = int(prof_result.get("total_vacancies") or 0)
             vacancies_scanned += total_vacancies
             if total_vacancies < self.min_vacancies:
                 continue
 
-            top = skills_counter.most_common(self.top_skills)
-            if not top:
-                continue
-
             updated_professions += 1
-            for skill, count in top:
+            
+            # Process skills from key_skills
+            top_skills = skills_counter.most_common(self.top_skills)
+            for skill, count in top_skills:
                 pct = round((count / total_vacancies) * 100, 2)
-                rows_to_upsert.append((profession, skill, count, total_vacancies, pct))
+                rows_to_upsert.append((profession, skill, "skills", count, total_vacancies, pct))
+            
+            # Process techs from description
+            top_desc = description_counter.most_common(self.top_skills)
+            for tech, count in top_desc:
+                pct = round((count / total_vacancies) * 100, 2)
+                rows_to_upsert.append((profession, tech, "description", count, total_vacancies, pct))
+            
+            # Process techs from title
+            top_title = title_counter.most_common(self.top_skills)
+            for tech, count in top_title:
+                pct = round((count / total_vacancies) * 100, 2)
+                rows_to_upsert.append((profession, tech, "title", count, total_vacancies, pct))
 
         if rows_to_upsert:
-            await self._upsert_rows(rows_to_upsert)
+            await self._upsert_rows_v2(rows_to_upsert)
 
         return {
             "updated_professions": updated_professions,
@@ -242,6 +257,8 @@ class HHSkillsSyncService:
         self, client: httpx.AsyncClient, profession: str
     ) -> dict[str, Any]:
         skills_counter: Counter[str] = Counter()
+        description_counter: Counter[str] = Counter()
+        title_counter: Counter[str] = Counter()
         total_vacancies = 0
 
         for page in range(self.max_pages):
@@ -264,6 +281,7 @@ class HHSkillsSyncService:
                 break
 
             for vacancy in items:
+                # Extract from key_skills
                 key_skills = vacancy.get("key_skills") or []
                 if not key_skills and vacancy.get("id"):
                     key_skills = await _fetch_vacancy_key_skills(
@@ -273,6 +291,23 @@ class HHSkillsSyncService:
                     skill_name = _pick_skill_name(raw_skill)
                     if skill_name:
                         skills_counter[skill_name] += 1
+
+                # Extract from title
+                title = vacancy.get("name") or ""
+                if title:
+                    title_techs = extract_from_title(title)
+                    for tech in title_techs:
+                        title_counter[tech] += 1
+
+                # Extract from description (snippet)
+                snippet = vacancy.get("snippet") or {}
+                requirement = snippet.get("requirement") or ""
+                responsibility = snippet.get("responsibility") or ""
+                description_text = f"{requirement} {responsibility}"
+                if description_text.strip():
+                    desc_techs = extract_from_description(description_text)
+                    for tech in desc_techs:
+                        description_counter[tech] += 1
 
                 total_vacancies += 1
                 if total_vacancies >= self.max_vacancies_per_prof:
@@ -284,10 +319,13 @@ class HHSkillsSyncService:
 
         return {
             "skills_counter": skills_counter,
+            "description_counter": description_counter,
+            "title_counter": title_counter,
             "total_vacancies": total_vacancies,
         }
 
     async def _upsert_rows(self, rows: list[tuple[str, str, int, int, float]]):
+        """Legacy method for backward compatibility - inserts into hh_skills"""
         conn = await self._db_connect()
         try:
             await conn.executemany(
@@ -295,6 +333,25 @@ class HHSkillsSyncService:
                 INSERT INTO hh_skills (profession, skill, vacancy_count, total_vacancies, percentage, updated_at)
                 VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
                 ON CONFLICT (profession, skill) DO UPDATE SET
+                    vacancy_count = EXCLUDED.vacancy_count,
+                    total_vacancies = EXCLUDED.total_vacancies,
+                    percentage = EXCLUDED.percentage,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                rows,
+            )
+        finally:
+            await self._db_release(conn)
+
+    async def _upsert_rows_v2(self, rows: list[tuple[str, str, str, int, int, float]]):
+        """New method - inserts into hh_tech_mentions with source field"""
+        conn = await self._db_connect()
+        try:
+            await conn.executemany(
+                """
+                INSERT INTO hh_tech_mentions (profession, technology, source, vacancy_count, total_vacancies, percentage, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+                ON CONFLICT (profession, technology, source) DO UPDATE SET
                     vacancy_count = EXCLUDED.vacancy_count,
                     total_vacancies = EXCLUDED.total_vacancies,
                     percentage = EXCLUDED.percentage,

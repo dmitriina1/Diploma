@@ -384,13 +384,24 @@ const startInterviewSession = async (v) => {
   justify-content: center;
   box-shadow: var(--shadow-md);
 }
+.fc-front {
+  /* Передняя сторона - вопрос */
+}
 .fc-back {
   transform: rotateY(180deg);
   overflow-y: auto;
   justify-content: flex-start;
   align-items: flex-start;
 }
-.fc-tags { display: flex; gap: .4rem; margin-bottom: 1.25rem; }
+.fc-tags { 
+  display: flex; 
+  gap: .4rem; 
+  margin-bottom: 1.25rem;
+  /* Скрываем теги на обратной стороне */
+}
+.fc-back .fc-tags {
+  display: none;
+}
 .fc-question { font-size: 1.5rem; font-weight: 600; text-align: center; line-height: 1.5; color: var(--c-text); }
 .fc-hint { margin-top: 1.5rem; font-size: .78rem; color: var(--c-text-4); display: flex; align-items: center; gap: .35rem; }
 .fc-hint kbd, .fc-btn kbd {
