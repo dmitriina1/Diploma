@@ -5,6 +5,7 @@ import { questionsApi } from './questions'
 import { trainerApi } from './trainer'
 import { contentApi } from './content'
 import { adminApi } from './admin'
+import { chatApi } from './chat'
 
 const api = {
   API_BASE_URL,
@@ -19,6 +20,7 @@ const api = {
   ...trainerApi,
   ...contentApi,
   ...adminApi,
+  ...chatApi,
 
   getPublicStats: () => apiClient.get('/api/stats'),
   exportJSON: () => adminApi.getAdminQuestions()

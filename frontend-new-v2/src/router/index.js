@@ -8,6 +8,7 @@ const routes = [
   { path: '/interview-questions', name: 'InterviewQuestions',    component: () => import('../views/InterviewQuestions.vue'),   meta: { title: 'Вопросы' } },
   { path: '/question/:id',        name: 'QuestionDetail',        component: () => import('../views/QuestionDetail.vue'),       meta: { title: 'Вопрос' }, props: true },
   { path: '/trainer',             name: 'Trainer',               component: () => import('../views/Trainer.vue'),              meta: { title: 'Тренажёр', requiresAuth: true } },
+  { path: '/ai-interview',        name: 'AIInterviewChat',       component: () => import('../views/AIInterviewChat.vue'),      meta: { title: 'AI Interview', requiresAuth: true } },
   { path: '/mock-interview',      name: 'MockInterview',         component: () => import('../views/MockInterview.vue'),        meta: { title: 'Mock Interview', requiresAuth: true } },
   { path: '/recordings',          name: 'InterviewRecordings',   component: () => import('../views/InterviewRecordings.vue'),  meta: { title: 'Записи', requiresAuth: true } },
   { path: '/suggest',             name: 'Suggestions',           component: () => import('../views/Suggestions.vue'),          meta: { title: 'Предложить видео' } },

@@ -9,7 +9,7 @@
       <div class="nav-links" :class="{ open: menuOpen }">
         <router-link to="/interview-questions" class="nav-link" @click="menuOpen = false">Вопросы</router-link>
         <router-link to="/trainer" class="nav-link" @click="menuOpen = false">Тренажёр</router-link>
-        <router-link to="/mock-interview" class="nav-link" @click="menuOpen = false">Mock</router-link>
+        <router-link to="/ai-interview" class="nav-link" @click="menuOpen = false">AI Interview</router-link>
         <router-link to="/test-assignments" class="nav-link" @click="menuOpen = false">Задания</router-link>
         <router-link to="/hh-requirements" class="nav-link" @click="menuOpen = false">Навыки</router-link>
         <router-link to="/recordings" class="nav-link" @click="menuOpen = false">Записи</router-link>
