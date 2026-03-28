@@ -3756,28 +3756,39 @@ async def get_hh_skills(
             where_clauses = []
             params = []
             param_idx = 1
-            
+
             if profession:
                 where_clauses.append(f"profession ILIKE ${param_idx}")
                 params.append(f"%{profession}%")
                 param_idx += 1
-            
+
             where_clauses.append(f"source = ANY(${param_idx})")
             params.append(source_list)
             param_idx += 1
-            
+
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-            
+
+            # Count unique (profession, technology) combinations
             total = await conn.fetchval(
-                f"SELECT COUNT(*) FROM hh_tech_mentions WHERE {where_sql}",
+                f"SELECT COUNT(DISTINCT (profession, technology)) FROM hh_tech_mentions WHERE {where_sql}",
                 *params
             )
-            
+
+            # Aggregate by (profession, technology) - sum vacancy counts, average percentage
             skills = await conn.fetch(
                 f"""
-                SELECT profession, technology as skill, source, vacancy_count, total_vacancies, percentage, created_at, updated_at
-                FROM hh_tech_mentions 
+                SELECT 
+                    profession,
+                    technology as skill,
+                    MAX(source) as source,  -- Take any source (or use array_agg)
+                    SUM(vacancy_count) as vacancy_count,
+                    MAX(total_vacancies) as total_vacancies,  -- Same total_vacancies for profession
+                    AVG(percentage)::float as percentage,  -- Average percentage across sources
+                    MAX(created_at) as created_at,
+                    MAX(updated_at) as updated_at
+                FROM hh_tech_mentions
                 WHERE {where_sql}
+                GROUP BY profession, technology
                 ORDER BY percentage DESC
                 LIMIT ${param_idx} OFFSET ${param_idx + 1}
                 """,
