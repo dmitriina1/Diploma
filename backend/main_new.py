@@ -252,6 +252,7 @@ async def lifespan(app: FastAPI):
         llm_provider=LLM_PROVIDER,
         openrouter_api_key=OPENROUTER_API_KEY,
         gemini_api_key=GEMINI_API_KEY,
+        groq_api_key=GROQ_API_KEY,
     )
     print("🤖 Interview Chatbot initialized")
 
@@ -3735,21 +3736,25 @@ async def get_test_assignment_detail(assignment_id: int):
 
 @app.get("/api/hh-skills", tags=["Public"])
 async def get_hh_skills(
-    profession: Optional[str] = None, 
-    page: int = 1, 
+    profession: Optional[str] = None,
+    page: int = 1,
     per_page: int = 30,
-    sources: Optional[str] = None  # "skills,description,title"
+    sources: Optional[str] = None,  # "skills,description,title"
 ):
     """Навыки/требования из вакансий HH с пагинацией и фильтрацией по источникам"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         offset = (page - 1) * per_page
-        
+
         # Parse sources filter
         source_list = []
         if sources:
-            source_list = [s.strip() for s in sources.split(",") if s.strip() in ["skills", "description", "title"]]
-        
+            source_list = [
+                s.strip()
+                for s in sources.split(",")
+                if s.strip() in ["skills", "description", "title"]
+            ]
+
         # Use new table if sources filter is provided, otherwise fallback to old table
         if source_list:
             # Query hh_tech_mentions with source filter
@@ -3771,7 +3776,7 @@ async def get_hh_skills(
             # Count unique (profession, technology) combinations
             total = await conn.fetchval(
                 f"SELECT COUNT(DISTINCT (profession, technology)) FROM hh_tech_mentions WHERE {where_sql}",
-                *params
+                *params,
             )
 
             # Aggregate by (profession, technology) - sum vacancy counts, average percentage
@@ -3883,18 +3888,21 @@ async def get_hh_professions():
 
 # ============== Interview Chatbot API ==============
 
+
 @app.post("/api/interview-chat/start", tags=["Interview Chat"])
 async def start_interview_chat(data: dict = Body(...)):
     """Start a new AI interview chat session"""
     if interview_chatbot is None:
         raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
-    
+
     topic = data.get("topic", "Python")
     difficulty = data.get("difficulty", "middle")
     user_session = data.get("user_session", "anonymous")
-    
+
     try:
-        result = await interview_chatbot.start_interview(topic, difficulty, user_session)
+        result = await interview_chatbot.start_interview(
+            topic, difficulty, user_session
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -3905,15 +3913,17 @@ async def send_chat_message(interview_id: int, data: dict = Body(...)):
     """Send a message in an interview chat session"""
     if interview_chatbot is None:
         raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
-    
+
     user_message = data.get("message", "")
     user_session = data.get("user_session", "anonymous")
-    
+
     if not user_message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
-    
+
     try:
-        result = await interview_chatbot.send_message(interview_id, user_message, user_session)
+        result = await interview_chatbot.send_message(
+            interview_id, user_message, user_session
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -3926,9 +3936,9 @@ async def end_interview_chat(interview_id: int, data: dict = Body(...)):
     """End an interview chat session and get summary"""
     if interview_chatbot is None:
         raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
-    
+
     user_session = data.get("user_session", "anonymous")
-    
+
     try:
         result = await interview_chatbot.end_interview(interview_id, user_session)
         return result
@@ -3943,7 +3953,7 @@ async def get_interview_history(user_session: str = "anonymous", limit: int = 10
     """Get user's interview chat history"""
     if interview_chatbot is None:
         raise HTTPException(status_code=503, detail="Interview chatbot not initialized")
-    
+
     try:
         history = await interview_chatbot.get_history(user_session, limit)
         return {"history": history}

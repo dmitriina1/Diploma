@@ -14,6 +14,29 @@
         <router-link to="/hh-requirements" class="nav-link" @click="menuOpen = false">Навыки</router-link>
         <router-link to="/recordings" class="nav-link" @click="menuOpen = false">Записи</router-link>
         <router-link v-if="auth.isAdmin" to="/admin" class="nav-link" @click="menuOpen = false">Админ</router-link>
+        <router-link
+          v-if="auth.isAuthenticated"
+          to="/profile"
+          class="nav-link nav-mobile-only"
+          @click="menuOpen = false"
+        >
+          Профиль
+        </router-link>
+        <button
+          v-if="auth.isAuthenticated"
+          class="nav-link nav-link-btn nav-mobile-only"
+          @click="logoutAndClose"
+        >
+          Выйти
+        </button>
+        <router-link
+          v-else
+          to="/login"
+          class="nav-link nav-mobile-only"
+          @click="menuOpen = false"
+        >
+          Войти
+        </router-link>
       </div>
 
       <div class="nav-right">
@@ -65,6 +88,11 @@ watch(() => route.path, () => { menuOpen.value = false })
 function logout() {
   auth.logout()
   router.push('/')
+}
+
+function logoutAndClose() {
+  menuOpen.value = false
+  logout()
 }
 </script>
 
@@ -123,6 +151,14 @@ function logout() {
   transition: all var(--dur) var(--ease);
   position: relative;
 }
+.nav-link-btn {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font: inherit;
+}
+.nav-mobile-only { display: none; }
 .nav-link::after {
   content: '';
   position: absolute;
@@ -215,6 +251,32 @@ function logout() {
 
 /* Mobile */
 @media (max-width: 768px) {
+  .nav-inner {
+    padding: 0 .9rem;
+    gap: .45rem;
+  }
+
+  .nav-logo {
+    gap: .4rem;
+    font-size: 1rem;
+  }
+
+  .nav-right {
+    margin-left: auto;
+    gap: .25rem;
+  }
+
+  .nav-user,
+  .nav-right > .btn.btn-ghost.btn-sm,
+  .nav-right > .btn.btn-primary.btn-sm {
+    display: none;
+  }
+
+  .theme-toggle {
+    width: 34px;
+    height: 34px;
+  }
+
   .nav-burger { display: flex; }
   .nav-links {
     position: fixed;
@@ -232,9 +294,18 @@ function logout() {
     transition: transform .25s var(--ease);
     z-index: 95;
     overflow-y: auto;
+    display: none;
   }
-  .nav-links.open { transform: translateX(0); }
+  .nav-mobile-only { display: block; }
+  .nav-links.open {
+    display: flex;
+    transform: translateX(0);
+  }
   .nav-link { padding: .65rem .75rem; font-size: .9rem; }
   .nav-username { display: none; }
+}
+
+@media (max-width: 460px) {
+  .nav-logo span { display: none; }
 }
 </style>

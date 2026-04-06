@@ -21,7 +21,7 @@
                 <span class="badge" :class="taskBadge(t.status)">{{ statusLabel(t.status) }}</span>
                 <span class="task-url">{{ trunc(t.video_url, 55) }}</span>
               </div>
-              <div style="display:flex;align-items:center;gap:.45rem">
+              <div class="task-meta">
                 <span class="task-time">{{ fmtTime(t.created_at) }}</span>
                 <button v-if="t.status === 'completed' || t.status === 'error'" class="btn btn-ghost btn-sm btn-icon" @click.stop="dismissTask(t.task_id)" title="Закрыть">×</button>
               </div>
@@ -554,8 +554,17 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 .task-card.st-error { border-color: rgba(239,68,68,.35); }
 .task-card.st-completed { border-color: rgba(34,197,94,.3); }
 .task-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
-.task-title { display: flex; align-items: center; gap: .5rem; }
-.task-url { font-size: .88rem; color: var(--c-text-4); font-family: monospace; }
+.task-title { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 0; }
+.task-url {
+  font-size: .88rem;
+  color: var(--c-text-4);
+  font-family: monospace;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-meta { display: flex; align-items: center; gap: .45rem; flex-shrink: 0; }
 .task-time { font-size: .78rem; color: var(--c-text-4); }
 .task-step { font-size: .88rem; color: var(--c-text-3); margin-top: .35rem; }
 .task-err { margin-top: .4rem; padding: .4rem .6rem; background: var(--c-err-bg); color: var(--c-err); border-radius: var(--r-sm); font-size: .88rem; }
@@ -591,6 +600,13 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 .tbl td { padding: .6rem .55rem; border-bottom: 1px solid var(--c-border); color: var(--c-text-2); vertical-align: middle; }
 .tbl tbody tr { cursor: pointer; transition: background var(--dur); }
 .tbl tbody tr:hover { background: var(--c-bg-2); }
+
+@media (max-width: 768px) {
+  .tbl {
+    min-width: 760px;
+  }
+}
+
 .tbl.tbl-sm { font-size: .88rem; }
 .tbl.tbl-sm td, .tbl.tbl-sm th { padding: .45rem .4rem; }
 .q-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -640,6 +656,7 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 @media (max-width: 768px) {
   .admin-wrap { padding: 1rem; }
   .admin-header { flex-direction: column; gap: .75rem; align-items: flex-start; }
+  .task-top { gap: .45rem; }
   .anl-row { grid-template-columns: 1fr; }
   .field-row-2 { grid-template-columns: 1fr; }
   .tab-btn { padding: .6rem .8rem; font-size: .82rem; }
