@@ -151,7 +151,7 @@ const loadSkills = async () => {
     totalSkills.value = r.data.total || 0
   } catch (e) { 
     console.error(e)
-    loadError.value = 'Проверь подключение к backend и повтори позже.'
+    loadError.value = 'Проверь подключение к backend и повтори позже.' 
   }
   loading.value = false
 }
@@ -202,6 +202,9 @@ onMounted(async () => {
   border-radius: var(--r-md);
   flex-wrap: wrap;
 }
+.source-filters:has(input:checked) {
+  border-color: color-mix(in srgb, var(--c-brand) 40%, var(--c-border));
+}
 .sf-label {
   font-size: .9rem;
   font-weight: 600;
@@ -225,7 +228,10 @@ onMounted(async () => {
   height: 16px;
   cursor: pointer;
 }
-
+.sf-check input[type="checkbox"]:checked + span {
+  color: var(--c-text);
+  font-weight: 600;
+}
 .prof-row { display: flex; flex-wrap: wrap; gap: .4rem; justify-content: center; margin-bottom: 1.5rem; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }
 
@@ -242,8 +248,23 @@ onMounted(async () => {
 .sk-info { display: flex; align-items: center; gap: .4rem; }
 .sk-rank { font-weight: 800; color: var(--c-text-4); font-size: .88rem; min-width: 26px; }
 .sk-name { font-weight: 600; font-size: .96rem; color: var(--c-text); }
-.sk-bar-wrap { display: flex; align-items: center; gap: .6rem; height: 28px; }
-.sk-bar { height: 100%; border-radius: 5px; transition: width .6s cubic-bezier(.4,0,.2,1); min-width: 4px; }
+.sk-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  height: 28px;
+  background: color-mix(in srgb, var(--c-bg-2) 88%, transparent);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  padding: 2px 8px 2px 2px;
+}
+.sk-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+  min-width: 4px;
+  box-shadow: inset 0 -1px 0 rgba(255,255,255,.18);
+}
 .sk-pct { font-weight: 800; color: var(--c-text); font-size: .92rem; min-width: 36px; text-align: right; }
 .sk-count { color: var(--c-text-4); font-size: .84rem; text-align: right; }
 
@@ -256,9 +277,14 @@ onMounted(async () => {
 .nice h4 { color: var(--c-warn); }
 .bonus h4 { color: var(--c-ok); }
 .sum-tags { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sum-tags .badge {
+  text-transform: none;
+  letter-spacing: 0;
+}
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 
 @media (max-width: 640px) {
+  .source-filters { justify-content: flex-start; }
   .skill-row { grid-template-columns: 1fr; gap: .2rem; }
   .sk-count { text-align: left; }
 }

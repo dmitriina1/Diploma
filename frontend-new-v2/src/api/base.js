@@ -15,26 +15,6 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
-let redirectingToLogin = false
-const transientCodes = new Set(['ECONNABORTED', 'ERR_NETWORK'])
-
-function isTransientError(error) {
-  if (!error) return false
-  if (transientCodes.has(error.code)) return true
-  if (error.message && /Network Error|ECONNREFUSED|timeout/i.test(error.message)) return true
-  const status = error.response?.status
-  return status === 502 || status === 503 || status === 504
-}
-
-function shouldRetry(config) {
-  if (!config) return false
-  const method = (config.method || 'get').toLowerCase()
-  if (method !== 'get') return false
-  if (config.url?.includes('/api/auth/')) return false
-  config.__retryCount = config.__retryCount || 0
-  return config.__retryCount < 2
-}
-
 apiClient.interceptors.request.use((config) => {
   if (config.baseURL?.endsWith('/api') && typeof config.url === 'string' && config.url.startsWith('/api/')) {
     config.url = config.url.slice(4)
@@ -47,22 +27,12 @@ apiClient.interceptors.request.use((config) => {
 
 apiClient.interceptors.response.use(
   (r) => r,
-  async (error) => {
-    const cfg = error.config
-
-    if (isTransientError(error) && shouldRetry(cfg)) {
-      cfg.__retryCount += 1
-      const delay = 250 * cfg.__retryCount
-      await new Promise((resolve) => setTimeout(resolve, delay))
-      return apiClient(cfg)
-    }
-
+  (error) => {
     if (error.response?.status === 401 && !error.config.url?.includes('/api/auth/')) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('auth_user')
-      if (!redirectingToLogin && window.location.pathname !== '/' && window.location.pathname !== '/login') {
-        redirectingToLogin = true
-        window.location.replace('/login')
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.location.href = '/login'
       }
     }
     return Promise.reject(error)

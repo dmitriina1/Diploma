@@ -9,18 +9,7 @@
       <span>Ось Y: {{ yLabel }} ({{ unit }})</span>
       <span>Ось X: {{ xLabel }}</span>
     </div>
-    <div class="lc-legend">
-      <span class="legend-item">
-        <span class="legend-swatch line-swatch"></span>
-        Тренд
-      </span>
-      <button class="legend-toggle" @click="showAverageLine = !showAverageLine" type="button">
-        <span class="legend-swatch avg-swatch" :class="{ muted: !showAverageLine }"></span>
-        {{ showAverageLine ? 'Средняя линия: вкл' : 'Средняя линия: выкл' }}
-      </button>
-    </div>
-    <div class="lc-plot-wrap">
-      <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-label="line-chart">
+    <svg viewBox="0 0 100 42" preserveAspectRatio="none" class="lc-svg" aria-hidden="true">
       <defs>
         <linearGradient :id="gradientId" x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stop-color="var(--c-brand-h)" stop-opacity="0.32" />
@@ -30,30 +19,11 @@
       <line v-for="y in gridLines" :key="`grid-${y}`" x1="10" :y1="y" x2="98" :y2="y" class="grid" />
       <line x1="10" y1="4" x2="10" y2="36" class="axis" />
       <line x1="10" y1="36" x2="98" y2="36" class="axis" />
-      <line v-if="plotted.length && showAverageLine" x1="10" :y1="avgY" x2="98" :y2="avgY" class="avg-line" />
+      <line v-if="plotted.length" x1="10" :y1="avgY" x2="98" :y2="avgY" class="avg-line" />
       <polygon v-if="areaPoints" :points="areaPoints" class="area" :style="{ fill: `url(#${gradientId})` }" />
       <polyline :points="polylinePoints" class="line" />
-      <g
-        v-for="p in plotted"
-        :key="p.key"
-        class="dot-group"
-        @mouseenter="showTooltip(p)"
-        @mousemove="showTooltip(p)"
-        @mouseleave="hideTooltip"
-      >
-        <circle :cx="p.x" :cy="p.y" r="1.1" class="dot-hit" />
-        <circle :cx="p.x" :cy="p.y" r="0.8" class="dot" />
-      </g>
-      </svg>
-      <div
-        v-if="tooltip.visible"
-        class="lc-tooltip"
-        :class="{ left: tooltip.alignLeft, below: tooltip.placeBelow }"
-        :style="{ left: `${tooltip.cx}%`, top: `${(tooltip.cy / 42) * 100}%` }"
-      >
-        {{ tooltip.text }}
-      </div>
-    </div>
+      <circle v-for="p in plotted" :key="p.key" :cx="p.x" :cy="p.y" r="0.8" class="dot" />
+    </svg>
     <div class="lc-scale">
       <span>{{ maxValue }} {{ unit }}</span>
       <span>{{ midValue }} {{ unit }}</span>
@@ -68,17 +38,14 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   points: { type: Array, default: () => [] },
   unit: { type: String, default: 'шт' },
-  tooltipUnit: { type: String, default: '' },
   xLabel: { type: String, default: 'Дата' },
   yLabel: { type: String, default: 'Значение' }
 })
-
-const showAverageLine = ref(true)
 
 const maxValue = computed(() => Math.max(...props.points.map((p) => Number(p.count || 0)), 1))
 const midValue = computed(() => Math.round(maxValue.value / 2))
@@ -131,32 +98,6 @@ const lastValue = computed(() => {
   if (!props.points.length) return 0
   return Math.round(Number(props.points[props.points.length - 1]?.count || 0))
 })
-const tooltipUnitLabel = computed(() => props.tooltipUnit || props.unit)
-
-const tooltip = ref({
-  visible: false,
-  text: '',
-  cx: 0,
-  cy: 0,
-  alignLeft: false,
-  placeBelow: false
-})
-
-const showTooltip = (p) => {
-  const text = `${p.labelShort} — ${p.value} ${tooltipUnitLabel.value}`
-  tooltip.value = {
-    visible: true,
-    text,
-    cx: p.x,
-    cy: p.y,
-    alignLeft: p.x > 80,
-    placeBelow: p.y < 12
-  }
-}
-
-const hideTooltip = () => {
-  tooltip.value.visible = false
-}
 </script>
 
 <style scoped>
@@ -176,46 +117,7 @@ const hideTooltip = () => {
   color: var(--c-text-4);
   font-size: .74rem;
 }
-.lc-legend {
-  display: flex;
-  align-items: center;
-  gap: .75rem;
-  flex-wrap: wrap;
-  font-size: .74rem;
-  color: var(--c-text-3);
-}
-.legend-item,
-.legend-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: .35rem;
-}
-.legend-toggle {
-  border: 1px solid var(--c-border);
-  background: var(--c-bg-2);
-  color: var(--c-text-3);
-  border-radius: var(--r-sm);
-  padding: .2rem .45rem;
-  cursor: pointer;
-}
-.legend-toggle:hover {
-  color: var(--c-text-2);
-  border-color: color-mix(in srgb, var(--c-brand) 36%, var(--c-border));
-}
-.legend-swatch {
-  width: 15px;
-  height: 0;
-  border-top: 2px solid var(--c-brand-h);
-  border-radius: 2px;
-}
-.line-swatch { border-top-color: var(--c-brand-h); }
-.avg-swatch {
-  border-top-color: color-mix(in srgb, var(--c-accent) 70%, transparent);
-  border-top-style: dashed;
-}
-.avg-swatch.muted { border-top-color: color-mix(in srgb, var(--c-text-4) 45%, transparent); }
 .lc-scale { font-variant-numeric: tabular-nums; }
-.lc-plot-wrap { position: relative; }
 .lc-svg {
   width: 100%;
   height: 160px;
@@ -240,29 +142,7 @@ const hideTooltip = () => {
 .line {
   fill: none;
   stroke: var(--c-brand-h);
-  stroke-width: 1.65;
+  stroke-width: 1.4;
 }
-.dot-group { cursor: crosshair; }
-.dot-hit { fill: transparent; }
-.dot { fill: var(--c-accent); transition: r .12s ease; }
-.dot-group:hover .dot { r: 1.05; }
-.lc-tooltip {
-  position: absolute;
-  z-index: 5;
-  max-width: calc(100% - 12px);
-  pointer-events: none;
-  white-space: nowrap;
-  font-size: .76rem;
-  font-weight: 600;
-  color: var(--c-text);
-  background: color-mix(in srgb, var(--c-bg) 92%, var(--c-surface));
-  border: 1px solid color-mix(in srgb, var(--c-border) 74%, transparent);
-  border-radius: var(--r-sm);
-  padding: .22rem .45rem;
-  transform: translate(10px, calc(-100% - 10px));
-  box-shadow: 0 8px 22px rgba(0, 0, 0, .14);
-}
-.lc-tooltip.left { transform: translate(calc(-100% - 10px), calc(-100% - 10px)); }
-.lc-tooltip.below { transform: translate(10px, 10px); }
-.lc-tooltip.left.below { transform: translate(calc(-100% - 10px), 10px); }
+.dot { fill: var(--c-accent); }
 </style>

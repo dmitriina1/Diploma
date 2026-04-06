@@ -107,9 +107,14 @@ onMounted(loadData)
 <style scoped>
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
-.filters { display: flex; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; justify-content: center; }
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  margin-bottom: 1.5rem;
+}
 .filters .input { min-width: 180px; }
-.search-wrap { position: relative; flex: 1; max-width: 260px; }
+.search-wrap { position: relative; }
 .search-icon { position: absolute; left: .65rem; top: 50%; transform: translateY(-50%); color: var(--c-text-4); pointer-events: none; }
 .search-input { padding-left: 2.1rem; width: 100%; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }
@@ -120,18 +125,20 @@ onMounted(loadData)
   overflow: hidden; 
   display: flex; 
   flex-direction: column;
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  border: 1px solid var(--c-border);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .ta-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+  border-color: var(--c-border-h);
 }
 .ta-head { 
   display: flex; 
   justify-content: space-between; 
   align-items: center; 
   padding: 1rem 1.25rem; 
-  background: linear-gradient(135deg, var(--c-bg-2), var(--c-surface));        
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c-bg-2) 84%, transparent), color-mix(in srgb, var(--c-surface) 92%, transparent));
   border-bottom: 1px solid var(--c-border);
 }
 .ta-head.junior { border-left: 4px solid var(--c-ok); }
@@ -139,12 +146,8 @@ onMounted(loadData)
 .ta-head.senior { border-left: 4px solid var(--c-err); }
 .company { 
   font-weight: 700; 
-  font-size: 1rem; 
+  font-size: .95rem;
   color: var(--c-text);
-  background: linear-gradient(135deg, var(--c-brand), var(--c-accent));        
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 .ta-title { 
   padding: 1rem 1.25rem 0; 
@@ -182,6 +185,11 @@ onMounted(loadData)
   max-height: 60px;
   overflow: hidden;
 }
+.ta-skills .badge {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: .78rem;
+}
 .ta-foot { 
   display: flex; 
   align-items: center; 
@@ -200,7 +208,9 @@ onMounted(loadData)
 .empty-state { text-align: center; padding: 3rem; color: var(--c-text-4); }
 
 @media (max-width: 640px) {
-  .filters { flex-direction: column; }
+  .filters {
+    grid-template-columns: 1fr;
+  }
   .filters .input, .search-wrap { min-width: auto; max-width: none; width: 100%; }
   .grid { grid-template-columns: 1fr; }
 }

@@ -1,10 +1,7 @@
 <template>
-  <footer class="footer gradient-line">
+  <footer class="footer">
     <div class="footer-inner">
-      <div>
-        <span class="footer-copy">InterviewHub © {{ year }}</span>
-        <p class="footer-note">AI-driven prep platform for engineering interviews</p>
-      </div>
+      <span class="footer-copy">InterviewHub © {{ year }}</span>
       <div class="footer-links">
         <router-link to="/suggest">Предложить видео</router-link>
         <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
@@ -32,7 +29,6 @@ const year = new Date().getFullYear()
   justify-content: space-between;
 }
 .footer-copy { color: var(--c-text-4); font-size: .9rem; }
-.footer-note { color: var(--c-text-4); font-size: .74rem; margin-top: .2rem; letter-spacing: .04em; text-transform: uppercase; }
 .footer-links { display: flex; gap: 1.5rem; }
 .footer-links a { color: var(--c-text-3); font-size: .9rem; transition: color var(--dur) var(--ease); }
 .footer-links a:hover { color: var(--c-text); }

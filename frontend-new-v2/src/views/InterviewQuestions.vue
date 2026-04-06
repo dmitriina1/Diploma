@@ -204,15 +204,12 @@ onMounted(async () => {
 }
 .search-input { padding-left: 2.2rem; }
 .filter-select { 
-  min-width: 180px;
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 210px;
+  max-width: 290px;
 }
 .filter-sort { 
-  min-width: 160px;
-  max-width: 180px;
+  min-width: 180px;
+  max-width: 220px;
 }
 
 .list-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
@@ -260,7 +257,11 @@ onMounted(async () => {
 
 @media (max-width: 640px) {
   .filters { flex-direction: column; }
-  .filter-select, .filter-sort { max-width: none; }
+  .filter-select, .filter-sort {
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
   .page-top { flex-direction: column; }
 }
 </style>

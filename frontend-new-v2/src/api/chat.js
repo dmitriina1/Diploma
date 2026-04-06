@@ -2,7 +2,7 @@ import { apiClient, getUserSession } from './base'
 
 export const chatApi = {
   // Start new interview chat
-  startInterviewChat: (topic, difficulty) =>
+  startInterviewChat: (topic, difficulty) => 
     apiClient.post('/api/interview-chat/start', {
       topic,
       difficulty,

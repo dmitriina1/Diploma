@@ -76,9 +76,9 @@
         </div>
 
         <div class="chat-input-area">
-          <textarea
-            v-model="userInput"
-            class="chat-input"
+          <textarea 
+            v-model="userInput" 
+            class="chat-input" 
             placeholder="Введите ваш ответ..."
             @keydown.enter.exact.prevent="sendMessage"
             @keydown.enter.shift.exact="userInput += '\n'"
@@ -161,14 +161,14 @@ const startChat = async () => {
 
 const sendMessage = async () => {
   if (!userInput.value.trim() || isTyping.value) return
-
+  
   const msg = userInput.value.trim()
   messages.value.push({ role: 'user', content: msg, timestamp: new Date() })
   userInput.value = ''
-
+  
   await nextTick()
   scrollToBottom()
-
+  
   isTyping.value = true
   try {
     const r = await api.sendChatMessage(currentInterviewId.value, msg)

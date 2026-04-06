@@ -16,22 +16,12 @@
         </div>
       </div>
 
-      <div v-if="loading" class="section reveal">
-        <div class="skeleton" style="height:32px; width:75%; margin-bottom:1rem"></div>
-        <div class="skeleton" style="height:140px; margin-bottom:.8rem"></div>
-        <div class="skeleton" style="height:100px"></div>
-      </div>
-
-      <div v-else-if="loadError" class="state-panel">
-        <h3>Не удалось загрузить вопрос</h3>
-        <p>{{ loadError }}</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:.7rem" @click="loadQuestion">Повторить</button>
-      </div>
+      <div v-if="loading" class="center-block"><div class="spinner"></div></div>
 
       <template v-else-if="question">
         <!-- Question Header -->
-        <div class="q-header reveal">
-          <h1 class="h-page">{{ question.question }}</h1>
+        <div class="q-header">
+          <h1>{{ question.question }}</h1>
           <div class="q-meta">
             <span class="badge badge-info">{{ question.topic }}</span>
             <span class="badge" :class="diffBadge(question.difficulty)">{{ question.difficulty }}</span>
@@ -41,7 +31,7 @@
         </div>
 
         <!-- AI Answer -->
-        <section class="section reveal" style="--delay:40ms" v-if="question.answer">
+        <section class="section" v-if="question.answer">
           <h2 class="sec-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-brand)" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
             Ответ
@@ -49,7 +39,7 @@
           <div class="answer-body" v-html="formatAnswer(question.answer)"></div>
         </section>
 
-        <section class="section reveal" style="--delay:80ms">
+        <section class="section">
           <h2 class="sec-title">Моя заметка</h2>
           <textarea v-model="note" class="input" rows="3" placeholder="Ваши короткие заметки по вопросу"></textarea>
           <div class="inline-actions">
@@ -59,7 +49,7 @@
         </section>
 
         <!-- Community Answers -->
-        <section class="section reveal" style="--delay:120ms">
+        <section class="section">
           <h2 class="sec-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-brand)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Ответы сообщества
@@ -90,7 +80,7 @@
           </div>
         </section>
 
-        <section class="section reveal" style="--delay:160ms">
+        <section class="section">
           <h2 class="sec-title">Обратная связь</h2>
           <div class="feedback-wrap card">
             <div class="feedback-row">
@@ -119,7 +109,7 @@
         </section>
 
         <!-- Similar questions -->
-        <section class="section reveal" style="--delay:200ms" v-if="similar.length">
+        <section class="section" v-if="similar.length">
           <h2 class="sec-title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--c-brand)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
             Похожие вопросы
@@ -162,7 +152,6 @@ const feedbackRating = ref(null)
 const feedbackComment = ref('')
 const feedbackMsg = ref('')
 const sendingFeedback = ref(false)
-const loadError = ref('')
 
 const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
 const formatAnswer = (t) => t ? t.replace(/\n/g, '<br>') : ''
@@ -170,7 +159,6 @@ const formatDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU', { day: 'nu
 
 async function loadQuestion() {
   loading.value = true
-  loadError.value = ''
   try {
     const r = await api.getPublicQuestionDetail(route.params.id)
     question.value = r.data
@@ -180,7 +168,7 @@ async function loadQuestion() {
 
     // similar
     if (question.value?.question) {
-      try { const s = await api.getSimilarQuestions(question.value.question, 5); similar.value = (s.data.similar_questions || []).filter(q => q.id != route.params.id) } catch {}
+      try { const s = await api.getSimilarQuestions(question.value.question, 5); similar.value = (s.data.similar || []).filter(q => q.id != route.params.id) } catch {}
     }
 
     // user answers
@@ -188,7 +176,7 @@ async function loadQuestion() {
 
     // personal note
     try { const n = await api.getNote(parseInt(route.params.id)); note.value = n.data.note || '' } catch { note.value = '' }
-  } catch (e) { console.error(e); loadError.value = 'Сервер не вернул данные вопроса.' }
+  } catch (e) { console.error(e) }
   loading.value = false
 }
 
@@ -300,15 +288,6 @@ watch(() => route.params.id, loadQuestion)
   color: var(--c-text-2);
   line-height: 1.75;
   font-size: 1.05rem;
-  position: relative;
-  overflow: hidden;
-}
-.answer-body::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent 0%, color-mix(in srgb, var(--c-brand-bg) 55%, transparent) 140%);
-  pointer-events: none;
 }
 
 .inline-actions { display: flex; align-items: center; gap: .6rem; margin-top: .5rem; }
@@ -322,8 +301,6 @@ watch(() => route.params.id, loadQuestion)
 
 .answers-list { display: flex; flex-direction: column; gap: .6rem; }
 .ua-card { padding: 1rem 1.15rem; }
-.ua-card { transition: transform var(--dur) var(--ease-out), border-color var(--dur) var(--ease); }
-.ua-card:hover { transform: translateY(-1px); border-color: var(--c-border-h); }
 .ua-top { display: flex; justify-content: space-between; margin-bottom: .4rem; }
 .ua-author { font-size: .9rem; font-weight: 600; color: var(--c-text); }
 .ua-date { font-size: .75rem; color: var(--c-text-4); }

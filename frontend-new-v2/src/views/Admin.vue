@@ -5,7 +5,7 @@
       <!-- Header -->
       <header class="admin-header">
         <div>
-          <h1><BrandIcon name="admin" :size="42" /> Панель управления</h1>
+          <h1><BrandIcon name="admin" :size="34" /> Панель управления</h1>
           <p class="sub">Обработка видео, утверждение вопросов, генерация ответов</p>
         </div>
         <button class="btn btn-primary" @click="showUpload = true">+ Загрузить видео</button>
@@ -21,7 +21,7 @@
                 <span class="badge" :class="taskBadge(t.status)">{{ statusLabel(t.status) }}</span>
                 <span class="task-url">{{ trunc(t.video_url, 55) }}</span>
               </div>
-              <div style="display:flex;align-items:center;gap:.45rem">
+              <div class="task-meta">
                 <span class="task-time">{{ fmtTime(t.created_at) }}</span>
                 <button v-if="t.status === 'completed' || t.status === 'error'" class="btn btn-ghost btn-sm btn-icon" @click.stop="dismissTask(t.task_id)" title="Закрыть">×</button>
               </div>
@@ -194,20 +194,6 @@
       <div v-show="activeTab === 5" class="tab-panel">
         <div v-if="anlLoading" class="center-block"><div class="spinner"></div></div>
         <template v-else>
-          <div class="period-toolbar card">
-            <span class="period-label">Период графиков:</span>
-            <button
-              v-for="d in [7, 30, 90]"
-              :key="d"
-              class="btn btn-sm"
-              :class="periodDays === d ? 'btn-primary' : 'btn-secondary'"
-              @click="setPeriod(d)"
-              :disabled="anlLoading"
-            >
-              {{ d }} дней
-            </button>
-          </div>
-
           <div class="metrics-grid">
             <div class="metric-card"><div class="mv">{{ questionsStore.questions.length }}</div><div class="ml">Вопросов</div><div class="ms">{{ questionsStore.approvedQuestions.length }} одобрено</div></div>
             <div class="metric-card"><div class="mv">{{ anl.users?.total || 0 }}</div><div class="ml">Пользователей</div><div class="ms">{{ anl.users?.active_30d || 0 }} активных</div></div>
@@ -215,24 +201,24 @@
             <div class="metric-card"><div class="mv">{{ anl.test_assignments?.total || 0 }}</div><div class="ml">Тестовых заданий</div></div>
             <div class="metric-card"><div class="mv">{{ anl.community?.total_answers || 0 }}</div><div class="ml">Ответов сообщества</div><div class="ms">{{ anl.community?.active_voters || 0 }} голосовали</div></div>
             <div class="metric-card"><div class="mv">{{ anl.trainer?.unique_users || 0 }}</div><div class="ml">Тренажёр</div><div class="ms">{{ anl.trainer?.total_reviews || 0 }} повторений</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.users?.registered_30d || 0 }}</div><div class="ml">Регистраций за {{ periodDays }}д</div><div class="ms">admin: {{ anl.users?.admins || 0 }}, users: {{ anl.users?.regular || 0 }}</div></div>
+            <div class="metric-card"><div class="mv">{{ anl.users?.registered_30d || 0 }}</div><div class="ml">Регистраций за 30д</div><div class="ms">admin: {{ anl.users?.admins || 0 }}, users: {{ anl.users?.regular || 0 }}</div></div>
             <div class="metric-card"><div class="mv">{{ anl.sessions?.anonymous_sessions || 0 }}</div><div class="ml">Анонимные сессии</div><div class="ms">авторизованные: {{ anl.sessions?.authorized_sessions || 0 }}</div></div>
           </div>
 
           <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
             <div class="anl-panel card" v-if="registrationChart.length">
-              <h4>Регистрации ({{ periodDays }} дней)</h4>
-              <LineChart :points="registrationChart" unit="чел" tooltip-unit="регистраций" y-label="Регистрации" x-label="Дни" />
+              <h4>Регистрации (30 дней)</h4>
+              <LineChart :points="registrationChart" unit="чел" y-label="Регистрации" x-label="Дни" />
             </div>
             <div class="anl-panel card" v-if="loginChart.length">
-              <h4>Логины ({{ periodDays }} дней)</h4>
-              <LineChart :points="loginChart" unit="входов" tooltip-unit="входов" y-label="Логины" x-label="Дни" />
+              <h4>Логины (30 дней)</h4>
+              <LineChart :points="loginChart" unit="входов" y-label="Логины" x-label="Дни" />
             </div>
           </div>
 
           <div class="anl-panel card" v-if="viewsChart.length">
-            <h4>Просмотры вопросов ({{ periodDays }} дней)</h4>
-            <LineChart :points="viewsChart" unit="просмотров" tooltip-unit="просмотров" y-label="Просмотры" x-label="Дни" />
+            <h4>Просмотры вопросов (30 дней)</h4>
+            <LineChart :points="viewsChart" unit="просмотров" y-label="Просмотры" x-label="Дни" />
           </div>
 
           <!-- Topic distribution -->
@@ -487,26 +473,13 @@ const deleteTA = async (a) => { if (!confirm(`Удалить «${a.title}»?`)) 
 
 // Analytics tab
 const anl = ref({}); const anlLoading = ref(false); const recalculating = ref(false)
-const periodDays = ref(30)
 const videosProcessed = computed(() => new Set(questionsStore.questions.map(q => q.video_url)).size)
 const topicDist = computed(() => questionsStore.topics.map(topic => {
   const qs = questionsStore.questions.filter(q => q.topic === topic)
   return { topic, count: qs.length, approved: qs.filter(q => q.is_approved || q.approved).length, with_answers: qs.filter(q => q.answer).length }
 }).sort((a, b) => b.count - a.count))
 
-const loadAnalytics = async () => {
-  anlLoading.value = true
-  try {
-    const r = await api.getAdminAnalytics(periodDays.value)
-    anl.value = r.data
-  } catch {}
-  anlLoading.value = false
-}
-const setPeriod = async (days) => {
-  if (periodDays.value === days) return
-  periodDays.value = days
-  await loadAnalytics()
-}
+const loadAnalytics = async () => { anlLoading.value = true; try { const r = await api.getAdminAnalytics(); anl.value = r.data } catch {} anlLoading.value = false }
 const recalcProb = async () => { if (!confirm('Пересчитать?')) return; recalculating.value = true; try { await api.recalculateProbabilities(); await questionsStore.fetchQuestions() } catch {} recalculating.value = false }
 const exportJSON = async () => { try { const r = await api.getAdminQuestions(); const b = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.json'; a.click(); URL.revokeObjectURL(u) } catch {} }
 const exportCSV = async () => { try { const r = await api.exportCSV(); const b = new Blob([r.data], { type: 'text/csv' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.csv'; a.click(); URL.revokeObjectURL(u) } catch {} }
@@ -554,7 +527,6 @@ const fmtTime = (t) => t ? new Date(t).toLocaleString('ru-RU', { hour: '2-digit'
 const fmtLogTime = (t) => t ? new Date(t).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
 
 onMounted(async () => {
-  if (!localStorage.getItem('auth_token')) return
   await Promise.all([
     questionsStore.fetchQuestions(),
     questionsStore.fetchAdminQuestions(),
@@ -566,9 +538,7 @@ onMounted(async () => {
   tasksStore.startGlobalPolling()
   for (const t of tasksStore.activeTasks) tasksStore.startPolling(t.task_id)
 })
-onUnmounted(() => {
-  tasksStore.stopGlobalPolling()
-})
+onUnmounted(() => tasksStore.stopGlobalPolling())
 </script>
 
 <style scoped>
@@ -584,8 +554,17 @@ onUnmounted(() => {
 .task-card.st-error { border-color: rgba(239,68,68,.35); }
 .task-card.st-completed { border-color: rgba(34,197,94,.3); }
 .task-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
-.task-title { display: flex; align-items: center; gap: .5rem; }
-.task-url { font-size: .88rem; color: var(--c-text-4); font-family: monospace; }
+.task-title { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 0; }
+.task-url {
+  font-size: .88rem;
+  color: var(--c-text-4);
+  font-family: monospace;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-meta { display: flex; align-items: center; gap: .45rem; flex-shrink: 0; }
 .task-time { font-size: .78rem; color: var(--c-text-4); }
 .task-step { font-size: .88rem; color: var(--c-text-3); margin-top: .35rem; }
 .task-err { margin-top: .4rem; padding: .4rem .6rem; background: var(--c-err-bg); color: var(--c-err); border-radius: var(--r-sm); font-size: .88rem; }
@@ -621,6 +600,13 @@ onUnmounted(() => {
 .tbl td { padding: .6rem .55rem; border-bottom: 1px solid var(--c-border); color: var(--c-text-2); vertical-align: middle; }
 .tbl tbody tr { cursor: pointer; transition: background var(--dur); }
 .tbl tbody tr:hover { background: var(--c-bg-2); }
+
+@media (max-width: 768px) {
+  .tbl {
+    min-width: 760px;
+  }
+}
+
 .tbl.tbl-sm { font-size: .88rem; }
 .tbl.tbl-sm td, .tbl.tbl-sm th { padding: .45rem .4rem; }
 .q-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -636,15 +622,6 @@ onUnmounted(() => {
 
 /* Analytics */
 .metrics-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .75rem; margin-bottom: 1.5rem; }
-.period-toolbar {
-  display: flex;
-  align-items: center;
-  gap: .55rem;
-  margin-bottom: .9rem;
-  padding: .7rem .85rem;
-  flex-wrap: wrap;
-}
-.period-label { font-size: .86rem; color: var(--c-text-3); margin-right: .2rem; }
 .metric-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 1.15rem; }
 .mv { font-size: 1.9rem; font-weight: 800; color: var(--c-text); }
 .ml { font-size: .88rem; color: var(--c-text-3); margin-top: .1rem; }
@@ -679,6 +656,7 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .admin-wrap { padding: 1rem; }
   .admin-header { flex-direction: column; gap: .75rem; align-items: flex-start; }
+  .task-top { gap: .45rem; }
   .anl-row { grid-template-columns: 1fr; }
   .field-row-2 { grid-template-columns: 1fr; }
   .tab-btn { padding: .6rem .8rem; font-size: .82rem; }
