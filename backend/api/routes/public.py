@@ -64,6 +64,15 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
         await conn.close()
 
 
+@router.get("/api/questions/similar")
+async def get_similar_questions_api(query: str, limit: int = 5):
+    try:
+        similar = await search_similar_questions(query, limit=limit)
+        return JSONResponse(content={"similar_questions": similar})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/api/questions/{question_id}")
 async def get_public_question_detail(question_id: int):
     conn = await asyncpg.connect(DATABASE_URL)
@@ -136,15 +145,6 @@ async def get_public_question_detail(question_id: int):
         return JSONResponse(content=result)
     finally:
         await conn.close()
-
-
-@router.get("/api/questions/similar")
-async def get_similar_questions_api(query: str, limit: int = 5):
-    try:
-        similar = await search_similar_questions(query, limit=limit)
-        return JSONResponse(content={"similar_questions": similar})
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/suggestions")

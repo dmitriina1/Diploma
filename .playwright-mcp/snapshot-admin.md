@@ -1,0 +1,1043 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "InterviewHub V2" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: InterviewHub V2
+      - generic [ref=e10]:
+        - link "Вопросы" [ref=e11] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e12] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e13] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e14] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e15] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e16] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e17] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e18]:
+        - button "Тёмная тема" [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+        - link "A Admin User" [ref=e24] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e25]: A
+          - generic [ref=e26]: Admin User
+        - button "Выйти" [ref=e27] [cursor=pointer]
+  - generic [ref=e28]:
+    - banner [ref=e29]:
+      - generic [ref=e30]:
+        - heading "Панель управления" [level=1] [ref=e31]:
+          - img [ref=e33]
+          - text: Панель управления
+        - paragraph [ref=e35]: Обработка видео, утверждение вопросов, генерация ответов
+      - button "+ Загрузить видео" [ref=e36] [cursor=pointer]
+    - generic [ref=e37]:
+      - generic [ref=e38]: Обработка видео
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - generic [ref=e41]:
+            - generic [ref=e42]:
+              - generic [ref=e43]: Готово
+              - generic [ref=e44]: https://youtu.be/QI-bXKC2mvU?si=26YAG58_57I_Wbeo
+            - generic [ref=e45]:
+              - generic [ref=e46]: 30.03, 18:17
+              - button "×" [ref=e47] [cursor=pointer]
+          - generic [ref=e50]: Готово!
+          - generic [ref=e51] [cursor=pointer]: ▼ Показать логи
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - generic [ref=e55]: Готово
+              - generic [ref=e56]: https://www.youtube.com/watch?v=QI-bXKC2mvU&t=1s
+            - generic [ref=e57]:
+              - generic [ref=e58]: 25.03, 18:13
+              - button "×" [ref=e59] [cursor=pointer]
+          - generic [ref=e62]: Готово!
+          - generic [ref=e63] [cursor=pointer]: ▼ Показать логи
+    - generic [ref=e64]:
+      - button "Вопросы" [ref=e65] [cursor=pointer]
+      - button "Предложения" [ref=e66] [cursor=pointer]
+      - button "Обратная связь" [ref=e67] [cursor=pointer]
+      - button "Видео" [ref=e68] [cursor=pointer]
+      - button "Тестовые задания" [ref=e69] [cursor=pointer]
+      - button "Аналитика" [ref=e70] [cursor=pointer]
+    - generic [ref=e71]:
+      - button "Массовая генерация ответов" [ref=e73] [cursor=pointer]
+      - generic [ref=e74]:
+        - textbox "Поиск..." [ref=e75]
+        - combobox [ref=e76]:
+          - option "Все темы" [selected]
+          - option "1C"
+          - option "Algorithms"
+          - option "Backend"
+          - option "General"
+          - option "IT"
+          - option "System Design"
+          - option "Общие вопросы"
+        - combobox [ref=e77]:
+          - option "Все статусы" [selected]
+          - option "Одобренные"
+          - option "Не одобренные"
+      - table [ref=e79]:
+        - rowgroup [ref=e80]:
+          - row "Вопрос Тема Сложность % Статус" [ref=e81]:
+            - columnheader [ref=e82]:
+              - checkbox [ref=e83]
+            - columnheader "Вопрос" [ref=e84]
+            - columnheader "Тема" [ref=e85]
+            - columnheader "Сложность" [ref=e86]
+            - columnheader "%" [ref=e87]
+            - columnheader "Статус" [ref=e88]
+            - columnheader [ref=e89]
+        - rowgroup [ref=e90]:
+          - row "Какой опыт работы? Общие вопросы junior 40% Да ↺ ×" [ref=e91] [cursor=pointer]:
+            - cell [ref=e92]:
+              - checkbox [ref=e93]
+            - cell "Какой опыт работы?" [ref=e94]
+            - cell "Общие вопросы" [ref=e95]:
+              - generic [ref=e96]: Общие вопросы
+            - cell "junior" [ref=e97]:
+              - generic [ref=e98]: junior
+            - cell "40%" [ref=e99]
+            - cell "Да" [ref=e100]:
+              - generic [ref=e101]: Да
+            - cell "↺ ×" [ref=e102]:
+              - button "↺" [ref=e103]
+              - button "×" [ref=e104]
+          - row "Как можно проверить тип интерфейса? Backend junior 20% Да ↺ ×" [ref=e105] [cursor=pointer]:
+            - cell [ref=e106]:
+              - checkbox [ref=e107]
+            - cell "Как можно проверить тип интерфейса?" [ref=e108]
+            - cell "Backend" [ref=e109]:
+              - generic [ref=e110]: Backend
+            - cell "junior" [ref=e111]:
+              - generic [ref=e112]: junior
+            - cell "20%" [ref=e113]
+            - cell "Да" [ref=e114]:
+              - generic [ref=e115]: Да
+            - cell "↺ ×" [ref=e116]:
+              - button "↺" [ref=e117]
+              - button "×" [ref=e118]
+          - row "Могу интерфейс одного типа присвоить интерфейс другого типа? Backend junior 20% Да ↺ ×" [ref=e119] [cursor=pointer]:
+            - cell [ref=e120]:
+              - checkbox [ref=e121]
+            - cell "Могу интерфейс одного типа присвоить интерфейс другого типа?" [ref=e122]
+            - cell "Backend" [ref=e123]:
+              - generic [ref=e124]: Backend
+            - cell "junior" [ref=e125]:
+              - generic [ref=e126]: junior
+            - cell "20%" [ref=e127]
+            - cell "Да" [ref=e128]:
+              - generic [ref=e129]: Да
+            - cell "↺ ×" [ref=e130]:
+              - button "↺" [ref=e131]
+              - button "×" [ref=e132]
+          - row "Интерфейс как устроено внутри? Backend junior 20% Да ↺ ×" [ref=e133] [cursor=pointer]:
+            - cell [ref=e134]:
+              - checkbox [ref=e135]
+            - cell "Интерфейс как устроено внутри?" [ref=e136]
+            - cell "Backend" [ref=e137]:
+              - generic [ref=e138]: Backend
+            - cell "junior" [ref=e139]:
+              - generic [ref=e140]: junior
+            - cell "20%" [ref=e141]
+            - cell "Да" [ref=e142]:
+              - generic [ref=e143]: Да
+            - cell "↺ ×" [ref=e144]:
+              - button "↺" [ref=e145]
+              - button "×" [ref=e146]
+          - row "ООП в ГО как ООП в ГО релизована. Backend middle 20% Да ↺ ×" [ref=e147] [cursor=pointer]:
+            - cell [ref=e148]:
+              - checkbox [ref=e149]
+            - cell "ООП в ГО как ООП в ГО релизована." [ref=e150]
+            - cell "Backend" [ref=e151]:
+              - generic [ref=e152]: Backend
+            - cell "middle" [ref=e153]:
+              - generic [ref=e154]: middle
+            - cell "20%" [ref=e155]
+            - cell "Да" [ref=e156]:
+              - generic [ref=e157]: Да
+            - cell "↺ ×" [ref=e158]:
+              - button "↺" [ref=e159]
+              - button "×" [ref=e160]
+          - row "Обобщенное программирование в голову, как можно писать обобщенный код? Backend senior 20% Да ↺ ×" [ref=e161] [cursor=pointer]:
+            - cell [ref=e162]:
+              - checkbox [ref=e163]
+            - cell "Обобщенное программирование в голову, как можно писать обобщенный код?" [ref=e164]
+            - cell "Backend" [ref=e165]:
+              - generic [ref=e166]: Backend
+            - cell "senior" [ref=e167]:
+              - generic [ref=e168]: senior
+            - cell "20%" [ref=e169]
+            - cell "Да" [ref=e170]:
+              - generic [ref=e171]: Да
+            - cell "↺ ×" [ref=e172]:
+              - button "↺" [ref=e173]
+              - button "×" [ref=e174]
+          - row "Допустим, мы хотим написать контекст вис тайм-аут, как мы его напишем? System Design middle 20% Да ↺ ×" [ref=e175] [cursor=pointer]:
+            - cell [ref=e176]:
+              - checkbox [ref=e177]
+            - cell "Допустим, мы хотим написать контекст вис тайм-аут, как мы его напишем?" [ref=e178]
+            - cell "System Design" [ref=e179]:
+              - generic [ref=e180]: System Design
+            - cell "middle" [ref=e181]:
+              - generic [ref=e182]: middle
+            - cell "20%" [ref=e183]
+            - cell "Да" [ref=e184]:
+              - generic [ref=e185]: Да
+            - cell "↺ ×" [ref=e186]:
+              - button "↺" [ref=e187]
+              - button "×" [ref=e188]
+          - row "Бэкграунд от туду контекста, чем отличается контекст туду и контекст бэкграунд. System Design junior 20% Да ↺ ×" [ref=e189] [cursor=pointer]:
+            - cell [ref=e190]:
+              - checkbox [ref=e191]
+            - cell "Бэкграунд от туду контекста, чем отличается контекст туду и контекст бэкграунд." [ref=e192]
+            - cell "System Design" [ref=e193]:
+              - generic [ref=e194]: System Design
+            - cell "junior" [ref=e195]:
+              - generic [ref=e196]: junior
+            - cell "20%" [ref=e197]
+            - cell "Да" [ref=e198]:
+              - generic [ref=e199]: Да
+            - cell "↺ ×" [ref=e200]:
+              - button "↺" [ref=e201]
+              - button "×" [ref=e202]
+          - row "Чем отличаются вис тайм-аут и вис дедлайн кодекста? System Design junior 20% Да ↺ ×" [ref=e203] [cursor=pointer]:
+            - cell [ref=e204]:
+              - checkbox [ref=e205]
+            - cell "Чем отличаются вис тайм-аут и вис дедлайн кодекста?" [ref=e206]
+            - cell "System Design" [ref=e207]:
+              - generic [ref=e208]: System Design
+            - cell "junior" [ref=e209]:
+              - generic [ref=e210]: junior
+            - cell "20%" [ref=e211]
+            - cell "Да" [ref=e212]:
+              - generic [ref=e213]: Да
+            - cell "↺ ×" [ref=e214]:
+              - button "↺" [ref=e215]
+              - button "×" [ref=e216]
+          - row "Контекст в Гоу, что, как устроено, какие, знаешь, виды. Backend middle 20% Да ↺ ×" [ref=e217] [cursor=pointer]:
+            - cell [ref=e218]:
+              - checkbox [ref=e219]
+            - cell "Контекст в Гоу, что, как устроено, какие, знаешь, виды." [ref=e220]
+            - cell "Backend" [ref=e221]:
+              - generic [ref=e222]: Backend
+            - cell "middle" [ref=e223]:
+              - generic [ref=e224]: middle
+            - cell "20%" [ref=e225]
+            - cell "Да" [ref=e226]:
+              - generic [ref=e227]: Да
+            - cell "↺ ×" [ref=e228]:
+              - button "↺" [ref=e229]
+              - button "×" [ref=e230]
+          - row "Мьютекса как бы лочить два мьютекса, о чем не следует помнить? System Design middle 20% Да ↺ ×" [ref=e231] [cursor=pointer]:
+            - cell [ref=e232]:
+              - checkbox [ref=e233]
+            - cell "Мьютекса как бы лочить два мьютекса, о чем не следует помнить?" [ref=e234]
+            - cell "System Design" [ref=e235]:
+              - generic [ref=e236]: System Design
+            - cell "middle" [ref=e237]:
+              - generic [ref=e238]: middle
+            - cell "20%" [ref=e239]
+            - cell "Да" [ref=e240]:
+              - generic [ref=e241]: Да
+            - cell "↺ ×" [ref=e242]:
+              - button "↺" [ref=e243]
+              - button "×" [ref=e244]
+          - row "Механизмы зависания происходить? System Design junior 20% Да ↺ ×" [ref=e245] [cursor=pointer]:
+            - cell [ref=e246]:
+              - checkbox [ref=e247]
+            - cell "Механизмы зависания происходить?" [ref=e248]
+            - cell "System Design" [ref=e249]:
+              - generic [ref=e250]: System Design
+            - cell "junior" [ref=e251]:
+              - generic [ref=e252]: junior
+            - cell "20%" [ref=e253]
+            - cell "Да" [ref=e254]:
+              - generic [ref=e255]: Да
+            - cell "↺ ×" [ref=e256]:
+              - button "↺" [ref=e257]
+              - button "×" [ref=e258]
+          - row "Канал устроен в Go. Backend middle 20% Да ↺ ×" [ref=e259] [cursor=pointer]:
+            - cell [ref=e260]:
+              - checkbox [ref=e261]
+            - cell "Канал устроен в Go." [ref=e262]
+            - cell "Backend" [ref=e263]:
+              - generic [ref=e264]: Backend
+            - cell "middle" [ref=e265]:
+              - generic [ref=e266]: middle
+            - cell "20%" [ref=e267]
+            - cell "Да" [ref=e268]:
+              - generic [ref=e269]: Да
+            - cell "↺ ×" [ref=e270]:
+              - button "↺" [ref=e271]
+              - button "×" [ref=e272]
+          - row "Представим, мы с тобой пишем какой-то сервак, если типичный, но есть, допусти... System Design senior 20% Да ↺ ×" [ref=e273] [cursor=pointer]:
+            - cell [ref=e274]:
+              - checkbox [ref=e275]
+            - cell "Представим, мы с тобой пишем какой-то сервак, если типичный, но есть, допусти..." [ref=e276]
+            - cell "System Design" [ref=e277]:
+              - generic [ref=e278]: System Design
+            - cell "senior" [ref=e279]:
+              - generic [ref=e280]: senior
+            - cell "20%" [ref=e281]
+            - cell "Да" [ref=e282]:
+              - generic [ref=e283]: Да
+            - cell "↺ ×" [ref=e284]:
+              - button "↺" [ref=e285]
+              - button "×" [ref=e286]
+          - row "Представим, я ставлю GoMaxProc в один, то есть, у меня будет один поток и оди... System Design middle 20% Да ↺ ×" [ref=e287] [cursor=pointer]:
+            - cell [ref=e288]:
+              - checkbox [ref=e289]
+            - cell "Представим, я ставлю GoMaxProc в один, то есть, у меня будет один поток и оди..." [ref=e290]
+            - cell "System Design" [ref=e291]:
+              - generic [ref=e292]: System Design
+            - cell "middle" [ref=e293]:
+              - generic [ref=e294]: middle
+            - cell "20%" [ref=e295]
+            - cell "Да" [ref=e296]:
+              - generic [ref=e297]: Да
+            - cell "↺ ×" [ref=e298]:
+              - button "↺" [ref=e299]
+              - button "×" [ref=e300]
+          - row "Что такое Garutin? System Design junior 20% Да ↺ ×" [ref=e301] [cursor=pointer]:
+            - cell [ref=e302]:
+              - checkbox [ref=e303]
+            - cell "Что такое Garutin?" [ref=e304]
+            - cell "System Design" [ref=e305]:
+              - generic [ref=e306]: System Design
+            - cell "junior" [ref=e307]:
+              - generic [ref=e308]: junior
+            - cell "20%" [ref=e309]
+            - cell "Да" [ref=e310]:
+              - generic [ref=e311]: Да
+            - cell "↺ ×" [ref=e312]:
+              - button "↺" [ref=e313]
+              - button "×" [ref=e314]
+          - row "Представим, что мы разработчики, там, я не знаю, теньков инвестиций, и нам ну... Backend middle 20% Да ↺ ×" [ref=e315] [cursor=pointer]:
+            - cell [ref=e316]:
+              - checkbox [ref=e317]
+            - cell "Представим, что мы разработчики, там, я не знаю, теньков инвестиций, и нам ну..." [ref=e318]
+            - cell "Backend" [ref=e319]:
+              - generic [ref=e320]: Backend
+            - cell "middle" [ref=e321]:
+              - generic [ref=e322]: middle
+            - cell "20%" [ref=e323]
+            - cell "Да" [ref=e324]:
+              - generic [ref=e325]: Да
+            - cell "↺ ×" [ref=e326]:
+              - button "↺" [ref=e327]
+              - button "×" [ref=e328]
+          - row "Вставка и чтение из неинициализированной мапы. Backend junior 20% Да ↺ ×" [ref=e329] [cursor=pointer]:
+            - cell [ref=e330]:
+              - checkbox [ref=e331]
+            - cell "Вставка и чтение из неинициализированной мапы." [ref=e332]
+            - cell "Backend" [ref=e333]:
+              - generic [ref=e334]: Backend
+            - cell "junior" [ref=e335]:
+              - generic [ref=e336]: junior
+            - cell "20%" [ref=e337]
+            - cell "Да" [ref=e338]:
+              - generic [ref=e339]: Да
+            - cell "↺ ×" [ref=e340]:
+              - button "↺" [ref=e341]
+              - button "×" [ref=e342]
+          - row "Когда коллизия происходит, как Go ее разрешает? Backend middle 20% Да ↺ ×" [ref=e343] [cursor=pointer]:
+            - cell [ref=e344]:
+              - checkbox [ref=e345]
+            - cell "Когда коллизия происходит, как Go ее разрешает?" [ref=e346]
+            - cell "Backend" [ref=e347]:
+              - generic [ref=e348]: Backend
+            - cell "middle" [ref=e349]:
+              - generic [ref=e350]: middle
+            - cell "20%" [ref=e351]
+            - cell "Да" [ref=e352]:
+              - generic [ref=e353]: Да
+            - cell "↺ ×" [ref=e354]:
+              - button "↺" [ref=e355]
+              - button "×" [ref=e356]
+          - row "Хач таблицы как бы устроена. Backend middle 20% Да ↺ ×" [ref=e357] [cursor=pointer]:
+            - cell [ref=e358]:
+              - checkbox [ref=e359]
+            - cell "Хач таблицы как бы устроена." [ref=e360]
+            - cell "Backend" [ref=e361]:
+              - generic [ref=e362]: Backend
+            - cell "middle" [ref=e363]:
+              - generic [ref=e364]: middle
+            - cell "20%" [ref=e365]
+            - cell "Да" [ref=e366]:
+              - generic [ref=e367]: Да
+            - cell "↺ ×" [ref=e368]:
+              - button "↺" [ref=e369]
+              - button "×" [ref=e370]
+          - row "Вставка и чтение из неинициализированного слайса. Backend junior 20% Да ↺ ×" [ref=e371] [cursor=pointer]:
+            - cell [ref=e372]:
+              - checkbox [ref=e373]
+            - cell "Вставка и чтение из неинициализированного слайса." [ref=e374]
+            - cell "Backend" [ref=e375]:
+              - generic [ref=e376]: Backend
+            - cell "junior" [ref=e377]:
+              - generic [ref=e378]: junior
+            - cell "20%" [ref=e379]
+            - cell "Да" [ref=e380]:
+              - generic [ref=e381]: Да
+            - cell "↺ ×" [ref=e382]:
+              - button "↺" [ref=e383]
+              - button "×" [ref=e384]
+          - row "Почему Append возвращает слайс? Backend junior 20% Да ↺ ×" [ref=e385] [cursor=pointer]:
+            - cell [ref=e386]:
+              - checkbox [ref=e387]
+            - cell "Почему Append возвращает слайс?" [ref=e388]
+            - cell "Backend" [ref=e389]:
+              - generic [ref=e390]: Backend
+            - cell "junior" [ref=e391]:
+              - generic [ref=e392]: junior
+            - cell "20%" [ref=e393]
+            - cell "Да" [ref=e394]:
+              - generic [ref=e395]: Да
+            - cell "↺ ×" [ref=e396]:
+              - button "↺" [ref=e397]
+              - button "×" [ref=e398]
+          - row "Удаление из начала за константу, как это можно сделать? Algorithms middle 20% Да ↺ ×" [ref=e399] [cursor=pointer]:
+            - cell [ref=e400]:
+              - checkbox [ref=e401]
+            - cell "Удаление из начала за константу, как это можно сделать?" [ref=e402]
+            - cell "Algorithms" [ref=e403]:
+              - generic [ref=e404]: Algorithms
+            - cell "middle" [ref=e405]:
+              - generic [ref=e406]: middle
+            - cell "20%" [ref=e407]
+            - cell "Да" [ref=e408]:
+              - generic [ref=e409]: Да
+            - cell "↺ ×" [ref=e410]:
+              - button "↺" [ref=e411]
+              - button "×" [ref=e412]
+          - row "Асимптотика работы с динамическими массивами? Algorithms middle 20% Да ↺ ×" [ref=e413] [cursor=pointer]:
+            - cell [ref=e414]:
+              - checkbox [ref=e415]
+            - cell "Асимптотика работы с динамическими массивами?" [ref=e416]
+            - cell "Algorithms" [ref=e417]:
+              - generic [ref=e418]: Algorithms
+            - cell "middle" [ref=e419]:
+              - generic [ref=e420]: middle
+            - cell "20%" [ref=e421]
+            - cell "Да" [ref=e422]:
+              - generic [ref=e423]: Да
+            - cell "↺ ×" [ref=e424]:
+              - button "↺" [ref=e425]
+              - button "×" [ref=e426]
+          - row "В чем разница между массивами и слайсами? Backend junior 20% Да ↺ ×" [ref=e427] [cursor=pointer]:
+            - cell [ref=e428]:
+              - checkbox [ref=e429]
+            - cell "В чем разница между массивами и слайсами?" [ref=e430]
+            - cell "Backend" [ref=e431]:
+              - generic [ref=e432]: Backend
+            - cell "junior" [ref=e433]:
+              - generic [ref=e434]: junior
+            - cell "20%" [ref=e435]
+            - cell "Да" [ref=e436]:
+              - generic [ref=e437]: Да
+            - cell "↺ ×" [ref=e438]:
+              - button "↺" [ref=e439]
+              - button "×" [ref=e440]
+          - row "Представим, давай себе возобним разработчиками Go. И, допустим, имьютабельные... Backend senior 20% Да ↺ ×" [ref=e441] [cursor=pointer]:
+            - cell [ref=e442]:
+              - checkbox [ref=e443]
+            - cell "Представим, давай себе возобним разработчиками Go. И, допустим, имьютабельные..." [ref=e444]
+            - cell "Backend" [ref=e445]:
+              - generic [ref=e446]: Backend
+            - cell "senior" [ref=e447]:
+              - generic [ref=e448]: senior
+            - cell "20%" [ref=e449]
+            - cell "Да" [ref=e450]:
+              - generic [ref=e451]: Да
+            - cell "↺ ×" [ref=e452]:
+              - button "↺" [ref=e453]
+              - button "×" [ref=e454]
+          - row "Unicode – это от 1 до 4 байт. Так может символ занимать. И получается, у нас ... Backend middle 20% Да ↺ ×" [ref=e455] [cursor=pointer]:
+            - cell [ref=e456]:
+              - checkbox [ref=e457]
+            - cell "Unicode – это от 1 до 4 байт. Так может символ занимать. И получается, у нас ..." [ref=e458]
+            - cell "Backend" [ref=e459]:
+              - generic [ref=e460]: Backend
+            - cell "middle" [ref=e461]:
+              - generic [ref=e462]: middle
+            - cell "20%" [ref=e463]
+            - cell "Да" [ref=e464]:
+              - generic [ref=e465]: Да
+            - cell "↺ ×" [ref=e466]:
+              - button "↺" [ref=e467]
+              - button "×" [ref=e468]
+          - row "LEN вернет количество байт. То есть, вообще на него не стоит опираться, если ... Backend junior 20% Да ↺ ×" [ref=e469] [cursor=pointer]:
+            - cell [ref=e470]:
+              - checkbox [ref=e471]
+            - cell "LEN вернет количество байт. То есть, вообще на него не стоит опираться, если ..." [ref=e472]
+            - cell "Backend" [ref=e473]:
+              - generic [ref=e474]: Backend
+            - cell "junior" [ref=e475]:
+              - generic [ref=e476]: junior
+            - cell "20%" [ref=e477]
+            - cell "Да" [ref=e478]:
+              - generic [ref=e479]: Да
+            - cell "↺ ×" [ref=e480]:
+              - button "↺" [ref=e481]
+              - button "×" [ref=e482]
+          - row "Расскажи, как строки устроены в Go? Backend junior 20% Да ↺ ×" [ref=e483] [cursor=pointer]:
+            - cell [ref=e484]:
+              - checkbox [ref=e485]
+            - cell "Расскажи, как строки устроены в Go?" [ref=e486]
+            - cell "Backend" [ref=e487]:
+              - generic [ref=e488]: Backend
+            - cell "junior" [ref=e489]:
+              - generic [ref=e490]: junior
+            - cell "20%" [ref=e491]
+            - cell "Да" [ref=e492]:
+              - generic [ref=e493]: Да
+            - cell "↺ ×" [ref=e494]:
+              - button "↺" [ref=e495]
+              - button "×" [ref=e496]
+          - row "Если бы представим какой-то коллега или знакомый друг спросил бы, где можно п... General junior 20% Да ↺ ×" [ref=e497] [cursor=pointer]:
+            - cell [ref=e498]:
+              - checkbox [ref=e499]
+            - cell "Если бы представим какой-то коллега или знакомый друг спросил бы, где можно п..." [ref=e500]
+            - cell "General" [ref=e501]:
+              - generic [ref=e502]: General
+            - cell "junior" [ref=e503]:
+              - generic [ref=e504]: junior
+            - cell "20%" [ref=e505]
+            - cell "Да" [ref=e506]:
+              - generic [ref=e507]: Да
+            - cell "↺ ×" [ref=e508]:
+              - button "↺" [ref=e509]
+              - button "×" [ref=e510]
+          - row "Насколько было сложно совмещать с работой, например, обучение на курсах? General junior 20% Да ↺ ×" [ref=e511] [cursor=pointer]:
+            - cell [ref=e512]:
+              - checkbox [ref=e513]
+            - cell "Насколько было сложно совмещать с работой, например, обучение на курсах?" [ref=e514]
+            - cell "General" [ref=e515]:
+              - generic [ref=e516]: General
+            - cell "junior" [ref=e517]:
+              - generic [ref=e518]: junior
+            - cell "20%" [ref=e519]
+            - cell "Да" [ref=e520]:
+              - generic [ref=e521]: Да
+            - cell "↺ ×" [ref=e522]:
+              - button "↺" [ref=e523]
+              - button "×" [ref=e524]
+          - row "Может быть, что-то больше всего тебе понравилось, может, что-то выделить отно... General junior 20% Да ↺ ×" [ref=e525] [cursor=pointer]:
+            - cell [ref=e526]:
+              - checkbox [ref=e527]
+            - cell "Может быть, что-то больше всего тебе понравилось, может, что-то выделить отно..." [ref=e528]
+            - cell "General" [ref=e529]:
+              - generic [ref=e530]: General
+            - cell "junior" [ref=e531]:
+              - generic [ref=e532]: junior
+            - cell "20%" [ref=e533]
+            - cell "Да" [ref=e534]:
+              - generic [ref=e535]: Да
+            - cell "↺ ×" [ref=e536]:
+              - button "↺" [ref=e537]
+              - button "×" [ref=e538]
+          - row "А если говорить не о САБЕСах, а, например, сейчас ты работаешь в ВИТе, может ... Backend middle 20% Да ↺ ×" [ref=e539] [cursor=pointer]:
+            - cell [ref=e540]:
+              - checkbox [ref=e541]
+            - cell "А если говорить не о САБЕСах, а, например, сейчас ты работаешь в ВИТе, может ..." [ref=e542]
+            - cell "Backend" [ref=e543]:
+              - generic [ref=e544]: Backend
+            - cell "middle" [ref=e545]:
+              - generic [ref=e546]: middle
+            - cell "20%" [ref=e547]
+            - cell "Да" [ref=e548]:
+              - generic [ref=e549]: Да
+            - cell "↺ ×" [ref=e550]:
+              - button "↺" [ref=e551]
+              - button "×" [ref=e552]
+          - row "Ну и расскажи, как мне у такси в Линоксе устроено? System Design middle 20% Да ↺ ×" [ref=e553] [cursor=pointer]:
+            - cell [ref=e554]:
+              - checkbox [ref=e555]
+            - cell "Ну и расскажи, как мне у такси в Линоксе устроено?" [ref=e556]
+            - cell "System Design" [ref=e557]:
+              - generic [ref=e558]: System Design
+            - cell "middle" [ref=e559]:
+              - generic [ref=e560]: middle
+            - cell "20%" [ref=e561]
+            - cell "Да" [ref=e562]:
+              - generic [ref=e563]: Да
+            - cell "↺ ×" [ref=e564]:
+              - button "↺" [ref=e565]
+              - button "×" [ref=e566]
+          - row "Может быть, что-то изменилось в карьере, в работе, после обучения на каких-ли... General junior 20% Да ↺ ×" [ref=e567] [cursor=pointer]:
+            - cell [ref=e568]:
+              - checkbox [ref=e569]
+            - cell "Может быть, что-то изменилось в карьере, в работе, после обучения на каких-ли..." [ref=e570]
+            - cell "General" [ref=e571]:
+              - generic [ref=e572]: General
+            - cell "junior" [ref=e573]:
+              - generic [ref=e574]: junior
+            - cell "20%" [ref=e575]
+            - cell "Да" [ref=e576]:
+              - generic [ref=e577]: Да
+            - cell "↺ ×" [ref=e578]:
+              - button "↺" [ref=e579]
+              - button "×" [ref=e580]
+          - row "Проблемы побудили пройти в очереди на этих курсах? General junior 20% Да ↺ ×" [ref=e581] [cursor=pointer]:
+            - cell [ref=e582]:
+              - checkbox [ref=e583]
+            - cell "Проблемы побудили пройти в очереди на этих курсах?" [ref=e584]
+            - cell "General" [ref=e585]:
+              - generic [ref=e586]: General
+            - cell "junior" [ref=e587]:
+              - generic [ref=e588]: junior
+            - cell "20%" [ref=e589]
+            - cell "Да" [ref=e590]:
+              - generic [ref=e591]: Да
+            - cell "↺ ×" [ref=e592]:
+              - button "↺" [ref=e593]
+              - button "×" [ref=e594]
+          - row "Какие курсы у нас проходили, можешь рассказать? General junior 20% Да ↺ ×" [ref=e595] [cursor=pointer]:
+            - cell [ref=e596]:
+              - checkbox [ref=e597]
+            - cell "Какие курсы у нас проходили, можешь рассказать?" [ref=e598]
+            - cell "General" [ref=e599]:
+              - generic [ref=e600]: General
+            - cell "junior" [ref=e601]:
+              - generic [ref=e602]: junior
+            - cell "20%" [ref=e603]
+            - cell "Да" [ref=e604]:
+              - generic [ref=e605]: Да
+            - cell "↺ ×" [ref=e606]:
+              - button "↺" [ref=e607]
+              - button "×" [ref=e608]
+          - row "Можешь рассказать о себе, какой у тебя опыт программирования, чем занимаешься... General junior 20% Да ↺ ×" [ref=e609] [cursor=pointer]:
+            - cell [ref=e610]:
+              - checkbox [ref=e611]
+            - cell "Можешь рассказать о себе, какой у тебя опыт программирования, чем занимаешься..." [ref=e612]
+            - cell "General" [ref=e613]:
+              - generic [ref=e614]: General
+            - cell "junior" [ref=e615]:
+              - generic [ref=e616]: junior
+            - cell "20%" [ref=e617]
+            - cell "Да" [ref=e618]:
+              - generic [ref=e619]: Да
+            - cell "↺ ×" [ref=e620]:
+              - button "↺" [ref=e621]
+              - button "×" [ref=e622]
+          - row "В чем разница между списком и группой? 1C junior 20% Да ↺ ×" [ref=e623] [cursor=pointer]:
+            - cell [ref=e624]:
+              - checkbox [ref=e625]
+            - cell "В чем разница между списком и группой?" [ref=e626]
+            - cell "1C" [ref=e627]:
+              - generic [ref=e628]: 1C
+            - cell "junior" [ref=e629]:
+              - generic [ref=e630]: junior
+            - cell "20%" [ref=e631]
+            - cell "Да" [ref=e632]:
+              - generic [ref=e633]: Да
+            - cell "↺ ×" [ref=e634]:
+              - button "↺" [ref=e635]
+              - button "×" [ref=e636]
+          - row "В чем разница между равно, больше, меньше, больше или равно, меньше или равно? 1C junior 20% Да ↺ ×" [ref=e637] [cursor=pointer]:
+            - cell [ref=e638]:
+              - checkbox [ref=e639]
+            - cell "В чем разница между равно, больше, меньше, больше или равно, меньше или равно?" [ref=e640]
+            - cell "1C" [ref=e641]:
+              - generic [ref=e642]: 1C
+            - cell "junior" [ref=e643]:
+              - generic [ref=e644]: junior
+            - cell "20%" [ref=e645]
+            - cell "Да" [ref=e646]:
+              - generic [ref=e647]: Да
+            - cell "↺ ×" [ref=e648]:
+              - button "↺" [ref=e649]
+              - button "×" [ref=e650]
+          - row "Какие виды сравнения бывают в запросах? 1C junior 20% Да ↺ ×" [ref=e651] [cursor=pointer]:
+            - cell [ref=e652]:
+              - checkbox [ref=e653]
+            - cell "Какие виды сравнения бывают в запросах?" [ref=e654]
+            - cell "1C" [ref=e655]:
+              - generic [ref=e656]: 1C
+            - cell "junior" [ref=e657]:
+              - generic [ref=e658]: junior
+            - cell "20%" [ref=e659]
+            - cell "Да" [ref=e660]:
+              - generic [ref=e661]: Да
+            - cell "↺ ×" [ref=e662]:
+              - button "↺" [ref=e663]
+              - button "×" [ref=e664]
+          - row "В чем разница между регистром сведений и регистром накопления? 1C junior 20% Да ↺ ×" [ref=e665] [cursor=pointer]:
+            - cell [ref=e666]:
+              - checkbox [ref=e667]
+            - cell "В чем разница между регистром сведений и регистром накопления?" [ref=e668]
+            - cell "1C" [ref=e669]:
+              - generic [ref=e670]: 1C
+            - cell "junior" [ref=e671]:
+              - generic [ref=e672]: junior
+            - cell "20%" [ref=e673]
+            - cell "Да" [ref=e674]:
+              - generic [ref=e675]: Да
+            - cell "↺ ×" [ref=e676]:
+              - button "↺" [ref=e677]
+              - button "×" [ref=e678]
+          - row "Какие виды регистров бывают? 1C junior 20% Да ↺ ×" [ref=e679] [cursor=pointer]:
+            - cell [ref=e680]:
+              - checkbox [ref=e681]
+            - cell "Какие виды регистров бывают?" [ref=e682]
+            - cell "1C" [ref=e683]:
+              - generic [ref=e684]: 1C
+            - cell "junior" [ref=e685]:
+              - generic [ref=e686]: junior
+            - cell "20%" [ref=e687]
+            - cell "Да" [ref=e688]:
+              - generic [ref=e689]: Да
+            - cell "↺ ×" [ref=e690]:
+              - button "↺" [ref=e691]
+              - button "×" [ref=e692]
+          - row "Может ли справочник быть регистратором? 1C junior 20% Да ↺ ×" [ref=e693] [cursor=pointer]:
+            - cell [ref=e694]:
+              - checkbox [ref=e695]
+            - cell "Может ли справочник быть регистратором?" [ref=e696]
+            - cell "1C" [ref=e697]:
+              - generic [ref=e698]: 1C
+            - cell "junior" [ref=e699]:
+              - generic [ref=e700]: junior
+            - cell "20%" [ref=e701]
+            - cell "Да" [ref=e702]:
+              - generic [ref=e703]: Да
+            - cell "↺ ×" [ref=e704]:
+              - button "↺" [ref=e705]
+              - button "×" [ref=e706]
+          - row "В чем разница между справочником и документом в 1С? 1C junior 20% Да ↺ ×" [ref=e707] [cursor=pointer]:
+            - cell [ref=e708]:
+              - checkbox [ref=e709]
+            - cell "В чем разница между справочником и документом в 1С?" [ref=e710]
+            - cell "1C" [ref=e711]:
+              - generic [ref=e712]: 1C
+            - cell "junior" [ref=e713]:
+              - generic [ref=e714]: junior
+            - cell "20%" [ref=e715]
+            - cell "Да" [ref=e716]:
+              - generic [ref=e717]: Да
+            - cell "↺ ×" [ref=e718]:
+              - button "↺" [ref=e719]
+              - button "×" [ref=e720]
+          - row "Как вы дорабатывали типовую конфигурацию? 1C junior 20% Да ↺ ×" [ref=e721] [cursor=pointer]:
+            - cell [ref=e722]:
+              - checkbox [ref=e723]
+            - cell "Как вы дорабатывали типовую конфигурацию?" [ref=e724]
+            - cell "1C" [ref=e725]:
+              - generic [ref=e726]: 1C
+            - cell "junior" [ref=e727]:
+              - generic [ref=e728]: junior
+            - cell "20%" [ref=e729]
+            - cell "Да" [ref=e730]:
+              - generic [ref=e731]: Да
+            - cell "↺ ×" [ref=e732]:
+              - button "↺" [ref=e733]
+              - button "×" [ref=e734]
+          - row "Как вы редактировали печатные формы в конфигураторе? 1C junior 20% Да ↺ ×" [ref=e735] [cursor=pointer]:
+            - cell [ref=e736]:
+              - checkbox [ref=e737]
+            - cell "Как вы редактировали печатные формы в конфигураторе?" [ref=e738]
+            - cell "1C" [ref=e739]:
+              - generic [ref=e740]: 1C
+            - cell "junior" [ref=e741]:
+              - generic [ref=e742]: junior
+            - cell "20%" [ref=e743]
+            - cell "Да" [ref=e744]:
+              - generic [ref=e745]: Да
+            - cell "↺ ×" [ref=e746]:
+              - button "↺" [ref=e747]
+              - button "×" [ref=e748]
+          - row "Какие задачи возникали у вас на последнем месте работы? IT junior 20% Да ↺ ×" [ref=e749] [cursor=pointer]:
+            - cell [ref=e750]:
+              - checkbox [ref=e751]
+            - cell "Какие задачи возникали у вас на последнем месте работы?" [ref=e752]
+            - cell "IT" [ref=e753]:
+              - generic [ref=e754]: IT
+            - cell "junior" [ref=e755]:
+              - generic [ref=e756]: junior
+            - cell "20%" [ref=e757]
+            - cell "Да" [ref=e758]:
+              - generic [ref=e759]: Да
+            - cell "↺ ×" [ref=e760]:
+              - button "↺" [ref=e761]
+              - button "×" [ref=e762]
+          - row "Назовите темы, которые вы упоминали на последнем месте работы? IT junior 20% Да ↺ ×" [ref=e763] [cursor=pointer]:
+            - cell [ref=e764]:
+              - checkbox [ref=e765]
+            - cell "Назовите темы, которые вы упоминали на последнем месте работы?" [ref=e766]
+            - cell "IT" [ref=e767]:
+              - generic [ref=e768]: IT
+            - cell "junior" [ref=e769]:
+              - generic [ref=e770]: junior
+            - cell "20%" [ref=e771]
+            - cell "Да" [ref=e772]:
+              - generic [ref=e773]: Да
+            - cell "↺ ×" [ref=e774]:
+              - button "↺" [ref=e775]
+              - button "×" [ref=e776]
+          - row "Вы должны выбрать именно вас, вы знаете Общие вопросы junior 20% Да ↺ ×" [ref=e777] [cursor=pointer]:
+            - cell [ref=e778]:
+              - checkbox [ref=e779]
+            - cell "Вы должны выбрать именно вас, вы знаете" [ref=e780]
+            - cell "Общие вопросы" [ref=e781]:
+              - generic [ref=e782]: Общие вопросы
+            - cell "junior" [ref=e783]:
+              - generic [ref=e784]: junior
+            - cell "20%" [ref=e785]
+            - cell "Да" [ref=e786]:
+              - generic [ref=e787]: Да
+            - cell "↺ ×" [ref=e788]:
+              - button "↺" [ref=e789]
+              - button "×" [ref=e790]
+          - row "Расскажите о ваших хобби Общие вопросы junior 20% Да ↺ ×" [ref=e791] [cursor=pointer]:
+            - cell [ref=e792]:
+              - checkbox [ref=e793]
+            - cell "Расскажите о ваших хобби" [ref=e794]
+            - cell "Общие вопросы" [ref=e795]:
+              - generic [ref=e796]: Общие вопросы
+            - cell "junior" [ref=e797]:
+              - generic [ref=e798]: junior
+            - cell "20%" [ref=e799]
+            - cell "Да" [ref=e800]:
+              - generic [ref=e801]: Да
+            - cell "↺ ×" [ref=e802]:
+              - button "↺" [ref=e803]
+              - button "×" [ref=e804]
+          - row "Сколько теннисных мячей поместиться в автобусе? Algorithms middle 20% Да ↺ ×" [ref=e805] [cursor=pointer]:
+            - cell [ref=e806]:
+              - checkbox [ref=e807]
+            - cell "Сколько теннисных мячей поместиться в автобусе?" [ref=e808]
+            - cell "Algorithms" [ref=e809]:
+              - generic [ref=e810]: Algorithms
+            - cell "middle" [ref=e811]:
+              - generic [ref=e812]: middle
+            - cell "20%" [ref=e813]
+            - cell "Да" [ref=e814]:
+              - generic [ref=e815]: Да
+            - cell "↺ ×" [ref=e816]:
+              - button "↺" [ref=e817]
+              - button "×" [ref=e818]
+          - row "Почему вы на меня кричите? Общие вопросы junior 20% Да ↺ ×" [ref=e819] [cursor=pointer]:
+            - cell [ref=e820]:
+              - checkbox [ref=e821]
+            - cell "Почему вы на меня кричите?" [ref=e822]
+            - cell "Общие вопросы" [ref=e823]:
+              - generic [ref=e824]: Общие вопросы
+            - cell "junior" [ref=e825]:
+              - generic [ref=e826]: junior
+            - cell "20%" [ref=e827]
+            - cell "Да" [ref=e828]:
+              - generic [ref=e829]: Да
+            - cell "↺ ×" [ref=e830]:
+              - button "↺" [ref=e831]
+              - button "×" [ref=e832]
+          - row "Ваша увлеченность где? Общие вопросы junior 20% Да ↺ ×" [ref=e833] [cursor=pointer]:
+            - cell [ref=e834]:
+              - checkbox [ref=e835]
+            - cell "Ваша увлеченность где?" [ref=e836]
+            - cell "Общие вопросы" [ref=e837]:
+              - generic [ref=e838]: Общие вопросы
+            - cell "junior" [ref=e839]:
+              - generic [ref=e840]: junior
+            - cell "20%" [ref=e841]
+            - cell "Да" [ref=e842]:
+              - generic [ref=e843]: Да
+            - cell "↺ ×" [ref=e844]:
+              - button "↺" [ref=e845]
+              - button "×" [ref=e846]
+          - row "Зачем продайте мне ручку? System Design senior 20% Да ↺ ×" [ref=e847] [cursor=pointer]:
+            - cell [ref=e848]:
+              - checkbox [ref=e849]
+            - cell "Зачем продайте мне ручку?" [ref=e850]
+            - cell "System Design" [ref=e851]:
+              - generic [ref=e852]: System Design
+            - cell "senior" [ref=e853]:
+              - generic [ref=e854]: senior
+            - cell "20%" [ref=e855]
+            - cell "Да" [ref=e856]:
+              - generic [ref=e857]: Да
+            - cell "↺ ×" [ref=e858]:
+              - button "↺" [ref=e859]
+              - button "×" [ref=e860]
+          - row "Какое это имеет значение? Общие вопросы junior 20% Да ↺ ×" [ref=e861] [cursor=pointer]:
+            - cell [ref=e862]:
+              - checkbox [ref=e863]
+            - cell "Какое это имеет значение?" [ref=e864]
+            - cell "Общие вопросы" [ref=e865]:
+              - generic [ref=e866]: Общие вопросы
+            - cell "junior" [ref=e867]:
+              - generic [ref=e868]: junior
+            - cell "20%" [ref=e869]
+            - cell "Да" [ref=e870]:
+              - generic [ref=e871]: Да
+            - cell "↺ ×" [ref=e872]:
+              - button "↺" [ref=e873]
+              - button "×" [ref=e874]
+          - row "У вас есть родственники в странах европы и сша? Общие вопросы junior 20% Да ↺ ×" [ref=e875] [cursor=pointer]:
+            - cell [ref=e876]:
+              - checkbox [ref=e877]
+            - cell "У вас есть родственники в странах европы и сша?" [ref=e878]
+            - cell "Общие вопросы" [ref=e879]:
+              - generic [ref=e880]: Общие вопросы
+            - cell "junior" [ref=e881]:
+              - generic [ref=e882]: junior
+            - cell "20%" [ref=e883]
+            - cell "Да" [ref=e884]:
+              - generic [ref=e885]: Да
+            - cell "↺ ×" [ref=e886]:
+              - button "↺" [ref=e887]
+              - button "×" [ref=e888]
+          - row "Вы готовы пройти тест на полиграфе? Общие вопросы junior 20% Да ↺ ×" [ref=e889] [cursor=pointer]:
+            - cell [ref=e890]:
+              - checkbox [ref=e891]
+            - cell "Вы готовы пройти тест на полиграфе?" [ref=e892]
+            - cell "Общие вопросы" [ref=e893]:
+              - generic [ref=e894]: Общие вопросы
+            - cell "junior" [ref=e895]:
+              - generic [ref=e896]: junior
+            - cell "20%" [ref=e897]
+            - cell "Да" [ref=e898]:
+              - generic [ref=e899]: Да
+            - cell "↺ ×" [ref=e900]:
+              - button "↺" [ref=e901]
+              - button "×" [ref=e902]
+          - row "Скажите, почему вы выбрали именно нашу компанию? Общие вопросы junior 20% Да ↺ ×" [ref=e903] [cursor=pointer]:
+            - cell [ref=e904]:
+              - checkbox [ref=e905]
+            - cell "Скажите, почему вы выбрали именно нашу компанию?" [ref=e906]
+            - cell "Общие вопросы" [ref=e907]:
+              - generic [ref=e908]: Общие вопросы
+            - cell "junior" [ref=e909]:
+              - generic [ref=e910]: junior
+            - cell "20%" [ref=e911]
+            - cell "Да" [ref=e912]:
+              - generic [ref=e913]: Да
+            - cell "↺ ×" [ref=e914]:
+              - button "↺" [ref=e915]
+              - button "×" [ref=e916]
+          - row "Как вы относитесь к fortran? Backend middle 20% Да ↺ ×" [ref=e917] [cursor=pointer]:
+            - cell [ref=e918]:
+              - checkbox [ref=e919]
+            - cell "Как вы относитесь к fortran?" [ref=e920]
+            - cell "Backend" [ref=e921]:
+              - generic [ref=e922]: Backend
+            - cell "middle" [ref=e923]:
+              - generic [ref=e924]: middle
+            - cell "20%" [ref=e925]
+            - cell "Да" [ref=e926]:
+              - generic [ref=e927]: Да
+            - cell "↺ ×" [ref=e928]:
+              - button "↺" [ref=e929]
+              - button "×" [ref=e930]
+          - row "Вы писали код на pascal? Backend middle 20% Да ↺ ×" [ref=e931] [cursor=pointer]:
+            - cell [ref=e932]:
+              - checkbox [ref=e933]
+            - cell "Вы писали код на pascal?" [ref=e934]
+            - cell "Backend" [ref=e935]:
+              - generic [ref=e936]: Backend
+            - cell "middle" [ref=e937]:
+              - generic [ref=e938]: middle
+            - cell "20%" [ref=e939]
+            - cell "Да" [ref=e940]:
+              - generic [ref=e941]: Да
+            - cell "↺ ×" [ref=e942]:
+              - button "↺" [ref=e943]
+              - button "×" [ref=e944]
+          - row "Кстати, на каких языках вы писали код по работе? Backend middle 20% Да ↺ ×" [ref=e945] [cursor=pointer]:
+            - cell [ref=e946]:
+              - checkbox [ref=e947]
+            - cell "Кстати, на каких языках вы писали код по работе?" [ref=e948]
+            - cell "Backend" [ref=e949]:
+              - generic [ref=e950]: Backend
+            - cell "middle" [ref=e951]:
+              - generic [ref=e952]: middle
+            - cell "20%" [ref=e953]
+            - cell "Да" [ref=e954]:
+              - generic [ref=e955]: Да
+            - cell "↺ ×" [ref=e956]:
+              - button "↺" [ref=e957]
+              - button "×" [ref=e958]
+          - row "Как вы думаете, почему канализационные люки круглые? System Design senior 20% Да ↺ ×" [ref=e959] [cursor=pointer]:
+            - cell [ref=e960]:
+              - checkbox [ref=e961]
+            - cell "Как вы думаете, почему канализационные люки круглые?" [ref=e962]
+            - cell "System Design" [ref=e963]:
+              - generic [ref=e964]: System Design
+            - cell "senior" [ref=e965]:
+              - generic [ref=e966]: senior
+            - cell "20%" [ref=e967]
+            - cell "Да" [ref=e968]:
+              - generic [ref=e969]: Да
+            - cell "↺ ×" [ref=e970]:
+              - button "↺" [ref=e971]
+              - button "×" [ref=e972]
+          - row "А почему не синий? Общие вопросы junior 20% Да ↺ ×" [ref=e973] [cursor=pointer]:
+            - cell [ref=e974]:
+              - checkbox [ref=e975]
+            - cell "А почему не синий?" [ref=e976]
+            - cell "Общие вопросы" [ref=e977]:
+              - generic [ref=e978]: Общие вопросы
+            - cell "junior" [ref=e979]:
+              - generic [ref=e980]: junior
+            - cell "20%" [ref=e981]
+            - cell "Да" [ref=e982]:
+              - generic [ref=e983]: Да
+            - cell "↺ ×" [ref=e984]:
+              - button "↺" [ref=e985]
+              - button "×" [ref=e986]
+          - row "Назовите ваш любимый цвет Общие вопросы junior 20% Да ↺ ×" [ref=e987] [cursor=pointer]:
+            - cell [ref=e988]:
+              - checkbox [ref=e989]
+            - cell "Назовите ваш любимый цвет" [ref=e990]
+            - cell "Общие вопросы" [ref=e991]:
+              - generic [ref=e992]: Общие вопросы
+            - cell "junior" [ref=e993]:
+              - generic [ref=e994]: junior
+            - cell "20%" [ref=e995]
+            - cell "Да" [ref=e996]:
+              - generic [ref=e997]: Да
+            - cell "↺ ×" [ref=e998]:
+              - button "↺" [ref=e999]
+              - button "×" [ref=e1000]
+          - row "Так сколько, семь или шесть лет? Общие вопросы junior 20% Да ↺ ×" [ref=e1001] [cursor=pointer]:
+            - cell [ref=e1002]:
+              - checkbox [ref=e1003]
+            - cell "Так сколько, семь или шесть лет?" [ref=e1004]
+            - cell "Общие вопросы" [ref=e1005]:
+              - generic [ref=e1006]: Общие вопросы
+            - cell "junior" [ref=e1007]:
+              - generic [ref=e1008]: junior
+            - cell "20%" [ref=e1009]
+            - cell "Да" [ref=e1010]:
+              - generic [ref=e1011]: Да
+            - cell "↺ ×" [ref=e1012]:
+              - button "↺" [ref=e1013]
+              - button "×" [ref=e1014]
+          - row "Чем вы занимаетесь на текущем месте работы? Общие вопросы junior 20% Да ↺ ×" [ref=e1015] [cursor=pointer]:
+            - cell [ref=e1016]:
+              - checkbox [ref=e1017]
+            - cell "Чем вы занимаетесь на текущем месте работы?" [ref=e1018]
+            - cell "Общие вопросы" [ref=e1019]:
+              - generic [ref=e1020]: Общие вопросы
+            - cell "junior" [ref=e1021]:
+              - generic [ref=e1022]: junior
+            - cell "20%" [ref=e1023]
+            - cell "Да" [ref=e1024]:
+              - generic [ref=e1025]: Да
+            - cell "↺ ×" [ref=e1026]:
+              - button "↺" [ref=e1027]
+              - button "×" [ref=e1028]
+  - contentinfo [ref=e1029]:
+    - generic [ref=e1030]:
+      - generic [ref=e1031]: InterviewHub © 2026
+      - generic [ref=e1032]:
+        - link "Предложить видео" [ref=e1033] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e1034] [cursor=pointer]:
+          - /url: https://github.com

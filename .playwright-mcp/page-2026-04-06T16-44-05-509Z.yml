@@ -1,0 +1,73 @@
+- generic [ref=e157]:
+  - navigation [ref=e158]:
+    - generic [ref=e159]:
+      - link "InterviewHub V2" [ref=e160] [cursor=pointer]:
+        - /url: /
+        - img [ref=e161]
+        - generic [ref=e163]: InterviewHub V2
+      - generic [ref=e164]:
+        - link "Вопросы" [ref=e165] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e166] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e167] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e168] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e169] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e170] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e171] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e172]:
+        - button "Тёмная тема" [ref=e173] [cursor=pointer]:
+          - img [ref=e175]
+        - link "A Admin User" [ref=e178] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e179]: A
+          - generic [ref=e180]: Admin User
+        - button "Выйти" [ref=e181] [cursor=pointer]
+  - generic [ref=e238]:
+    - generic [ref=e239]:
+      - button [ref=e240] [cursor=pointer]:
+        - img [ref=e241]
+      - generic [ref=e244]: 1 / 20
+      - generic [ref=e246]:
+        - generic [ref=e247]: ✓ 0
+        - generic [ref=e248]: ↻ 0
+    - generic [ref=e250] [cursor=pointer]:
+      - generic [ref=e251]:
+        - generic [ref=e252]:
+          - generic [ref=e253]: junior
+          - generic [ref=e254]: Backend
+        - heading "Как можно проверить тип интерфейса?" [level=2] [ref=e255]
+        - generic [ref=e256]:
+          - text: Нажмите, чтобы перевернуть ·
+          - generic [ref=e257]: Space
+      - generic [ref=e259]:
+        - text: "Проверка типа интерфейса в backend-разработке, особенно при использовании языков программирования, поддерживающих объектно-ориентированное программирование (ООП), таких как Java или C#, может быть осуществлена несколькими способами. Одним из распространённых методов является использование оператора `instanceof` или аналогичных конструкций в других языках, которые проверяют, является ли объект экземпляром конкретного класса или реализует определённый интерфейс."
+        - text: "Например, в Java, если у вас есть интерфейс `Printable` и класс `Document` который его реализует, вы можете проверить, реализует ли объект `Document` интерфейс `Printable`, используя следующий код:"
+        - text: "```java"
+        - text: Document doc = new Document();
+        - text: "if (doc instanceof Printable) {"
+        - text: System.out.println("Объект реализует интерфейс Printable");
+        - text: "}"
+        - text: "```"
+        - text: "В языках, где не поддерживается ООП или в ситуациях, когда необходимо более тонкое управление типами, можно использовать другие подходы, такие как проверка через рефлексию или использование динамического типирования, если оно поддерживается языком. Например, в Python, где типы не объявляются явно, вы можете проверить, реализует ли объект определённый интерфейс (или имеет определённые методы), используя функцию `hasattr()` или `isinstance()` вместе с абстрактными базовыми классами."
+        - text: Независимо от используемого метода, важно помнить, что проверка типа интерфейса должна быть частью общей стратегии обработки типов и ошибок в вашем приложении, поскольку избыточная проверка типов может сделать код более сложным и менее гибким.
+    - generic [ref=e260]:
+      - button "↻ На повтор ←" [ref=e261] [cursor=pointer]:
+        - generic [ref=e262]: ↻ На повтор
+        - generic [ref=e263]: ←
+      - button "✓ Знаю →" [ref=e264] [cursor=pointer]:
+        - generic [ref=e265]: ✓ Знаю
+        - generic [ref=e266]: →
+  - contentinfo [ref=e214]:
+    - generic [ref=e215]:
+      - generic [ref=e216]: InterviewHub © 2026
+      - generic [ref=e217]:
+        - link "Предложить видео" [ref=e218] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e219] [cursor=pointer]:
+          - /url: https://github.com

@@ -1,0 +1,266 @@
+- generic [ref=e681]:
+  - navigation [ref=e682]:
+    - generic [ref=e683]:
+      - link "InterviewHub V2" [ref=e684] [cursor=pointer]:
+        - /url: /
+        - img [ref=e685]
+        - generic [ref=e687]: InterviewHub V2
+      - generic [ref=e688]:
+        - link "Вопросы" [ref=e689] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e690] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e691] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e692] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e693] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e694] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e695] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e696]:
+        - button "Тёмная тема" [ref=e697] [cursor=pointer]:
+          - img [ref=e699]
+        - link "A Admin User" [ref=e702] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e703]: A
+          - generic [ref=e704]: Admin User
+        - button "Выйти" [ref=e705] [cursor=pointer]
+  - generic [ref=e706]:
+    - heading "Тестовые задания" [level=1] [ref=e707]:
+      - img [ref=e709]
+      - text: Тестовые задания
+    - paragraph [ref=e711]: Реальные тестовые задания от IT-компаний для практики
+    - generic [ref=e712]:
+      - combobox [ref=e713]:
+        - option "Все профессии" [selected]
+        - option "Frontend разработчик"
+        - option "Backend разработчик"
+        - option "Python разработчик"
+        - option "Java разработчик"
+        - option "DevOps инженер"
+        - option "QA инженер"
+        - option "Data Scientist"
+        - option "Mobile разработчик"
+      - combobox [ref=e714]:
+        - option "Любая сложность" [selected]
+        - option "Junior"
+        - option "Middle"
+        - option "Senior"
+      - generic [ref=e715]:
+        - img
+        - textbox "Поиск..." [ref=e716]
+    - generic [ref=e717]:
+      - generic [ref=e718]:
+        - generic [ref=e719]:
+          - generic [ref=e720]: middle
+          - generic [ref=e721]: Тинькофф
+        - link "Документирование API" [ref=e722] [cursor=pointer]:
+          - /url: /test-assignments/28
+        - paragraph [ref=e723]: Описать API Gateway в OpenAPI 3.0 формате
+        - generic [ref=e724]: Системный аналитик
+        - generic [ref=e725]:
+          - generic [ref=e726]: OpenAPI
+          - generic [ref=e727]: Swagger
+          - generic [ref=e728]: REST API
+          - generic [ref=e729]: UML
+        - generic [ref=e730]:
+          - link "Подробнее →" [ref=e731] [cursor=pointer]:
+            - /url: /test-assignments/28
+          - generic [ref=e732]: 28 февр. 2026 г.
+      - generic [ref=e733]:
+        - generic [ref=e734]:
+          - generic [ref=e735]: middle
+          - generic [ref=e736]: Яндекс
+        - link "Автотесты для REST API" [ref=e737] [cursor=pointer]:
+          - /url: /test-assignments/20
+        - paragraph [ref=e738]: Фреймворк автотестов с отчётами и CI интеграцией
+        - generic [ref=e739]: AQA / Automation
+        - generic [ref=e740]:
+          - generic [ref=e741]: Python
+          - generic [ref=e742]: pytest
+          - generic [ref=e743]: Allure
+          - generic [ref=e744]: REST API
+        - generic [ref=e745]:
+          - link "Подробнее →" [ref=e746] [cursor=pointer]:
+            - /url: /test-assignments/20
+          - generic [ref=e747]: 28 февр. 2026 г.
+      - generic [ref=e748]:
+        - generic [ref=e749]:
+          - generic [ref=e750]: senior
+          - generic [ref=e751]: СберАналитика
+        - link "ETL пайплайн" [ref=e752] [cursor=pointer]:
+          - /url: /test-assignments/21
+        - paragraph [ref=e753]: Сборка данных из 3 источников в DWH с Airflow
+        - generic [ref=e754]: Data Scientist
+        - generic [ref=e755]:
+          - generic [ref=e756]: Python
+          - generic [ref=e757]: Apache Spark
+          - generic [ref=e758]: SQL
+          - generic [ref=e759]: Airflow
+        - generic [ref=e760]:
+          - link "Подробнее →" [ref=e761] [cursor=pointer]:
+            - /url: /test-assignments/21
+          - generic [ref=e762]: 28 февр. 2026 г.
+      - generic [ref=e763]:
+        - generic [ref=e764]:
+          - generic [ref=e765]: junior
+          - generic [ref=e766]: МТС
+        - link "Dashboard для метрик" [ref=e767] [cursor=pointer]:
+          - /url: /test-assignments/22
+        - paragraph [ref=e768]: Интерактивный дашборд на Power BI / Superset
+        - generic [ref=e769]: Аналитик данных
+        - generic [ref=e770]:
+          - generic [ref=e771]: SQL
+          - generic [ref=e772]: Power BI
+          - generic [ref=e773]: Python
+        - generic [ref=e774]:
+          - link "Подробнее →" [ref=e775] [cursor=pointer]:
+            - /url: /test-assignments/22
+          - generic [ref=e776]: 28 февр. 2026 г.
+      - generic [ref=e777]:
+        - generic [ref=e778]:
+          - generic [ref=e779]: middle
+          - generic [ref=e780]: Softline
+        - link "Обработка форм 1С" [ref=e781] [cursor=pointer]:
+          - /url: /test-assignments/23
+        - paragraph [ref=e782]: Доработка типовой конфигурации УТ 11
+        - generic [ref=e783]: 1С программист
+        - generic [ref=e784]:
+          - generic [ref=e785]: 1C
+          - generic [ref=e786]: SQL
+          - generic [ref=e787]: BSP
+        - generic [ref=e788]:
+          - link "Подробнее →" [ref=e789] [cursor=pointer]:
+            - /url: /test-assignments/23
+          - generic [ref=e790]: 28 февр. 2026 г.
+      - generic [ref=e791]:
+        - generic [ref=e792]:
+          - generic [ref=e793]: junior
+          - generic [ref=e794]: Авито
+        - link "iOS приложение погоды" [ref=e795] [cursor=pointer]:
+          - /url: /test-assignments/24
+        - paragraph [ref=e796]: SwiftUI + CoreData + OpenWeather API
+        - generic [ref=e797]: iOS / Swift разработчик
+        - generic [ref=e798]:
+          - generic [ref=e799]: Swift
+          - generic [ref=e800]: SwiftUI
+          - generic [ref=e801]: REST API
+        - generic [ref=e802]:
+          - link "Подробнее →" [ref=e803] [cursor=pointer]:
+            - /url: /test-assignments/24
+          - generic [ref=e804]: 28 февр. 2026 г.
+      - generic [ref=e805]:
+        - generic [ref=e806]:
+          - generic [ref=e807]: junior
+          - generic [ref=e808]: VK
+        - link "Android TODO-app" [ref=e809] [cursor=pointer]:
+          - /url: /test-assignments/25
+        - paragraph [ref=e810]: MVVM + Room + Jetpack Compose
+        - generic [ref=e811]: Android разработчик
+        - generic [ref=e812]:
+          - generic [ref=e813]: Kotlin
+          - generic [ref=e814]: Jetpack Compose
+          - generic [ref=e815]: Room
+        - generic [ref=e816]:
+          - link "Подробнее →" [ref=e817] [cursor=pointer]:
+            - /url: /test-assignments/25
+          - generic [ref=e818]: 28 февр. 2026 г.
+      - generic [ref=e819]:
+        - generic [ref=e820]:
+          - generic [ref=e821]: middle
+          - generic [ref=e822]: Сбермаркет
+        - link "Планировщик задач Flutter" [ref=e823] [cursor=pointer]:
+          - /url: /test-assignments/26
+        - paragraph [ref=e824]: Кроссплатформенное приложение с Firebase
+        - generic [ref=e825]: Flutter разработчик
+        - generic [ref=e826]:
+          - generic [ref=e827]: Flutter
+          - generic [ref=e828]: Dart
+          - generic [ref=e829]: Firebase
+        - generic [ref=e830]:
+          - link "Подробнее →" [ref=e831] [cursor=pointer]:
+            - /url: /test-assignments/26
+          - generic [ref=e832]: 28 февр. 2026 г.
+      - generic [ref=e833]:
+        - generic [ref=e834]:
+          - generic [ref=e835]: middle
+          - generic [ref=e836]: Ozon
+        - link "Roadmap продукта" [ref=e837] [cursor=pointer]:
+          - /url: /test-assignments/27
+        - paragraph [ref=e838]: Построить roadmap и провести приоритизацию фич
+        - generic [ref=e839]: Продукт-менеджер
+        - generic [ref=e840]:
+          - generic [ref=e841]: RICE
+          - generic [ref=e842]: JIRA
+          - generic [ref=e843]: Miro
+          - generic [ref=e844]: Figma
+        - generic [ref=e845]:
+          - link "Подробнее →" [ref=e846] [cursor=pointer]:
+            - /url: /test-assignments/27
+          - generic [ref=e847]: 28 февр. 2026 г.
+      - generic [ref=e848]:
+        - generic [ref=e849]:
+          - generic [ref=e850]: junior
+          - generic [ref=e851]: Ламода
+        - link "Парсер сайтов на PHP" [ref=e852] [cursor=pointer]:
+          - /url: /test-assignments/17
+        - paragraph [ref=e853]: Написать CLI-утилиту для парсинга каталога товаров с пагинацией
+        - generic [ref=e854]: PHP разработчик
+        - generic [ref=e855]:
+          - generic [ref=e856]: PHP
+          - generic [ref=e857]: cURL
+          - generic [ref=e858]: DOM
+          - generic [ref=e859]: JSON
+        - generic [ref=e860]:
+          - link "Подробнее →" [ref=e861] [cursor=pointer]:
+            - /url: /test-assignments/17
+          - generic [ref=e862]: 28 февр. 2026 г.
+      - generic [ref=e863]:
+        - generic [ref=e864]:
+          - generic [ref=e865]: middle
+          - generic [ref=e866]: Озон
+        - link "Микросервис авторизации на Go" [ref=e867] [cursor=pointer]:
+          - /url: /test-assignments/18
+        - paragraph [ref=e868]: JWT + refresh tokens, rate limiting, PostgreSQL
+        - generic [ref=e869]: Golang разработчик
+        - generic [ref=e870]:
+          - generic [ref=e871]: Go
+          - generic [ref=e872]: PostgreSQL
+          - generic [ref=e873]: JWT
+          - generic [ref=e874]: Docker
+        - generic [ref=e875]:
+          - link "Подробнее →" [ref=e876] [cursor=pointer]:
+            - /url: /test-assignments/18
+          - generic [ref=e877]: 28 февр. 2026 г.
+      - generic [ref=e878]:
+        - generic [ref=e879]:
+          - generic [ref=e880]: middle
+          - generic [ref=e881]: Kaspersky
+        - link "ASP.NET Web API" [ref=e882] [cursor=pointer]:
+          - /url: /test-assignments/19
+        - paragraph [ref=e883]: CRUD API с авторизацией и Swagger документацией
+        - generic [ref=e884]: C# разработчик
+        - generic [ref=e885]:
+          - generic [ref=e886]: C#
+          - generic [ref=e887]: .NET
+          - generic [ref=e888]: Entity Framework
+          - generic [ref=e889]: SQL
+        - generic [ref=e890]:
+          - link "Подробнее →" [ref=e891] [cursor=pointer]:
+            - /url: /test-assignments/19
+          - generic [ref=e892]: 28 февр. 2026 г.
+    - generic [ref=e893]:
+      - button "←" [disabled]
+      - generic [ref=e894]: 1 / 2
+      - button "→" [ref=e895] [cursor=pointer]
+  - contentinfo [ref=e896]:
+    - generic [ref=e897]:
+      - generic [ref=e898]: InterviewHub © 2026
+      - generic [ref=e899]:
+        - link "Предложить видео" [ref=e900] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e901] [cursor=pointer]:
+          - /url: https://github.com

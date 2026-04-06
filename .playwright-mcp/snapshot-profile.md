@@ -1,0 +1,94 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "InterviewHub V2" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: InterviewHub V2
+      - generic [ref=e10]:
+        - link "Вопросы" [ref=e11] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e12] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e13] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e14] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e15] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e16] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e17] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e18]:
+        - button "Тёмная тема" [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+        - link "A Admin User" [ref=e24] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e25]: A
+          - generic [ref=e26]: Admin User
+        - button "Выйти" [ref=e27] [cursor=pointer]
+  - generic [ref=e28]:
+    - button "На главную" [ref=e29] [cursor=pointer]:
+      - img [ref=e30]
+      - text: На главную
+    - heading "Профиль" [level=1] [ref=e32]:
+      - img [ref=e34]
+      - text: Профиль
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e40]: A
+        - generic [ref=e41]: Админ
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]: Имя
+          - textbox "Ваше имя" [ref=e45]: Admin User
+        - generic [ref=e46]:
+          - generic [ref=e47]: Логин
+          - generic [ref=e48]: admin
+        - generic [ref=e49]:
+          - generic [ref=e50]: GitHub
+          - textbox "https://github.com/you" [ref=e51]: https://github.com/admin-test
+        - generic [ref=e52]:
+          - generic [ref=e53]: Аватар (URL)
+          - textbox "https://..." [ref=e54]
+        - generic [ref=e55]:
+          - generic [ref=e56]: Регистрация
+          - generic [ref=e57]: 1 марта 2026 г.
+        - button "Сохранить" [ref=e59] [cursor=pointer]
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]: "1"
+        - generic [ref=e63]: Карточек
+      - generic [ref=e64]:
+        - generic [ref=e65]: "1"
+        - generic [ref=e66]: Повторено
+      - generic [ref=e67]:
+        - generic [ref=e68]: "2.6"
+        - generic [ref=e69]: Лёгкость
+      - generic [ref=e70]:
+        - generic [ref=e71]: "1"
+        - generic [ref=e72]: Закладок
+    - generic [ref=e73]:
+      - heading "GitHub" [level=3] [ref=e74]
+      - link "https://github.com/admin-test" [ref=e75] [cursor=pointer]:
+        - /url: https://github.com/admin-test
+    - generic [ref=e76]:
+      - heading "Сохранённые вопросы" [level=3] [ref=e77]:
+        - img [ref=e78]
+        - text: Сохранённые вопросы
+      - link "Общие вопросы junior Какой опыт работы? 6 апреля 2026 г." [ref=e81] [cursor=pointer]:
+        - /url: /question/2
+        - generic [ref=e82]:
+          - generic [ref=e83]: Общие вопросы
+          - generic [ref=e84]: junior
+        - generic [ref=e85]: Какой опыт работы?
+        - generic [ref=e86]: 6 апреля 2026 г.
+  - contentinfo [ref=e87]:
+    - generic [ref=e88]:
+      - generic [ref=e89]: InterviewHub © 2026
+      - generic [ref=e90]:
+        - link "Предложить видео" [ref=e91] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e92] [cursor=pointer]:
+          - /url: https://github.com

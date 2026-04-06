@@ -1,0 +1,7 @@
+[GET] http://localhost:3000/api/questions => [200] OK
+[GET] http://localhost:3000/api/questions?status=approved&limit=1000 => [200] OK
+[GET] http://localhost:3000/api/questions/2 => [200] OK
+[GET] http://localhost:3000/api/bookmarks/user_1775493702336_bp7hk1fet => [200] OK
+[GET] http://localhost:3000/api/questions/similar?query=%D0%9A%D0%B0%D0%BA%D0%BE%D0%B9+%D0%BE%D0%BF%D1%8B%D1%82+%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%8B%3F&limit=5 => [200] OK
+[GET] http://localhost:3000/api/user-answers/2?user_session=user_1775493702336_bp7hk1fet => [200] OK
+[GET] http://localhost:3000/api/notes/user_1775493702336_bp7hk1fet => [200] OK

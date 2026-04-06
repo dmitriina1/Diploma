@@ -1,0 +1,10 @@
+[POST] http://localhost:3000/api/auth/login => [200] OK
+[GET] http://localhost:3000/api/questions => [200] OK
+[GET] http://localhost:3000/api/questions => [200] OK
+[GET] http://localhost:3000/api/trainer/sm2-cards/admin => [200] OK
+[GET] http://localhost:3000/api/admin/videos => [200] OK
+[GET] http://localhost:3000/api/trainer/sm2-cards/admin => [200] OK
+[POST] http://localhost:3000/api/trainer/sm2-review => [200] OK
+[GET] http://localhost:3000/api/hh-skills/professions => [200] OK
+[GET] http://localhost:3000/api/hh-skills?page=1&per_page=30&profession=Backend+%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D1%87%D0%B8%D0%BA&sources=skills => [200] OK
+[GET] http://localhost:3000/api/interview-chat/history?user_session=admin&limit=10 => [200] OK

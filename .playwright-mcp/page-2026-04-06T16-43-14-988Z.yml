@@ -1,0 +1,69 @@
+- generic [ref=e157]:
+  - navigation [ref=e158]:
+    - generic [ref=e159]:
+      - link "InterviewHub V2" [ref=e160] [cursor=pointer]:
+        - /url: /
+        - img [ref=e161]
+        - generic [ref=e163]: InterviewHub V2
+      - generic [ref=e164]:
+        - link "Вопросы" [ref=e165] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e166] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e167] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e168] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e169] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e170] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e171] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e172]:
+        - button "Тёмная тема" [ref=e173] [cursor=pointer]:
+          - img [ref=e175]
+        - link "A Admin User" [ref=e178] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e179]: A
+          - generic [ref=e180]: Admin User
+        - button "Выйти" [ref=e181] [cursor=pointer]
+  - generic [ref=e220]:
+    - button "← Назад" [ref=e221] [cursor=pointer]
+    - heading "Настройка карточек" [level=2] [ref=e222]
+    - generic [ref=e223]:
+      - generic [ref=e224]:
+        - generic [ref=e225]: Технология
+        - combobox [ref=e226]:
+          - option "Все" [selected]
+          - option "1C"
+          - option "Algorithms"
+          - option "Backend"
+          - option "General"
+          - option "IT"
+          - option "System Design"
+          - option "Общие вопросы"
+      - generic [ref=e227]:
+        - generic [ref=e228]: Сложность
+        - combobox [ref=e229]:
+          - option "Любая" [selected]
+          - option "Junior"
+          - option "Middle"
+          - option "Senior"
+      - generic [ref=e230]:
+        - generic [ref=e231]:
+          - text: "Количество:"
+          - strong [ref=e232]: "20"
+        - slider [ref=e233]: "20"
+      - generic [ref=e234] [cursor=pointer]:
+        - checkbox "Сначала «на повтор»" [checked] [ref=e235]
+        - generic [ref=e236]: Сначала «на повтор»
+      - button "Начать" [ref=e237] [cursor=pointer]
+  - contentinfo [ref=e214]:
+    - generic [ref=e215]:
+      - generic [ref=e216]: InterviewHub © 2026
+      - generic [ref=e217]:
+        - link "Предложить видео" [ref=e218] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e219] [cursor=pointer]:
+          - /url: https://github.com

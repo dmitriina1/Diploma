@@ -1,0 +1,26 @@
+- generic [ref=e4]:
+  - link "На главную" [ref=e5] [cursor=pointer]:
+    - /url: /
+    - img [ref=e6]
+    - text: На главную
+  - generic [ref=e8]:
+    - img [ref=e9]
+    - heading "Interview Prep" [level=1] [ref=e12]
+  - paragraph [ref=e13]: Войдите в аккаунт
+  - generic [ref=e14]:
+    - button "Вход" [ref=e15] [cursor=pointer]
+    - button "Регистрация" [ref=e16] [cursor=pointer]
+  - generic [ref=e17]:
+    - generic [ref=e18]:
+      - generic [ref=e19]: Логин
+      - textbox "Логин" [ref=e20]:
+        - /placeholder: Введите логин
+    - generic [ref=e21]:
+      - generic [ref=e22]: Пароль
+      - textbox "Пароль" [ref=e23]:
+        - /placeholder: Введите пароль
+    - button "Войти" [ref=e24] [cursor=pointer]
+  - paragraph [ref=e25]:
+    - text: Нет аккаунта?
+    - link "Зарегистрируйтесь" [ref=e26] [cursor=pointer]:
+      - /url: "#"

@@ -1,0 +1,297 @@
+- generic [ref=e269]:
+  - navigation [ref=e270]:
+    - generic [ref=e271]:
+      - link "InterviewHub V2" [ref=e272] [cursor=pointer]:
+        - /url: /
+        - img [ref=e273]
+        - generic [ref=e275]: InterviewHub V2
+      - generic [ref=e276]:
+        - link "Вопросы" [ref=e277] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e278] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e279] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e280] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e281] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e282] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e283] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e284]:
+        - button "Тёмная тема" [ref=e285] [cursor=pointer]:
+          - img [ref=e287]
+        - link "A Admin User" [ref=e290] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e291]: A
+          - generic [ref=e292]: Admin User
+        - button "Выйти" [ref=e293] [cursor=pointer]
+  - generic [ref=e294]:
+    - heading "Навыки из вакансий" [level=1] [ref=e295]:
+      - img [ref=e297]
+      - text: Навыки из вакансий
+    - paragraph [ref=e301]: Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)
+    - generic [ref=e302]:
+      - button "Обновить из HH сейчас" [ref=e303] [cursor=pointer]
+      - generic [ref=e304]: "Автообновление: примерно раз в 24 часа"
+    - generic [ref=e305]:
+      - generic [ref=e306]: "Источник данных:"
+      - generic [ref=e307] [cursor=pointer]:
+        - checkbox "Навыки" [checked] [ref=e308]
+        - generic [ref=e309]: Навыки
+      - generic [ref=e310] [cursor=pointer]:
+        - checkbox "Описание" [ref=e311]
+        - generic [ref=e312]: Описание
+      - generic [ref=e313] [cursor=pointer]:
+        - checkbox "Заголовок" [ref=e314]
+        - generic [ref=e315]: Заголовок
+    - generic [ref=e316]:
+      - button "Backend разработчик" [ref=e317] [cursor=pointer]
+      - button "C# разработчик" [ref=e318] [cursor=pointer]
+      - button "Data Scientist" [ref=e319] [cursor=pointer]
+      - button "DevOps инженер" [ref=e320] [cursor=pointer]
+      - button "Frontend разработчик" [ref=e321] [cursor=pointer]
+      - button "Golang разработчик" [ref=e322] [cursor=pointer]
+      - button "Java разработчик" [ref=e323] [cursor=pointer]
+      - button "PHP разработчик" [ref=e324] [cursor=pointer]
+      - button "Python разработчик" [ref=e325] [cursor=pointer]
+      - button "QA тестировщик" [ref=e326] [cursor=pointer]
+      - button "Аналитик данных" [ref=e327] [cursor=pointer]
+      - button "Бизнес-аналитик" [ref=e328] [cursor=pointer]
+      - button "Продуктовый аналитик" [ref=e329] [cursor=pointer]
+      - button "Системный аналитик" [ref=e330] [cursor=pointer]
+    - generic [ref=e331]:
+      - heading "Backend разработчик" [level=2] [ref=e332]
+      - generic [ref=e333]: ~7200 вакансий
+      - generic [ref=e334]: 88 навыков
+    - generic [ref=e335]:
+      - generic [ref=e336]:
+        - generic [ref=e337]:
+          - generic [ref=e338]: "#1"
+          - generic [ref=e339]: Elasticsearch
+        - generic [ref=e342]: 10%
+        - generic [ref=e343]: 720 вак.
+      - generic [ref=e344]:
+        - generic [ref=e345]:
+          - generic [ref=e346]: "#2"
+          - generic [ref=e347]: PostgreSQL
+        - generic [ref=e350]: 7%
+        - generic [ref=e351]: 10 вак.
+      - generic [ref=e352]:
+        - generic [ref=e353]:
+          - generic [ref=e354]: "#3"
+          - generic [ref=e355]: Docker
+        - generic [ref=e358]: 5%
+        - generic [ref=e359]: 7 вак.
+      - generic [ref=e360]:
+        - generic [ref=e361]:
+          - generic [ref=e362]: "#4"
+          - generic [ref=e363]: Git
+        - generic [ref=e366]: 4%
+        - generic [ref=e367]: 6 вак.
+      - generic [ref=e368]:
+        - generic [ref=e369]:
+          - generic [ref=e370]: "#5"
+          - generic [ref=e371]: Go
+        - generic [ref=e374]: 4%
+        - generic [ref=e375]: 6 вак.
+      - generic [ref=e376]:
+        - generic [ref=e377]:
+          - generic [ref=e378]: "#6"
+          - generic [ref=e379]: Kafka
+        - generic [ref=e382]: 4%
+        - generic [ref=e383]: 6 вак.
+      - generic [ref=e384]:
+        - generic [ref=e385]:
+          - generic [ref=e386]: "#7"
+          - generic [ref=e387]: PHP
+        - generic [ref=e390]: 3%
+        - generic [ref=e391]: 5 вак.
+      - generic [ref=e392]:
+        - generic [ref=e393]:
+          - generic [ref=e394]: "#8"
+          - generic [ref=e395]: ООП
+        - generic [ref=e398]: 3%
+        - generic [ref=e399]: 5 вак.
+      - generic [ref=e400]:
+        - generic [ref=e401]:
+          - generic [ref=e402]: "#9"
+          - generic [ref=e403]: Clickhouse
+        - generic [ref=e406]: 3%
+        - generic [ref=e407]: 5 вак.
+      - generic [ref=e408]:
+        - generic [ref=e409]:
+          - generic [ref=e410]: "#10"
+          - generic [ref=e411]: REST API
+        - generic [ref=e414]: 3%
+        - generic [ref=e415]: 5 вак.
+      - generic [ref=e416]:
+        - generic [ref=e417]:
+          - generic [ref=e418]: "#11"
+          - generic [ref=e419]: RabbitMQ
+        - generic [ref=e422]: 3%
+        - generic [ref=e423]: 4 вак.
+      - generic [ref=e424]:
+        - generic [ref=e425]:
+          - generic [ref=e426]: "#12"
+          - generic [ref=e427]: MySQL
+        - generic [ref=e430]: 3%
+        - generic [ref=e431]: 4 вак.
+      - generic [ref=e432]:
+        - generic [ref=e433]:
+          - generic [ref=e434]: "#13"
+          - generic [ref=e435]: ORM
+        - generic [ref=e438]: 3%
+        - generic [ref=e439]: 4 вак.
+      - generic [ref=e440]:
+        - generic [ref=e441]:
+          - generic [ref=e442]: "#14"
+          - generic [ref=e443]: Python
+        - generic [ref=e446]: 3%
+        - generic [ref=e447]: 4 вак.
+      - generic [ref=e448]:
+        - generic [ref=e449]:
+          - generic [ref=e450]: "#15"
+          - generic [ref=e451]: GitLab CI
+        - generic [ref=e454]: 3%
+        - generic [ref=e455]: 4 вак.
+      - generic [ref=e456]:
+        - generic [ref=e457]:
+          - generic [ref=e458]: "#16"
+          - generic [ref=e459]: Redis
+        - generic [ref=e462]: 3%
+        - generic [ref=e463]: 4 вак.
+      - generic [ref=e464]:
+        - generic [ref=e465]:
+          - generic [ref=e466]: "#17"
+          - generic [ref=e467]: API
+        - generic [ref=e470]: 3%
+        - generic [ref=e471]: 4 вак.
+      - generic [ref=e472]:
+        - generic [ref=e473]:
+          - generic [ref=e474]: "#18"
+          - generic [ref=e475]: Laravel
+        - generic [ref=e478]: 2%
+        - generic [ref=e479]: 3 вак.
+      - generic [ref=e480]:
+        - generic [ref=e481]:
+          - generic [ref=e482]: "#19"
+          - generic [ref=e483]: CI/CD
+        - generic [ref=e486]: 2%
+        - generic [ref=e487]: 3 вак.
+      - generic [ref=e488]:
+        - generic [ref=e489]:
+          - generic [ref=e490]: "#20"
+          - generic [ref=e491]: C#
+        - generic [ref=e494]: 2%
+        - generic [ref=e495]: 3 вак.
+      - generic [ref=e496]:
+        - generic [ref=e497]:
+          - generic [ref=e498]: "#21"
+          - generic [ref=e499]: Symfony
+        - generic [ref=e502]: 2%
+        - generic [ref=e503]: 3 вак.
+      - generic [ref=e504]:
+        - generic [ref=e505]:
+          - generic [ref=e506]: "#22"
+          - generic [ref=e507]: JavaScript
+        - generic [ref=e510]: 2%
+        - generic [ref=e511]: 3 вак.
+      - generic [ref=e512]:
+        - generic [ref=e513]:
+          - generic [ref=e514]: "#23"
+          - generic [ref=e515]: Spring Framework
+        - generic [ref=e518]: 2%
+        - generic [ref=e519]: 3 вак.
+      - generic [ref=e520]:
+        - generic [ref=e521]:
+          - generic [ref=e522]: "#24"
+          - generic [ref=e523]: MongoDB
+        - generic [ref=e526]: 2%
+        - generic [ref=e527]: 3 вак.
+      - generic [ref=e528]:
+        - generic [ref=e529]:
+          - generic [ref=e530]: "#25"
+          - generic [ref=e531]: .NET Core
+        - generic [ref=e534]: 2%
+        - generic [ref=e535]: 3 вак.
+      - generic [ref=e536]:
+        - generic [ref=e537]:
+          - generic [ref=e538]: "#26"
+          - generic [ref=e539]: HTTP
+        - generic [ref=e542]: 2%
+        - generic [ref=e543]: 3 вак.
+      - generic [ref=e544]:
+        - generic [ref=e545]:
+          - generic [ref=e546]: "#27"
+          - generic [ref=e547]: Java
+        - generic [ref=e550]: 2%
+        - generic [ref=e551]: 3 вак.
+      - generic [ref=e552]:
+        - generic [ref=e553]:
+          - generic [ref=e554]: "#28"
+          - generic [ref=e555]: GraphQL
+        - generic [ref=e558]: 2%
+        - generic [ref=e559]: 3 вак.
+      - generic [ref=e560]:
+        - generic [ref=e561]:
+          - generic [ref=e562]: "#29"
+          - generic [ref=e563]: Backend
+        - generic [ref=e566]: 2%
+        - generic [ref=e567]: 3 вак.
+      - generic [ref=e568]:
+        - generic [ref=e569]:
+          - generic [ref=e570]: "#30"
+          - generic [ref=e571]: Apache Kafka
+        - generic [ref=e574]: 1%
+        - generic [ref=e575]: 2 вак.
+    - generic [ref=e576]:
+      - button "←" [disabled]
+      - generic [ref=e577]: 1 / 3
+      - button "→" [ref=e578] [cursor=pointer]
+    - generic [ref=e579]:
+      - heading "Must-have (>50%)" [level=4] [ref=e581]
+      - heading "Nice-to-have (20–50%)" [level=4] [ref=e583]
+      - generic [ref=e584]:
+        - heading "Дополнительно (<20%)" [level=4] [ref=e585]
+        - generic [ref=e586]:
+          - generic [ref=e587]: Elasticsearch (10%)
+          - generic [ref=e588]: PostgreSQL (7%)
+          - generic [ref=e589]: Docker (5%)
+          - generic [ref=e590]: Git (4%)
+          - generic [ref=e591]: Go (4%)
+          - generic [ref=e592]: Kafka (4%)
+          - generic [ref=e593]: PHP (3%)
+          - generic [ref=e594]: ООП (3%)
+          - generic [ref=e595]: Clickhouse (3%)
+          - generic [ref=e596]: REST API (3%)
+          - generic [ref=e597]: RabbitMQ (3%)
+          - generic [ref=e598]: MySQL (3%)
+          - generic [ref=e599]: ORM (3%)
+          - generic [ref=e600]: Python (3%)
+          - generic [ref=e601]: GitLab CI (3%)
+          - generic [ref=e602]: Redis (3%)
+          - generic [ref=e603]: API (3%)
+          - generic [ref=e604]: Laravel (2%)
+          - generic [ref=e605]: CI/CD (2%)
+          - generic [ref=e606]: C# (2%)
+          - generic [ref=e607]: Symfony (2%)
+          - generic [ref=e608]: JavaScript (2%)
+          - generic [ref=e609]: Spring Framework (2%)
+          - generic [ref=e610]: MongoDB (2%)
+          - generic [ref=e611]: .NET Core (2%)
+          - generic [ref=e612]: HTTP (2%)
+          - generic [ref=e613]: Java (2%)
+          - generic [ref=e614]: GraphQL (2%)
+          - generic [ref=e615]: Backend (2%)
+          - generic [ref=e616]: Apache Kafka (1%)
+  - contentinfo [ref=e617]:
+    - generic [ref=e618]:
+      - generic [ref=e619]: InterviewHub © 2026
+      - generic [ref=e620]:
+        - link "Предложить видео" [ref=e621] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e622] [cursor=pointer]:
+          - /url: https://github.com

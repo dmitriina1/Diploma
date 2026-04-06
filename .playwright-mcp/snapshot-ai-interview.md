@@ -1,0 +1,81 @@
+- generic [ref=e623]:
+  - navigation [ref=e624]:
+    - generic [ref=e625]:
+      - link "InterviewHub V2" [ref=e626] [cursor=pointer]:
+        - /url: /
+        - img [ref=e627]
+        - generic [ref=e629]: InterviewHub V2
+      - generic [ref=e630]:
+        - link "Вопросы" [ref=e631] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e632] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e633] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e634] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e635] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e636] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e637] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e638]:
+        - button "Тёмная тема" [ref=e639] [cursor=pointer]:
+          - img [ref=e641]
+        - link "A Admin User" [ref=e644] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e645]: A
+          - generic [ref=e646]: Admin User
+        - button "Выйти" [ref=e647] [cursor=pointer]
+  - generic [ref=e649]:
+    - heading "AI Interview Chat" [level=1] [ref=e650]
+    - paragraph [ref=e651]: Симуляция технического собеседования с AI-интервьюером
+    - generic [ref=e652]:
+      - generic [ref=e653]:
+        - generic [ref=e654]: Технология
+        - combobox [ref=e655]:
+          - option "Python" [selected]
+          - option "JavaScript"
+          - option "Java"
+          - option "Go"
+          - option "React"
+          - option "Vue"
+          - option "Node.js"
+          - option "Django"
+          - option "Spring"
+          - option "PostgreSQL"
+          - option "Docker"
+          - option "Kubernetes"
+          - option "AWS"
+          - option "System Design"
+      - generic [ref=e656]:
+        - generic [ref=e657]: Сложность
+        - combobox [ref=e658]:
+          - option "Junior"
+          - option "Middle" [selected]
+          - option "Senior"
+      - button "Начать интервью" [ref=e659] [cursor=pointer]
+    - generic [ref=e660]:
+      - heading "История интервью" [level=3] [ref=e661]
+      - generic [ref=e662]:
+        - generic [ref=e663] [cursor=pointer]:
+          - generic [ref=e664]:
+            - generic [ref=e665]: Python
+            - generic [ref=e666]: middle
+            - generic [ref=e667]: active
+          - generic [ref=e668]: 30 мар. 2026 г., 18:24
+        - generic [ref=e669] [cursor=pointer]:
+          - generic [ref=e670]:
+            - generic [ref=e671]: Python
+            - generic [ref=e672]: middle
+            - generic [ref=e673]: completed
+          - generic [ref=e674]: 28 мар. 2026 г., 21:41
+  - contentinfo [ref=e675]:
+    - generic [ref=e676]:
+      - generic [ref=e677]: InterviewHub © 2026
+      - generic [ref=e678]:
+        - link "Предложить видео" [ref=e679] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e680] [cursor=pointer]:
+          - /url: https://github.com

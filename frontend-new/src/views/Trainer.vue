@@ -366,6 +366,7 @@ const startInterviewSession = async (v) => {
   min-height: 360px;
   position: relative;
   transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
   transition: transform .5s var(--ease);
 }
 .fc-card.flipped { transform: rotateY(180deg); }
@@ -374,6 +375,8 @@ const startInterviewSession = async (v) => {
   inset: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
@@ -385,10 +388,11 @@ const startInterviewSession = async (v) => {
   box-shadow: var(--shadow-md);
 }
 .fc-front {
-  /* Передняя сторона - вопрос */
+  z-index: 2;
 }
 .fc-back {
   transform: rotateY(180deg);
+  z-index: 1;
   overflow-y: auto;
   justify-content: flex-start;
   align-items: flex-start;
@@ -397,10 +401,6 @@ const startInterviewSession = async (v) => {
   display: flex; 
   gap: .4rem; 
   margin-bottom: 1.25rem;
-  /* Скрываем теги на обратной стороне */
-}
-.fc-back .fc-tags {
-  display: none;
 }
 .fc-question { font-size: 1.5rem; font-weight: 600; text-align: center; line-height: 1.5; color: var(--c-text); }
 .fc-hint { margin-top: 1.5rem; font-size: .78rem; color: var(--c-text-4); display: flex; align-items: center; gap: .35rem; }

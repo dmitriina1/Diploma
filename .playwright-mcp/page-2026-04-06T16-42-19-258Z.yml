@@ -1,0 +1,146 @@
+- generic [ref=e27]:
+  - navigation [ref=e28]:
+    - generic [ref=e29]:
+      - link "InterviewHub V2" [ref=e30] [cursor=pointer]:
+        - /url: /
+        - img [ref=e31]
+        - generic [ref=e33]: InterviewHub V2
+      - generic [ref=e34]:
+        - link "Вопросы" [ref=e35] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e36] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e37] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e38] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e39] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e40] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e41] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e42]:
+        - button "Тёмная тема" [ref=e43] [cursor=pointer]:
+          - img [ref=e45]
+        - link "A Admin User" [ref=e48] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e49]: A
+          - generic [ref=e50]: Admin User
+        - button "Выйти" [ref=e51] [cursor=pointer]
+  - generic [ref=e53]:
+    - generic [ref=e54]: AI-powered подготовка
+    - heading "Готовься к IT-собеседованиям умнее и быстрее" [level=1] [ref=e55]:
+      - text: Готовься к IT-собеседованиям
+      - text: умнее и быстрее
+    - paragraph [ref=e56]:
+      - text: Автоматическое извлечение вопросов из видео, интеллектуальный тренажёр с SM-2,
+      - text: аналитика рынка труда и тестовые задания от топовых компаний.
+    - generic [ref=e57]:
+      - link "Начать подготовку" [ref=e58] [cursor=pointer]:
+        - /url: /interview-questions
+        - img [ref=e59]
+        - text: Начать подготовку
+      - link "Тренажёр SM-2" [ref=e61] [cursor=pointer]:
+        - /url: /trainer
+    - generic [ref=e62]:
+      - generic [ref=e63]:
+        - generic [ref=e64]: "67"
+        - text: Вопросов
+      - generic [ref=e65]:
+        - generic [ref=e66]: "7"
+        - text: Технологий
+      - generic [ref=e67]:
+        - generic [ref=e68]: "1"
+        - text: Видео
+  - generic [ref=e69]:
+    - heading "Как это работает" [level=2] [ref=e70]
+    - generic [ref=e71]:
+      - generic [ref=e72]:
+        - generic [ref=e73]: "1"
+        - generic [ref=e74]: 🎬
+        - heading "Загрузка видео" [level=3] [ref=e75]
+        - paragraph [ref=e76]: Система автоматически обрабатывает видео с YouTube, VK, Rutube и других платформ
+      - generic [ref=e77]:
+        - generic [ref=e78]: "2"
+        - generic [ref=e79]: 🤖
+        - heading "AI-анализ" [level=3] [ref=e80]
+        - paragraph [ref=e81]: Whisper транскрибирует речь, LLM извлекает вопросы, FAISS удаляет дубликаты
+      - generic [ref=e82]:
+        - generic [ref=e83]: "3"
+        - generic [ref=e84]: 📚
+        - heading "База знаний" [level=3] [ref=e85]
+        - paragraph [ref=e86]: Вопросы структурируются по темам, сложности и вероятности встречи
+      - generic [ref=e87]:
+        - generic [ref=e88]: "4"
+        - generic [ref=e89]: 🎯
+        - heading "Подготовка" [level=3] [ref=e90]
+        - paragraph [ref=e91]: Используй тренажёр SM-2, mock-интервью и аналитику для эффективной подготовки
+  - generic [ref=e92]:
+    - heading "Все инструменты в одном месте" [level=2] [ref=e93]
+    - generic [ref=e94]:
+      - link "📝 Вопросы с собеседований База вопросов с фильтрацией по технологии, сложности и вероятности" [ref=e95] [cursor=pointer]:
+        - /url: /interview-questions
+        - generic [ref=e96]: 📝
+        - generic [ref=e97]:
+          - heading "Вопросы с собеседований" [level=3] [ref=e98]
+          - paragraph [ref=e99]: База вопросов с фильтрацией по технологии, сложности и вероятности
+        - img [ref=e100]
+      - link "⚡ Тренажёр SM-2 Интервальное повторение для эффективного запоминания" [ref=e102] [cursor=pointer]:
+        - /url: /trainer
+        - generic [ref=e103]: ⚡
+        - generic [ref=e104]:
+          - heading "Тренажёр SM-2" [level=3] [ref=e105]
+          - paragraph [ref=e106]: Интервальное повторение для эффективного запоминания
+        - img [ref=e107]
+      - link "🤖 AI Interview Чат с AI-интервьюером для реалистичной симуляции собеседования" [ref=e109] [cursor=pointer]:
+        - /url: /ai-interview
+        - generic [ref=e110]: 🤖
+        - generic [ref=e111]:
+          - heading "AI Interview" [level=3] [ref=e112]
+          - paragraph [ref=e113]: Чат с AI-интервьюером для реалистичной симуляции собеседования
+        - img [ref=e114]
+      - link "🎬 Записи собеседований Видео с извлечёнными вопросами и таймкодами" [ref=e116] [cursor=pointer]:
+        - /url: /recordings
+        - generic [ref=e117]: 🎬
+        - generic [ref=e118]:
+          - heading "Записи собеседований" [level=3] [ref=e119]
+          - paragraph [ref=e120]: Видео с извлечёнными вопросами и таймкодами
+        - img [ref=e121]
+      - link "📋 Тестовые задания Задания от Яндекс, СБЕР, VK, Т-Банк и других компаний" [ref=e123] [cursor=pointer]:
+        - /url: /test-assignments
+        - generic [ref=e124]: 📋
+        - generic [ref=e125]:
+          - heading "Тестовые задания" [level=3] [ref=e126]
+          - paragraph [ref=e127]: Задания от Яндекс, СБЕР, VK, Т-Банк и других компаний
+        - img [ref=e128]
+      - link "📊 Навыки из вакансий Аналитика требований работодателей на основе HH.ru" [ref=e130] [cursor=pointer]:
+        - /url: /hh-requirements
+        - generic [ref=e131]: 📊
+        - generic [ref=e132]:
+          - heading "Навыки из вакансий" [level=3] [ref=e133]
+          - paragraph [ref=e134]: Аналитика требований работодателей на основе HH.ru
+        - img [ref=e135]
+      - link "💡 Предложить видео Знаешь полезное видео? Отправь ссылку для обработки" [ref=e137] [cursor=pointer]:
+        - /url: /suggest
+        - generic [ref=e138]: 💡
+        - generic [ref=e139]:
+          - heading "Предложить видео" [level=3] [ref=e140]
+          - paragraph [ref=e141]: Знаешь полезное видео? Отправь ссылку для обработки
+        - img [ref=e142]
+  - generic [ref=e145]:
+    - heading "Готов начать подготовку?" [level=2] [ref=e146]
+    - paragraph [ref=e147]: Присоединяйся к тысячам разработчиков, которые готовятся к собеседованиям с InterviewHub
+    - generic [ref=e148]:
+      - link "Перейти к вопросам" [ref=e149] [cursor=pointer]:
+        - /url: /interview-questions
+      - link "Обработать видео" [ref=e150] [cursor=pointer]:
+        - /url: /recordings
+  - contentinfo [ref=e151]:
+    - generic [ref=e152]:
+      - generic [ref=e153]: InterviewHub © 2026
+      - generic [ref=e154]:
+        - link "Предложить видео" [ref=e155] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e156] [cursor=pointer]:
+          - /url: https://github.com

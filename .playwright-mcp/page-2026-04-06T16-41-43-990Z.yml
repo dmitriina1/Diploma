@@ -1,0 +1,96 @@
+- generic [ref=e353]:
+  - navigation [ref=e354]:
+    - generic [ref=e355]:
+      - link "InterviewHub V2" [ref=e356] [cursor=pointer]:
+        - /url: /
+        - img [ref=e357]
+        - generic [ref=e359]: InterviewHub V2
+      - generic [ref=e360]:
+        - link "Вопросы" [ref=e361] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e362] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e363] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e364] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e365] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e366] [cursor=pointer]:
+          - /url: /recordings
+      - generic [ref=e367]:
+        - button "Тёмная тема" [ref=e368] [cursor=pointer]:
+          - img [ref=e370]
+        - link "Войти" [ref=e373] [cursor=pointer]:
+          - /url: /login
+  - generic [ref=e374]:
+    - generic [ref=e375]:
+      - link [ref=e376] [cursor=pointer]:
+        - /url: /interview-questions
+        - img [ref=e377]
+      - button "Сохранить" [ref=e380] [cursor=pointer]:
+        - img [ref=e381]
+        - text: Сохранить
+    - generic [ref=e383]:
+      - heading "Какой опыт работы?" [level=1] [ref=e384]
+      - generic [ref=e385]:
+        - generic [ref=e386]: Общие вопросы
+        - generic [ref=e387]: junior
+        - generic [ref=e388]: 40% вероятность
+    - generic [ref=e389]:
+      - heading "Ответ" [level=2] [ref=e390]:
+        - img [ref=e391]
+        - text: Ответ
+      - generic [ref=e394]:
+        - text: У меня опыт работы junior-разработчиком на протяжении года. Я работал над несколькими проектами, включая веб-приложение на Python и Django, а также мобильное приложение на Java и Android Studio.
+        - text: В рамках первого проекта я занимался разработкой backend-части веб-приложения, включая создание моделей данных, написание API и интеграцию с frontend-частью. Мы использовали Agile-методологию и проводили регулярные код-ревью, что позволило мне улучшить навыки написания чистого и эффективного кода.
+        - text: Во втором проекте я работал над разработкой мобильного приложения, включая создание пользовательского интерфейса, написание бизнес-логики и интеграцию с backend-частью. Мы использовали Git для контроля версий и проводили регулярные тестирования, что позволило мне улучшить навыки работы с кодом и отладки ошибок.
+        - text: Оба проекта были успешно запущены и получили положительные отзывы от пользователей. Этот опыт taught мне важность командной работы, написания чистого и эффективного кода, а также регулярного тестирования и отладки.
+    - generic [ref=e395]:
+      - heading "Моя заметка" [level=2] [ref=e396]
+      - textbox "Ваши короткие заметки по вопросу" [ref=e397]
+      - button "Сохранить заметку" [ref=e399] [cursor=pointer]
+    - generic [ref=e400]:
+      - heading "Ответы сообщества 1" [level=2] [ref=e401]:
+        - img [ref=e402]
+        - text: Ответы сообщества
+        - generic [ref=e407]: "1"
+      - generic [ref=e408]:
+        - textbox "Напишите свой ответ..." [ref=e409]
+        - button "Отправить" [disabled]
+      - generic [ref=e411]:
+        - generic [ref=e412]:
+          - generic [ref=e413]: Аноним
+          - generic [ref=e414]: 1 мар. 2026 г.
+        - generic [ref=e415]: adsdsdasdasdadsdada
+        - generic [ref=e417]:
+          - button "▲ 0" [ref=e418] [cursor=pointer]
+          - button "▼ 0" [ref=e419] [cursor=pointer]
+    - generic [ref=e420]:
+      - heading "Обратная связь" [level=2] [ref=e421]
+      - generic [ref=e422]:
+        - generic [ref=e423]:
+          - combobox [ref=e424]:
+            - option "Предложение" [selected]
+            - option "Ошибка в вопросе"
+            - option "Качество ответа"
+            - option "Понравилось"
+            - option "Не понравилось"
+          - combobox [ref=e425]:
+            - option "Без рейтинга" [selected]
+            - option "5"
+            - option "4"
+            - option "3"
+            - option "2"
+            - option "1"
+        - textbox "Что улучшить?" [ref=e426]
+        - generic [ref=e427]:
+          - button "Отправить" [disabled]
+  - contentinfo [ref=e428]:
+    - generic [ref=e429]:
+      - generic [ref=e430]: InterviewHub © 2026
+      - generic [ref=e431]:
+        - link "Предложить видео" [ref=e432] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e433] [cursor=pointer]:
+          - /url: https://github.com

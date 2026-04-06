@@ -1,0 +1,185 @@
+- generic [ref=e129]:
+  - navigation [ref=e130]:
+    - generic [ref=e131]:
+      - link "InterviewHub V2" [ref=e132] [cursor=pointer]:
+        - /url: /
+        - img [ref=e133]
+        - generic [ref=e135]: InterviewHub V2
+      - generic [ref=e136]:
+        - link "Вопросы" [ref=e137] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e138] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e139] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e140] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e141] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e142] [cursor=pointer]:
+          - /url: /recordings
+      - generic [ref=e143]:
+        - button "Тёмная тема" [ref=e144] [cursor=pointer]:
+          - img [ref=e146]
+        - link "Войти" [ref=e149] [cursor=pointer]:
+          - /url: /login
+  - generic [ref=e150]:
+    - generic [ref=e152]:
+      - heading "Вопросы с собеседований" [level=1] [ref=e153]
+      - paragraph [ref=e154]: Реальные вопросы с IT-собеседований
+    - generic [ref=e155]:
+      - generic [ref=e156]:
+        - img
+        - textbox "Поиск вопроса..." [ref=e157]
+      - combobox [ref=e158]:
+        - option "Все технологии" [selected]
+        - option "1C"
+        - option "Algorithms"
+        - option "Backend"
+        - option "General"
+        - option "IT"
+        - option "System Design"
+        - option "Общие вопросы"
+      - combobox [ref=e159]:
+        - option "Любая сложность" [selected]
+        - option "Junior"
+        - option "Middle"
+        - option "Senior"
+      - combobox [ref=e160]:
+        - option "По вероятности" [selected]
+        - option "По дате"
+        - option "По алфавиту"
+    - generic [ref=e162]: 67 вопросов
+    - generic [ref=e163]:
+      - link "Какой опыт работы? Общие вопросы junior 40%" [ref=e164] [cursor=pointer]:
+        - /url: /question/2
+        - generic [ref=e165]:
+          - paragraph [ref=e166]: Какой опыт работы?
+          - generic [ref=e167]
+        - img [ref=e171]
+      - link "Как можно проверить тип интерфейса? Backend junior 20%" [ref=e173] [cursor=pointer]:
+        - /url: /question/68
+        - generic [ref=e174]:
+          - paragraph [ref=e175]: Как можно проверить тип интерфейса?
+          - generic [ref=e176]
+        - img [ref=e180]
+      - link "Могу интерфейс одного типа присвоить интерфейс другого типа? Backend junior 20%" [ref=e182] [cursor=pointer]:
+        - /url: /question/67
+        - generic [ref=e183]:
+          - paragraph [ref=e184]: Могу интерфейс одного типа присвоить интерфейс другого типа?
+          - generic [ref=e185]
+        - img [ref=e189]
+      - link "Интерфейс как устроено внутри? Backend junior 20%" [ref=e191] [cursor=pointer]:
+        - /url: /question/66
+        - generic [ref=e192]:
+          - paragraph [ref=e193]: Интерфейс как устроено внутри?
+          - generic [ref=e194]
+        - img [ref=e198]
+      - link "ООП в ГО как ООП в ГО релизована. Backend middle 20%" [ref=e200] [cursor=pointer]:
+        - /url: /question/65
+        - generic [ref=e201]:
+          - paragraph [ref=e202]: ООП в ГО как ООП в ГО релизована.
+          - generic [ref=e203]
+        - img [ref=e207]
+      - link "Обобщенное программирование в голову, как можно писать обобщенный код? Backend senior 20%" [ref=e209] [cursor=pointer]:
+        - /url: /question/64
+        - generic [ref=e210]:
+          - paragraph [ref=e211]: Обобщенное программирование в голову, как можно писать обобщенный код?
+          - generic [ref=e212]
+        - img [ref=e216]
+      - link "Допустим, мы хотим написать контекст вис тайм-аут, как мы его напишем? System Design middle 20%" [ref=e218] [cursor=pointer]:
+        - /url: /question/63
+        - generic [ref=e219]:
+          - paragraph [ref=e220]: Допустим, мы хотим написать контекст вис тайм-аут, как мы его напишем?
+          - generic [ref=e221]
+        - img [ref=e225]
+      - link "Бэкграунд от туду контекста, чем отличается контекст туду и контекст бэкграунд. System Design junior 20%" [ref=e227] [cursor=pointer]:
+        - /url: /question/62
+        - generic [ref=e228]:
+          - paragraph [ref=e229]: Бэкграунд от туду контекста, чем отличается контекст туду и контекст бэкграунд.
+          - generic [ref=e230]
+        - img [ref=e234]
+      - link "Чем отличаются вис тайм-аут и вис дедлайн кодекста? System Design junior 20%" [ref=e236] [cursor=pointer]:
+        - /url: /question/61
+        - generic [ref=e237]:
+          - paragraph [ref=e238]: Чем отличаются вис тайм-аут и вис дедлайн кодекста?
+          - generic [ref=e239]
+        - img [ref=e243]
+      - link "Контекст в Гоу, что, как устроено, какие, знаешь, виды. Backend middle 20%" [ref=e245] [cursor=pointer]:
+        - /url: /question/60
+        - generic [ref=e246]:
+          - paragraph [ref=e247]: Контекст в Гоу, что, как устроено, какие, знаешь, виды.
+          - generic [ref=e248]
+        - img [ref=e252]
+      - link "Мьютекса как бы лочить два мьютекса, о чем не следует помнить? System Design middle 20%" [ref=e254] [cursor=pointer]:
+        - /url: /question/59
+        - generic [ref=e255]:
+          - paragraph [ref=e256]: Мьютекса как бы лочить два мьютекса, о чем не следует помнить?
+          - generic [ref=e257]
+        - img [ref=e261]
+      - link "Механизмы зависания происходить? System Design junior 20%" [ref=e263] [cursor=pointer]:
+        - /url: /question/58
+        - generic [ref=e264]:
+          - paragraph [ref=e265]: Механизмы зависания происходить?
+          - generic [ref=e266]
+        - img [ref=e270]
+      - link "Канал устроен в Go. Backend middle 20%" [ref=e272] [cursor=pointer]:
+        - /url: /question/57
+        - generic [ref=e273]:
+          - paragraph [ref=e274]: Канал устроен в Go.
+          - generic [ref=e275]
+        - img [ref=e279]
+      - link "Представим, мы с тобой пишем какой-то сервак, если типичный, но есть, допустим, Apache, он синхронный, да, есть Nginx, он синхронный. System Design senior 20%" [ref=e281] [cursor=pointer]:
+        - /url: /question/56
+        - generic [ref=e282]:
+          - paragraph [ref=e283]: Представим, мы с тобой пишем какой-то сервак, если типичный, но есть, допустим, Apache, он синхронный, да, есть Nginx, он синхронный.
+          - generic [ref=e284]
+        - img [ref=e288]
+      - link "Представим, я ставлю GoMaxProc в один, то есть, у меня будет один поток и один процессор на очередь на исполнение гарутин, и я что делаю? Я функцию main беру, завожу гарутинку и там пишу бесконечный цикл. Что будет? System Design middle 20%" [ref=e290] [cursor=pointer]:
+        - /url: /question/55
+        - generic [ref=e291]:
+          - paragraph [ref=e292]: Представим, я ставлю GoMaxProc в один, то есть, у меня будет один поток и один процессор на очередь на исполнение гарутин, и я что делаю? Я функцию main беру, завожу гарутинку и там пишу бесконечный цикл. Что будет?
+          - generic [ref=e293]
+        - img [ref=e297]
+      - link "Что такое Garutin? System Design junior 20%" [ref=e299] [cursor=pointer]:
+        - /url: /question/54
+        - generic [ref=e300]:
+          - paragraph [ref=e301]: Что такое Garutin?
+          - generic [ref=e302]
+        - img [ref=e306]
+      - link "Представим, что мы разработчики, там, я не знаю, теньков инвестиций, и нам нужно написать мапку, у которой в качестве ключа будет цена какого-то актива. Backend middle 20%" [ref=e308] [cursor=pointer]:
+        - /url: /question/53
+        - generic [ref=e309]:
+          - paragraph [ref=e310]: Представим, что мы разработчики, там, я не знаю, теньков инвестиций, и нам нужно написать мапку, у которой в качестве ключа будет цена какого-то актива.
+          - generic [ref=e311]
+        - img [ref=e315]
+      - link "Вставка и чтение из неинициализированной мапы. Backend junior 20%" [ref=e317] [cursor=pointer]:
+        - /url: /question/52
+        - generic [ref=e318]:
+          - paragraph [ref=e319]: Вставка и чтение из неинициализированной мапы.
+          - generic [ref=e320]
+        - img [ref=e324]
+      - link "Когда коллизия происходит, как Go ее разрешает? Backend middle 20%" [ref=e326] [cursor=pointer]:
+        - /url: /question/51
+        - generic [ref=e327]:
+          - paragraph [ref=e328]: Когда коллизия происходит, как Go ее разрешает?
+          - generic [ref=e329]
+        - img [ref=e333]
+      - link "Хач таблицы как бы устроена. Backend middle 20%" [ref=e335] [cursor=pointer]:
+        - /url: /question/50
+        - generic [ref=e336]:
+          - paragraph [ref=e337]: Хач таблицы как бы устроена.
+          - generic [ref=e338]
+        - img [ref=e342]
+    - generic [ref=e344]:
+      - button "←" [disabled]
+      - generic [ref=e345]: 1 / 4
+      - button "→" [ref=e346] [cursor=pointer]
+  - contentinfo [ref=e347]:
+    - generic [ref=e348]:
+      - generic [ref=e349]: InterviewHub © 2026
+      - generic [ref=e350]:
+        - link "Предложить видео" [ref=e351] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e352] [cursor=pointer]:
+          - /url: https://github.com

@@ -1,0 +1,60 @@
+- generic [ref=e157]:
+  - navigation [ref=e158]:
+    - generic [ref=e159]:
+      - link "InterviewHub V2" [ref=e160] [cursor=pointer]:
+        - /url: /
+        - img [ref=e161]
+        - generic [ref=e163]: InterviewHub V2
+      - generic [ref=e164]:
+        - link "Вопросы" [ref=e165] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e166] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e167] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e168] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e169] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e170] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e171] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e172]:
+        - button "Тёмная тема" [ref=e173] [cursor=pointer]:
+          - img [ref=e175]
+        - link "A Admin User" [ref=e178] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e179]: A
+          - generic [ref=e180]: Admin User
+        - button "Выйти" [ref=e181] [cursor=pointer]
+  - generic [ref=e238]:
+    - generic [ref=e239]:
+      - button [ref=e240] [cursor=pointer]:
+        - img [ref=e241]
+      - generic [ref=e244]: 2 / 20
+      - generic [ref=e246]:
+        - generic [ref=e247]: ✓ 1
+        - generic [ref=e248]: ↻ 0
+    - generic [ref=e250] [cursor=pointer]:
+      - generic [ref=e251]:
+        - generic [ref=e252]:
+          - generic [ref=e253]: junior
+          - generic [ref=e254]: System Design
+        - heading "Чем отличаются вис тайм-аут и вис дедлайн кодекста?" [level=2] [ref=e268]
+        - generic [ref=e256]:
+          - text: Нажмите, чтобы перевернуть ·
+          - generic [ref=e257]: Space
+      - generic [ref=e259]:
+        - text: Вис тайм-аут и вис дедлайн кодекста представляют собой два различных подхода к управлению ожиданием в системах, особенно в контексте распределенных систем и сетей.fg
+        - text: Вис тайм-аут (wait timeout) — это максимальное время ожидания ответа от другого компонента системы или удаленного сервера. Если ответ не получен в течение этого времени, система может либо повторить запрос, либо завершить операцию с ошибкой. Например, в веб-приложении может быть установлен тайм-аут в 5 секунд для ожидания ответа от базы данных. Если ответ не получен в течение 5 секунд, приложение может выдать ошибку или повторить запрос.
+        - text: Вис дедлайн (wait deadline), с другой стороны, представляет собой максимальное время, в течение которого операция должна быть завершена. Это означает, что система будет ожидать ответа в течение этого времени, но также будет отслеживать общее время выполнения операции. Если общее время выполнения операции превышает установленный дедлайн, система может прервать операцию, даже если ответ еще не получен. Например, в реальном времени системе управления может быть установлен дедлайн в 10 миллисекунд для завершения операции. Если операция не завершена в течение этого времени, система может прервать ее и перейти к следующей операции.
+        - text: Ключевое различие между тайм-аутом и дедлайном заключается в том, что тайм-аут контролирует время ожидания ответа, тогда как дедлайн контролирует общее время выполнения операции. Правильный выбор между тайм-аутом и дедлайном зависит от конкретных требований системы и характера операций, которые выполняются.
+  - contentinfo [ref=e214]:
+    - generic [ref=e215]:
+      - generic [ref=e216]: InterviewHub © 2026
+      - generic [ref=e217]:
+        - link "Предложить видео" [ref=e218] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e219] [cursor=pointer]:
+          - /url: https://github.com

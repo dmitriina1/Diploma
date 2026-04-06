@@ -1,0 +1,87 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "InterviewHub V2" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: InterviewHub V2
+      - generic [ref=e10]:
+        - link "Вопросы" [ref=e11] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e12] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e13] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e14] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e15] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e16] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e17] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e18]:
+        - button "Тёмная тема" [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+        - link "A Admin User" [ref=e24] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e25]: A
+          - generic [ref=e26]: Admin User
+        - button "Выйти" [ref=e27] [cursor=pointer]
+  - generic [ref=e28]:
+    - heading "Предложить видео" [level=1] [ref=e29]:
+      - img [ref=e31]
+      - text: Предложить видео
+    - paragraph [ref=e33]: Знаете хорошее видео с IT-собеседованием? Предложите его для обработки!
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - button "Ссылка" [ref=e36] [cursor=pointer]
+        - button "Файл" [ref=e37] [cursor=pointer]
+      - generic [ref=e38]:
+        - generic [ref=e39]: Ссылка на видео *
+        - textbox "https://youtube.com/watch?v=... или rutube.ru/video/..." [ref=e40]
+      - generic [ref=e41]:
+        - generic [ref=e42]: Комментарий
+        - textbox "Почему стоит обработать это видео?" [ref=e43]
+      - generic [ref=e44]:
+        - generic [ref=e45]: Email (необязательно)
+        - textbox "ivan@example.com" [ref=e46]
+      - button "Отправить предложение" [disabled]
+    - generic [ref=e47]:
+      - heading "Предложенные видео" [level=2] [ref=e48]
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]: Обрабатывается
+            - generic [ref=e53]: YouTube
+          - link "https://youtube.com/watch?v=verify_test" [ref=e54] [cursor=pointer]:
+            - /url: https://youtube.com/watch?v=verify_test
+          - generic [ref=e55]:
+            - generic [ref=e56]: Vue
+            - generic [ref=e57]: 24.02.2026
+        - generic [ref=e58]:
+          - generic [ref=e59]:
+            - generic [ref=e60]: Обрабатывается
+            - generic [ref=e61]: YouTube
+          - link "https://www.youtube.com/watch?v=rtpEdoSCMCk" [ref=e62] [cursor=pointer]:
+            - /url: https://www.youtube.com/watch?v=rtpEdoSCMCk
+          - generic [ref=e63]:
+            - generic [ref=e64]: JavaScript
+            - generic [ref=e65]: 24.02.2026
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: На рассмотрении
+            - generic [ref=e69]: YouTube
+          - link "https://youtube.com/watch?v=test123" [ref=e70] [cursor=pointer]:
+            - /url: https://youtube.com/watch?v=test123
+          - generic [ref=e71]:
+            - generic [ref=e72]: Python
+            - generic [ref=e73]: 24.02.2026
+  - contentinfo [ref=e74]:
+    - generic [ref=e75]:
+      - generic [ref=e76]: InterviewHub © 2026
+      - generic [ref=e77]:
+        - link "Предложить видео" [ref=e78] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e79] [cursor=pointer]:
+          - /url: https://github.com

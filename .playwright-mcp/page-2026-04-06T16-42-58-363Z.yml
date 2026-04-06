@@ -1,0 +1,62 @@
+- generic [ref=e157]:
+  - navigation [ref=e158]:
+    - generic [ref=e159]:
+      - link "InterviewHub V2" [ref=e160] [cursor=pointer]:
+        - /url: /
+        - img [ref=e161]
+        - generic [ref=e163]: InterviewHub V2
+      - generic [ref=e164]:
+        - link "Вопросы" [ref=e165] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e166] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e167] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e168] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e169] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e170] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e171] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e172]:
+        - button "Тёмная тема" [ref=e173] [cursor=pointer]:
+          - img [ref=e175]
+        - link "A Admin User" [ref=e178] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e179]: A
+          - generic [ref=e180]: Admin User
+        - button "Выйти" [ref=e181] [cursor=pointer]
+  - generic [ref=e183]:
+    - heading "Тренажёр SM-2" [level=1] [ref=e184]
+    - paragraph [ref=e185]: Интервальные повторения по алгоритму SuperMemo 2
+    - generic [ref=e186]:
+      - generic [ref=e187]:
+        - generic [ref=e188]: "67"
+        - text: новых
+      - generic [ref=e189]:
+        - generic [ref=e190]: "0"
+        - text: на повтор
+      - generic [ref=e191]:
+        - generic [ref=e192]: "0"
+        - text: выучено
+    - generic [ref=e193]:
+      - generic [ref=e194] [cursor=pointer]:
+        - img [ref=e197]
+        - heading "Проработка вопросов" [level=3] [ref=e200]
+        - paragraph [ref=e201]: Карточки с SM-2. Отмечайте «Знаю» или «На повтор».
+        - generic [ref=e203]: 67 вопросов
+      - generic [ref=e204] [cursor=pointer]:
+        - img [ref=e207]
+        - heading "Реальное собеседование" [level=3] [ref=e210]
+        - paragraph [ref=e211]: Вопросы из настоящих собеседований в хронологическом порядке.
+        - generic [ref=e213]: 5 записей
+  - contentinfo [ref=e214]:
+    - generic [ref=e215]:
+      - generic [ref=e216]: InterviewHub © 2026
+      - generic [ref=e217]:
+        - link "Предложить видео" [ref=e218] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e219] [cursor=pointer]:
+          - /url: https://github.com

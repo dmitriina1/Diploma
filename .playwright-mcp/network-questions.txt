@@ -1,0 +1,2 @@
+[GET] http://localhost:3000/api/questions => [200] OK
+[GET] http://localhost:3000/api/questions?status=approved&limit=1000 => [200] OK

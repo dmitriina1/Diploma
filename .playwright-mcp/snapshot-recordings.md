@@ -1,0 +1,93 @@
+- generic [ref=e902]:
+  - navigation [ref=e903]:
+    - generic [ref=e904]:
+      - link "InterviewHub V2" [ref=e905] [cursor=pointer]:
+        - /url: /
+        - img [ref=e906]
+        - generic [ref=e908]: InterviewHub V2
+      - generic [ref=e909]:
+        - link "Вопросы" [ref=e910] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e911] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e912] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e913] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e914] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e915] [cursor=pointer]:
+          - /url: /recordings
+        - link "Админ" [ref=e916] [cursor=pointer]:
+          - /url: /admin
+      - generic [ref=e917]:
+        - button "Тёмная тема" [ref=e918] [cursor=pointer]:
+          - img [ref=e920]
+        - link "A Admin User" [ref=e923] [cursor=pointer]:
+          - /url: /profile
+          - generic [ref=e924]: A
+          - generic [ref=e925]: Admin User
+        - button "Выйти" [ref=e926] [cursor=pointer]
+  - generic [ref=e927]:
+    - heading "Записи собеседований" [level=1] [ref=e928]:
+      - img [ref=e930]
+      - text: Записи собеседований
+    - paragraph [ref=e933]: Реальные записи IT-собеседований с извлечёнными вопросами
+    - generic [ref=e934]:
+      - combobox [ref=e935]:
+        - option "Все платформы" [selected]
+        - option "YouTube"
+        - option "RuTube"
+        - option "VK"
+      - generic [ref=e936]:
+        - img
+        - textbox "Поиск по названию..." [ref=e937]
+    - generic [ref=e938]:
+      - generic [ref=e939]:
+        - generic [ref=e941]: youtube
+        - heading "Разместил ВАКАНСИЮ на FRONTEND разработчика. В шоке от откликов и резюме. Выводы" [level=3] [ref=e942]
+        - paragraph [ref=e943]: 0 вопросов
+        - generic [ref=e944]:
+          - link "Смотреть" [ref=e945] [cursor=pointer]:
+            - /url: https://www.youtube.com/watch?v=rtpEdoSCMCk
+          - button "Вопросы" [ref=e946] [cursor=pointer]
+      - generic [ref=e947]:
+        - generic [ref=e949]: rutube
+        - heading "Mock-собеседование Go разработчика из OZON" [level=3] [ref=e950]
+        - paragraph [ref=e951]: 0 вопросов
+        - generic [ref=e952]:
+          - link "Смотреть" [ref=e953] [cursor=pointer]:
+            - /url: https://rutube.ru/video/7bb196f9c3749e00cdd0c41937fa04b3/
+          - button "Вопросы" [ref=e954] [cursor=pointer]
+      - generic [ref=e955]:
+        - generic [ref=e957]: rutube
+        - heading "Разваливал собеседования по Go на раз-два" [level=3] [ref=e958]
+        - paragraph [ref=e959]: 0 вопросов
+        - generic [ref=e960]:
+          - link "Смотреть" [ref=e961] [cursor=pointer]:
+            - /url: https://rutube.ru/video/ed6614b7febb3879474ad2122e9ecf0d/?r=wd
+          - button "Вопросы" [ref=e962] [cursor=pointer]
+      - generic [ref=e963]:
+        - generic [ref=e965]: youtube
+        - heading "РЕАЛЬНОЕ СОБЕСЕДОВАНИЕ НА JUNIOR ПРОГРАММИСТА 1С. ЗП 100 000" [level=3] [ref=e966]
+        - paragraph [ref=e967]: 0 вопросов
+        - generic [ref=e968]:
+          - link "Смотреть" [ref=e969] [cursor=pointer]:
+            - /url: https://youtu.be/8fhjR1mIONQ?si=iyoVmUNtMWK9_7KK
+          - button "Вопросы" [ref=e970] [cursor=pointer]
+      - generic [ref=e971]:
+        - generic [ref=e973]: youtube
+        - heading "Собеседование в IT" [level=3] [ref=e974]
+        - paragraph [ref=e975]: 0 вопросов
+        - generic [ref=e976]:
+          - link "Смотреть" [ref=e977] [cursor=pointer]:
+            - /url: https://www.youtube.com/watch?v=QI-bXKC2mvU
+          - button "Вопросы" [ref=e978] [cursor=pointer]
+  - contentinfo [ref=e979]:
+    - generic [ref=e980]:
+      - generic [ref=e981]: InterviewHub © 2026
+      - generic [ref=e982]:
+        - link "Предложить видео" [ref=e983] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e984] [cursor=pointer]:
+          - /url: https://github.com
