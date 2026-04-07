@@ -318,18 +318,44 @@
     <!-- Question Detail Dialog -->
     <Teleport to="body">
       <div v-if="qDetailId" class="overlay" @click.self="qDetailId = null">
-        <div class="dialog card" style="max-width:700px;max-height:80vh;overflow-y:auto">
+        <div class="dialog card qd-dialog">
           <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="qDetailId = null">×</button></div>
-          <div v-if="qDetail" class="dialog-body">
-            <div class="qd-badges" style="margin-bottom:.75rem">
-              <span class="badge badge-info">{{ qDetail.topic }}</span>
-              <span class="badge" :class="diffBadge(qDetail.difficulty)">{{ qDetail.difficulty }}</span>
+          <div v-if="qDetail" class="dialog-body qd-body">
+            <div class="qd-badges">
+              <span class="badge badge-info">{{ qEdit.topic || 'Без темы' }}</span>
+              <span class="badge" :class="diffBadge(qEdit.difficulty)">{{ qEdit.difficulty }}</span>
               <span class="badge" :class="qDetail.approved ? 'badge-ok' : 'badge-warn'">{{ qDetail.approved ? 'Одобрен' : 'Не одобрен' }}</span>
             </div>
-            <h4 style="margin-bottom:.75rem">{{ qDetail.question }}</h4>
-            <div v-if="qDetail.answer" class="qd-answer" v-html="qDetail.answer.replace(/\n/g, '<br>')"></div>
-            <div v-else class="qd-no-answer">Ответ не сгенерирован</div>
-            <div style="display:flex;gap:.5rem;margin-top:1rem">
+
+            <div class="qd-form-surface">
+              <div class="field">
+                <label>Вопрос</label>
+                <textarea v-model="qEdit.question" class="input" rows="3" placeholder="Введите текст вопроса"></textarea>
+              </div>
+
+              <div class="field-row-2 qd-field-row">
+                <div class="field">
+                  <label>Тема</label>
+                  <input v-model="qEdit.topic" class="input" placeholder="Например: React, Python, SQL" />
+                </div>
+                <div class="field">
+                  <label>Сложность</label>
+                  <select v-model="qEdit.difficulty" class="input">
+                    <option value="junior">junior</option>
+                    <option value="middle">middle</option>
+                    <option value="senior">senior</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Ответ</label>
+                <textarea v-model="qEdit.answer" class="input" rows="8" placeholder="Введите ответ на вопрос"></textarea>
+              </div>
+            </div>
+
+            <div class="qd-actions">
+              <button class="btn btn-primary btn-sm" @click="saveQDetail" :disabled="qSaving">{{ qSaving ? 'Сохранение...' : qSaveSuccess ? 'Сохранено' : 'Сохранить' }}</button>
               <button v-if="!qDetail.approved" class="btn btn-ok btn-sm" @click="approveOne(qDetail.id); qDetailId = null">Одобрить</button>
               <button v-else class="btn btn-warn btn-sm" @click="revokeOne(qDetail.id); qDetailId = null">Отозвать</button>
               <button class="btn btn-secondary btn-sm" @click="generateOne(qDetail.id)">Генерировать ответ</button>
@@ -398,7 +424,27 @@ const qStatus = ref('')
 const selectedQIds = ref([])
 const qDetailId = ref(null)
 const qDetail = computed(() => questionsStore.adminQuestions.find(q => q.id === qDetailId.value))
+const qSaving = ref(false)
+const qSaveSuccess = ref(false)
+const qEdit = ref({ question: '', answer: '', topic: '', difficulty: 'middle' })
 const topics = computed(() => questionsStore.topics)
+let qSaveSuccessTimer = null
+
+const normalizeDifficulty = (difficulty) => {
+  const normalized = String(difficulty || '').toLowerCase()
+  return ['junior', 'middle', 'senior'].includes(normalized) ? normalized : 'middle'
+}
+
+const syncQEditFromSource = (question) => {
+  if (!question) return
+  qSaveSuccess.value = false
+  qEdit.value = {
+    question: question.question || '',
+    answer: question.answer || '',
+    topic: question.topic || '',
+    difficulty: normalizeDifficulty(question.difficulty)
+  }
+}
 
 const filteredAdminQ = computed(() => {
   let qs = questionsStore.adminQuestions
@@ -411,12 +457,56 @@ const filteredAdminQ = computed(() => {
 const allQSelected = computed(() => filteredAdminQ.value.length > 0 && filteredAdminQ.value.every(q => selectedQIds.value.includes(q.id)))
 const toggleAllQ = () => { if (allQSelected.value) selectedQIds.value = []; else selectedQIds.value = filteredAdminQ.value.map(q => q.id) }
 const toggleQ = (id) => { const i = selectedQIds.value.indexOf(id); if (i >= 0) selectedQIds.value.splice(i, 1); else selectedQIds.value.push(id) }
-const openQDetail = (q) => { qDetailId.value = q.id }
+const openQDetail = (q) => { qDetailId.value = q.id; syncQEditFromSource(q) }
+
+const saveQDetail = async () => {
+  if (!qDetail.value) return
+
+  const questionText = (qEdit.value.question || '').trim()
+  if (!questionText) {
+    alert('Текст вопроса не может быть пустым')
+    return
+  }
+
+  qSaving.value = true
+  qSaveSuccess.value = false
+  const ok = await questionsStore.updateQuestion(qDetail.value.id, {
+    question: questionText,
+    answer: qEdit.value.answer || '',
+    topic: (qEdit.value.topic || '').trim() || 'General',
+    difficulty: normalizeDifficulty(qEdit.value.difficulty),
+    timecode: qDetail.value.timecode || null,
+    approved: !!qDetail.value.approved
+  })
+  qSaving.value = false
+
+  if (!ok) {
+    alert('Не удалось сохранить изменения')
+    return
+  }
+
+  const updated = questionsStore.adminQuestions.find((q) => q.id === qDetail.value.id)
+  syncQEditFromSource(updated)
+  qSaveSuccess.value = true
+  if (qSaveSuccessTimer) clearTimeout(qSaveSuccessTimer)
+  qSaveSuccessTimer = setTimeout(() => {
+    qSaveSuccess.value = false
+  }, 1800)
+  qDetailId.value = null
+}
 
 const approveOne = async (id) => { await questionsStore.approveQuestions([id]) }
 const revokeOne = async (id) => { await questionsStore.revokeQuestions([id]) }
 const deleteOne = async (id) => { if (confirm('Удалить вопрос?')) await questionsStore.deleteQuestion(id) }
-const generateOne = async (id) => { try { await questionsStore.generateAnswer(id) } catch {} }
+const generateOne = async (id) => {
+  try {
+    await questionsStore.generateAnswer(id)
+    if (qDetailId.value === id) {
+      const updated = questionsStore.adminQuestions.find((q) => q.id === id)
+      syncQEditFromSource(updated)
+    }
+  } catch {}
+}
 const bulkApprove = async () => { await questionsStore.approveQuestions(selectedQIds.value); selectedQIds.value = [] }
 const bulkRevoke = async () => { await questionsStore.revokeQuestions(selectedQIds.value); selectedQIds.value = [] }
 const bulkDelete = async () => { if (!confirm(`Удалить ${selectedQIds.value.length} вопросов?`)) return; for (const id of selectedQIds.value) await questionsStore.deleteQuestion(id); selectedQIds.value = [] }
@@ -538,7 +628,10 @@ onMounted(async () => {
   tasksStore.startGlobalPolling()
   for (const t of tasksStore.activeTasks) tasksStore.startPolling(t.task_id)
 })
-onUnmounted(() => tasksStore.stopGlobalPolling())
+onUnmounted(() => {
+  tasksStore.stopGlobalPolling()
+  if (qSaveSuccessTimer) clearTimeout(qSaveSuccessTimer)
+})
 </script>
 
 <style scoped>
@@ -641,6 +734,63 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
 .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .dialog-head h3 { font-size: 1.1rem; font-weight: 600; }
 .dialog-body { display: flex; flex-direction: column; gap: .9rem; }
+.qd-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
+  max-height: min(84vh, 920px);
+  overflow: hidden;
+  padding: 1.1rem 1.15rem 1.2rem;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c-surface-h) 88%, transparent) 0%, color-mix(in srgb, var(--c-surface) 92%, transparent) 100%);
+  box-shadow: var(--shadow-lg);
+}
+.qd-dialog .dialog-head {
+  position: relative;
+  background: transparent;
+  margin-bottom: .85rem;
+  padding-bottom: .65rem;
+}
+.qd-body {
+  gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-inline: .05rem;
+  padding-right: .2rem;
+}
+.qd-badges { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+.qd-form-surface {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+  background: color-mix(in srgb, var(--c-bg-2) 70%, var(--c-surface));
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: .95rem;
+}
+.qd-field-row { gap: .9rem; }
+.qd-body .field label {
+  color: var(--c-text-2);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.qd-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  align-items: center;
+  justify-content: flex-end;
+  border: 1px solid var(--c-border);
+  background: color-mix(in srgb, var(--c-bg-1) 78%, var(--c-surface-h));
+  backdrop-filter: blur(4px);
+  border-radius: var(--r-md);
+  padding: .55rem;
+}
+.qd-actions .btn-primary { margin-right: auto; min-width: 130px; }
 .mode-toggle { display: flex; gap: .4rem; }
 .field { display: flex; flex-direction: column; gap: .3rem; }
 .field label { font-size: .82rem; color: var(--c-text-3); font-weight: 500; }
@@ -659,6 +809,12 @@ onUnmounted(() => tasksStore.stopGlobalPolling())
   .task-top { gap: .45rem; }
   .anl-row { grid-template-columns: 1fr; }
   .field-row-2 { grid-template-columns: 1fr; }
+  .qd-dialog { max-height: calc(100vh - 1.25rem); padding: .85rem; }
+  .qd-dialog .dialog-head { margin-bottom: .65rem; }
+  .qd-form-surface { padding: .75rem; }
+  .qd-actions { justify-content: stretch; }
+  .qd-actions .btn { flex: 1 1 calc(50% - .25rem); }
+  .qd-actions .btn-primary { margin-right: 0; flex-basis: 100%; }
   .tab-btn { padding: .6rem .8rem; font-size: .82rem; }
 }
 </style>
