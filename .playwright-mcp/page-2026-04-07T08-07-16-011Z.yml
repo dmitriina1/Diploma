@@ -1,0 +1,90 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link " InterviewHub Prime" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9]: 
+        - generic [ref=e10]: InterviewHub Prime
+      - menubar [ref=e11]:
+        - menuitem "Вопросы" [ref=e12]:
+          - link "Вопросы" [ref=e14] [cursor=pointer]:
+            - /url: /interview-questions
+            - text: 
+            - generic [ref=e15]: Вопросы
+        - menuitem "Тренажер" [ref=e16]:
+          - link "Тренажер" [ref=e18] [cursor=pointer]:
+            - /url: /trainer
+            - text: 
+            - generic [ref=e19]: Тренажер
+        - menuitem "AI Interview" [ref=e20]:
+          - link "AI Interview" [ref=e22] [cursor=pointer]:
+            - /url: /ai-interview
+            - text: 
+            - generic [ref=e23]: AI Interview
+        - menuitem "Задания" [ref=e24]:
+          - link "Задания" [ref=e26] [cursor=pointer]:
+            - /url: /test-assignments
+            - text: 
+            - generic [ref=e27]: Задания
+        - menuitem "Навыки" [ref=e28]:
+          - link "Навыки" [ref=e30] [cursor=pointer]:
+            - /url: /hh-requirements
+            - text: 
+            - generic [ref=e31]: Навыки
+        - menuitem "Записи" [ref=e32]:
+          - link "Записи" [ref=e34] [cursor=pointer]:
+            - /url: /recordings
+            - text: 
+            - generic [ref=e35]: Записи
+      - generic [ref=e37]:
+        - button "" [ref=e38] [cursor=pointer]:
+          - generic [ref=e39]: 
+        - button "Войти" [ref=e40] [cursor=pointer]:
+          - generic [ref=e41]: 
+          - generic [ref=e42]: Войти
+  - main [ref=e43]:
+    - generic [ref=e48]:
+      - heading "Вопросы с собеседований" [level=1] [ref=e49]
+      - paragraph [ref=e50]: Реальные вопросы с IT-собеседований с фильтрацией и ранжированием.
+    - generic [ref=e54]:
+      - generic [ref=e55]:
+        - generic [ref=e56]: Поиск
+        - generic [ref=e57]:
+          - generic [ref=e58]: 
+          - textbox "Поиск вопроса..." [ref=e59]
+      - generic [ref=e60]:
+        - generic [ref=e61]: Технология
+        - generic [ref=e62] [cursor=pointer]:
+          - combobox "Все технологии" [ref=e63]
+          - img [ref=e65]
+      - generic [ref=e67]:
+        - generic [ref=e68]: Сложность
+        - generic [ref=e69] [cursor=pointer]:
+          - combobox "Любая сложность" [ref=e70]
+          - img [ref=e72]
+      - generic [ref=e74]:
+        - generic [ref=e75]: Сортировка
+        - generic [ref=e76] [cursor=pointer]:
+          - combobox "По вероятности" [ref=e77]
+          - img [ref=e79]
+    - generic [ref=e83]: 0 вопросов
+    - generic [ref=e87]:
+      - generic [ref=e88]: 
+      - heading "Ошибка загрузки" [level=3] [ref=e89]
+      - alert:
+        - generic [ref=e91]: Не удалось получить вопросы. Проверьте соединение с сервером.
+      - button "Повторить" [ref=e93] [cursor=pointer]:
+        - generic [ref=e94]: 
+        - generic [ref=e95]: Повторить
+  - contentinfo [ref=e96]:
+    - generic [ref=e97]:
+      - generic [ref=e98]:
+        - generic [ref=e99]: 
+        - generic [ref=e100]: InterviewHub Prime © 2026
+      - generic [ref=e101]:
+        - link "Предложить видео" [ref=e102] [cursor=pointer]:
+          - /url: /suggest
+        - link "PrimeVue" [ref=e103] [cursor=pointer]:
+          - /url: https://primevue.org/
+        - link "GitHub" [ref=e104] [cursor=pointer]:
+          - /url: https://github.com

@@ -1,0 +1,30 @@
+- generic [ref=e236]:
+  - button "На главную" [ref=e238] [cursor=pointer]:
+    - generic [ref=e239]: 
+    - generic [ref=e240]: На главную
+  - generic [ref=e241]:
+    - generic [ref=e243]: PrimeVue Edition
+    - heading "Interview Prep" [level=1] [ref=e244]
+    - paragraph [ref=e245]: Войдите, чтобы продолжить подготовку
+  - tablist "Режим авторизации" [ref=e246]:
+    - button "Вход" [ref=e247] [cursor=pointer]:
+      - generic [ref=e248]: Вход
+    - button "Регистрация" [ref=e249] [cursor=pointer]:
+      - generic [ref=e250]: Регистрация
+  - generic [ref=e251]:
+    - generic [ref=e252]:
+      - textbox "Логин" [ref=e253]
+      - generic: Логин
+    - generic [ref=e254]:
+      - generic [ref=e255]:
+        - textbox [ref=e256]
+        - img [ref=e257]
+        - generic: Enter a password
+      - generic: Пароль
+    - button "Войти" [ref=e259] [cursor=pointer]:
+      - generic [ref=e260]: 
+      - generic [ref=e261]: Войти
+  - paragraph [ref=e262]:
+    - text: Нет аккаунта?
+    - link "Зарегистрируйтесь" [ref=e263] [cursor=pointer]:
+      - /url: "#"

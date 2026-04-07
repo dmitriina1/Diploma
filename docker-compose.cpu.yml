@@ -97,6 +97,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-auto}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:3010,http://localhost:3020}
     ports:
       - "8000:8000"
     volumes:
@@ -124,6 +125,20 @@ services:
     volumes:
       - ./frontend-vue:/app
       - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - diploma-network
+
+  # ============== Frontend PrimeVue (Dedicated Variant) ==============
+  primevue:
+    build:
+      context: ./PrimeVue
+      dockerfile: Dockerfile
+    container_name: PrimeVue
+    ports:
+      - "3020:80"
+    restart: unless-stopped
     depends_on:
       - backend
     networks:

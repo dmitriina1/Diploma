@@ -40,7 +40,7 @@ AUTO_MIGRATE_DB = (
 DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "2"))
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "20"))
 
-DEFAULT_CORS = "http://localhost:3000,http://localhost:3001,http://localhost:3010"
+DEFAULT_CORS = "http://localhost:3000,http://localhost:3001,http://localhost:3010,http://localhost:3020"
 CORS_ALLOW_ORIGINS = _parse_origins(os.getenv("CORS_ALLOW_ORIGINS", DEFAULT_CORS))
 
 HH_SYNC_ENABLED = _get_bool("HH_SYNC_ENABLED", True)

@@ -1,0 +1,151 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - link " InterviewHub Prime" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e9]: 
+        - generic [ref=e10]: InterviewHub Prime
+      - menubar [ref=e11]:
+        - menuitem "Вопросы" [ref=e12]:
+          - link " Вопросы" [ref=e14] [cursor=pointer]:
+            - /url: /interview-questions
+            - generic [ref=e15]: 
+            - generic [ref=e16]: Вопросы
+        - menuitem "Тренажер" [ref=e17]:
+          - link " Тренажер" [ref=e19] [cursor=pointer]:
+            - /url: /trainer
+            - generic [ref=e20]: 
+            - generic [ref=e21]: Тренажер
+        - menuitem "AI Interview" [ref=e22]:
+          - link " AI Interview" [ref=e24] [cursor=pointer]:
+            - /url: /ai-interview
+            - generic [ref=e25]: 
+            - generic [ref=e26]: AI Interview
+        - menuitem "Задания" [ref=e27]:
+          - link " Задания" [ref=e29] [cursor=pointer]:
+            - /url: /test-assignments
+            - generic [ref=e30]: 
+            - generic [ref=e31]: Задания
+        - menuitem "Навыки" [ref=e32]:
+          - link " Навыки" [ref=e34] [cursor=pointer]:
+            - /url: /hh-requirements
+            - generic [ref=e35]: 
+            - generic [ref=e36]: Навыки
+        - menuitem "Записи" [ref=e37]:
+          - link " Записи" [ref=e39] [cursor=pointer]:
+            - /url: /recordings
+            - generic [ref=e40]: 
+            - generic [ref=e41]: Записи
+      - generic [ref=e43]:
+        - button "" [ref=e44] [cursor=pointer]:
+          - generic [ref=e45]: 
+        - button "Войти" [ref=e46] [cursor=pointer]:
+          - generic [ref=e47]: 
+          - generic [ref=e48]: Войти
+  - main [ref=e49]:
+    - generic [ref=e50]:
+      - generic [ref=e53]:
+        - generic [ref=e55]: AI-подготовка
+        - heading "Платформа подготовки к IT-собеседованиям" [level=1] [ref=e56]
+        - paragraph [ref=e57]: Вопросы, тренажер SM-2, mock-интервью, анализ вакансий и обработка видео в едином рабочем пространстве.
+        - generic [ref=e58]:
+          - button "Начать подготовку" [ref=e59] [cursor=pointer]:
+            - generic [ref=e60]: 
+            - generic [ref=e61]: Начать подготовку
+          - button "Тренажер SM-2" [ref=e62] [cursor=pointer]:
+            - generic [ref=e63]: 
+            - generic [ref=e64]: Тренажер SM-2
+      - generic [ref=e66]:
+        - generic [ref=e68]: Текущая база
+        - generic [ref=e69]:
+          - generic [ref=e70]:
+            - generic [ref=e71]:
+              - generic [ref=e72]: "67"
+              - generic [ref=e73]: Вопросов
+            - generic [ref=e74]:
+              - generic [ref=e75]: "7"
+              - generic [ref=e76]: Технологий
+            - generic [ref=e77]:
+              - generic [ref=e78]: "0"
+              - generic [ref=e79]: Видео
+          - separator
+    - generic [ref=e82]:
+      - generic [ref=e83]:
+        - heading "Инструменты платформы" [level=2] [ref=e84]
+        - paragraph [ref=e85]: PrimeVue-интерфейс для ежедневной практики и контроля прогресса.
+      - generic [ref=e86]:
+        - generic [ref=e88]:
+          - generic [ref=e91]:
+            - generic [ref=e92]: 
+            - generic [ref=e93]: База вопросов
+          - paragraph [ref=e95]: Фильтры по темам, сложности и вероятности вопроса.
+          - button "Открыть" [ref=e97] [cursor=pointer]:
+            - generic [ref=e98]: 
+            - generic [ref=e99]: Открыть
+        - generic [ref=e101]:
+          - generic [ref=e104]:
+            - generic [ref=e105]: 
+            - generic [ref=e106]: Тренажер SM-2
+          - paragraph [ref=e108]: Интервальные повторения и закрепление ответа.
+          - button "Открыть" [ref=e110] [cursor=pointer]:
+            - generic [ref=e111]: 
+            - generic [ref=e112]: Открыть
+        - generic [ref=e114]:
+          - generic [ref=e117]:
+            - generic [ref=e118]: 
+            - generic [ref=e119]: AI Interview
+          - paragraph [ref=e121]: Практика формулировок в диалоге с AI-интервьюером.
+          - button "Открыть" [ref=e123] [cursor=pointer]:
+            - generic [ref=e124]: 
+            - generic [ref=e125]: Открыть
+        - generic [ref=e127]:
+          - generic [ref=e130]:
+            - generic [ref=e131]: 
+            - generic [ref=e132]: Тестовые задания
+          - paragraph [ref=e134]: Коллекция задач от компаний для портфолио-практики.
+          - button "Открыть" [ref=e136] [cursor=pointer]:
+            - generic [ref=e137]: 
+            - generic [ref=e138]: Открыть
+        - generic [ref=e140]:
+          - generic [ref=e143]:
+            - generic [ref=e144]: 
+            - generic [ref=e145]: Записи
+          - paragraph [ref=e147]: Архив обработанных интервью с таймкодами и вопросами.
+          - button "Открыть" [ref=e149] [cursor=pointer]:
+            - generic [ref=e150]: 
+            - generic [ref=e151]: Открыть
+        - generic [ref=e153]:
+          - generic [ref=e156]:
+            - generic [ref=e157]: 
+            - generic [ref=e158]: Навыки вакансий
+          - paragraph [ref=e160]: Аналитика востребованных навыков по рынку.
+          - button "Открыть" [ref=e162] [cursor=pointer]:
+            - generic [ref=e163]: 
+            - generic [ref=e164]: Открыть
+    - generic [ref=e167]:
+      - generic [ref=e169]: Как это работает
+      - generic [ref=e171]:
+        - generic [ref=e172]:
+          - generic [ref=e174]: "01"
+          - heading "Загрузка и транскрибация" [level=3] [ref=e175]
+          - paragraph [ref=e176]: Whisper извлекает текст и структуру разговора из видео.
+        - generic [ref=e177]:
+          - generic [ref=e179]: "02"
+          - heading "Извлечение вопросов" [level=3] [ref=e180]
+          - paragraph [ref=e181]: LLM выделяет релевантные вопросы и убирает дубликаты.
+        - generic [ref=e182]:
+          - generic [ref=e184]: "03"
+          - heading "Подготовка и тренировка" [level=3] [ref=e185]
+          - paragraph [ref=e186]: Ты учишься по базе и закрепляешь материал в тренажере.
+  - contentinfo [ref=e187]:
+    - generic [ref=e188]:
+      - generic [ref=e189]:
+        - generic [ref=e190]: 
+        - generic [ref=e191]: InterviewHub Prime © 2026
+      - generic [ref=e192]:
+        - link "Предложить видео" [ref=e193] [cursor=pointer]:
+          - /url: /suggest
+        - link "PrimeVue" [ref=e194] [cursor=pointer]:
+          - /url: https://primevue.org/
+        - link "GitHub" [ref=e195] [cursor=pointer]:
+          - /url: https://github.com
