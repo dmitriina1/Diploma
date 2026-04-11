@@ -10,7 +10,12 @@
           <h3>Рынок в динамике, а не в ощущениях</h3>
           <p>Сравнивайте источники (навыки, описание, заголовок), чтобы видеть реальный спрос и приоритеты подготовки.</p>
         </div>
-        <img :src="skillsOrbit" alt="Иллюстрация аналитики навыков" class="skills-hero-art float-soft" />
+        <div class="skills-hero-signals">
+          <span class="skills-chip must">Must-have: {{ mustHave.length }}</span>
+          <span class="skills-chip nice">Nice-to-have: {{ niceToHave.length }}</span>
+          <span class="skills-chip bonus">Дополнительно: {{ bonusSkills.length }}</span>
+          <span class="skills-chip source">Источник: {{ activeSourceTitle }}</span>
+        </div>
       </div>
 
       <div v-if="auth.isAdmin" class="sync-actions">
@@ -120,7 +125,6 @@ import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 import { useAuthStore } from '../store/auth'
-import skillsOrbit from '../assets/media/hybrid/skills-orbit.svg'
 
 const loading = ref(false)
 const syncing = ref(false)
@@ -225,11 +229,9 @@ onMounted(async () => {
 .skills-hero {
   margin: 0 auto 1.2rem;
   max-width: 980px;
-  padding: 1rem;
+  padding: 1rem 1.05rem;
   display: grid;
-  grid-template-columns: 1.2fr minmax(180px, 280px);
-  gap: .9rem;
-  align-items: center;
+  gap: .7rem;
   border-color: color-mix(in srgb, var(--c-border-h) 74%, transparent);
 }
 
@@ -245,12 +247,40 @@ onMounted(async () => {
   line-height: 1.58;
 }
 
-.skills-hero-art {
-  width: 100%;
-  height: auto;
-  border-radius: var(--r-md);
-  border: 1px solid color-mix(in srgb, var(--c-border) 78%, transparent);
-  background: color-mix(in srgb, var(--c-bg-2) 75%, transparent);
+.skills-hero-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+}
+
+.skills-chip {
+  padding: .33rem .62rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--c-border) 85%, transparent);
+  background: color-mix(in srgb, var(--c-surface) 76%, transparent);
+  color: var(--c-text-2);
+  font-size: .78rem;
+  letter-spacing: .01em;
+}
+
+.skills-chip.must {
+  border-color: color-mix(in srgb, var(--c-err) 40%, transparent);
+  color: var(--c-err);
+}
+
+.skills-chip.nice {
+  border-color: color-mix(in srgb, var(--c-warn) 40%, transparent);
+  color: var(--c-warn);
+}
+
+.skills-chip.bonus {
+  border-color: color-mix(in srgb, var(--c-ok) 40%, transparent);
+  color: var(--c-ok);
+}
+
+.skills-chip.source {
+  border-color: color-mix(in srgb, var(--c-brand-h) 40%, transparent);
+  color: var(--c-brand-h);
 }
 
 .sync-actions {
@@ -370,10 +400,6 @@ onMounted(async () => {
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 
 @media (max-width: 640px) {
-  .skills-hero {
-    grid-template-columns: 1fr;
-  }
-
   .source-filters { justify-content: flex-start; }
   .skill-row { grid-template-columns: 1fr; gap: .2rem; }
   .sk-count { text-align: left; }

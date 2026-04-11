@@ -160,16 +160,32 @@ async def get_processed_videos(_admin: dict = Depends(require_admin)):
     try:
         rows = await conn.fetch(
             """
-            SELECT id, title, youtube_url, platform
-            FROM processed_videos
-            ORDER BY id DESC
+            SELECT
+                pv.id,
+                pv.title,
+                pv.youtube_url,
+                pv.platform,
+                pv.processed_at,
+                GREATEST(COALESCE(pv.questions_count, 0), COALESCE(qc.question_count, 0)) AS questions_count,
+                GREATEST(COALESCE(pv.questions_count, 0), COALESCE(qc.question_count, 0)) AS question_count,
+                GREATEST(COALESCE(pv.questions_count, 0), COALESCE(qc.question_count, 0)) AS linked_questions
+            FROM processed_videos pv
+            LEFT JOIN (
+                SELECT video_id, COUNT(*) AS question_count
+                FROM question_video
+                GROUP BY video_id
+            ) qc ON qc.video_id = pv.id
+            ORDER BY pv.processed_at DESC NULLS LAST, pv.id DESC
             LIMIT 300
             """
         )
         videos = []
         for row in rows:
             d = dict(row)
-            d["created_at"] = None
+            if d.get("processed_at") and hasattr(d["processed_at"], "isoformat"):
+                d["processed_at"] = d["processed_at"].isoformat()
+            # Keep backward-compatible timestamp key used by UI cards.
+            d["created_at"] = d.get("processed_at")
             videos.append(d)
         return {"videos": videos, "count": len(videos)}
     finally:

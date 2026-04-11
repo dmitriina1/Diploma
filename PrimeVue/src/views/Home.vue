@@ -6,45 +6,39 @@
       <section class="hero-grid">
         <Card class="hero-card reveal-pop">
           <template #content>
-            <div class="hero-layout">
-              <div class="hero-copy">
-                <div class="hero-badges">
-                  <Tag value="AI-powered подготовка" severity="success" rounded class="hero-tag" />
-                  <Tag value="PrimeVue Edition" severity="contrast" rounded />
-                </div>
-
-                <h1 class="h-page hero-title">
-                  Готовься к <span>IT-собеседованиям</span>
-                  системно и быстрее
-                </h1>
-
-                <p class="hero-sub">
-                  Вопросы, тренажер SM-2, mock-интервью, анализ вакансий и обработка видео в едином
-                  рабочем пространстве без переключения между разными сервисами.
-                </p>
-
-                <ul class="hero-points">
-                  <li>Приоритизация тем по вероятности и рыночному спросу</li>
-                  <li>Практика в формате интервью, а не просто чтение конспектов</li>
-                  <li>Реальный цикл подготовки: изучил → закрепил → проверил</li>
-                </ul>
-
-                <div class="hero-actions">
-                  <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
-                  <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
-                </div>
-
-                <div class="hero-stats">
-                  <div v-for="item in stats" :key="item.label" class="hero-stat-item">
-                    <div class="hero-stat-value">{{ item.value }}</div>
-                    <div class="hero-stat-label">{{ item.label }}</div>
-                  </div>
-                </div>
+            <div class="hero-copy">
+              <div class="hero-badges">
+                <Tag value="Что дает платформа" severity="success" rounded class="hero-tag" />
+                <Tag value="Практика + аналитика" severity="contrast" rounded />
               </div>
 
-              <div class="hero-visual media-glow">
-                <img :src="heroVisual" alt="Схема подготовки к интервью" class="hero-art float-soft" />
-                <div class="hero-visual-badge">AI pipeline • Q&A • SM-2</div>
+              <h1 class="h-page hero-title">
+                Подготовка к <span>IT-собеседованиям</span>
+                с понятным планом и приоритетами
+              </h1>
+
+              <p class="hero-sub">
+                InterviewHub собирает вопросы из реальных интервью, показывает что спрашивают чаще,
+                и превращает подготовку в управляемый цикл: изучил, закрепил, проверил результат.
+              </p>
+
+              <div class="hero-benefits">
+                <article v-for="benefit in heroBenefits" :key="benefit.title" class="hero-benefit">
+                  <h3>{{ benefit.title }}</h3>
+                  <p>{{ benefit.text }}</p>
+                </article>
+              </div>
+
+              <div class="hero-actions">
+                <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
+                <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
+              </div>
+
+              <div class="hero-stats">
+                <div v-for="item in stats" :key="item.label" class="hero-stat-item">
+                  <div class="hero-stat-value">{{ item.value }}</div>
+                  <div class="hero-stat-label">{{ item.label }}</div>
+                </div>
               </div>
             </div>
           </template>
@@ -78,6 +72,23 @@
         </Card>
       </section>
 
+      <section class="value-strip">
+        <Card class="value-card">
+          <template #content>
+            <div class="value-head">
+              <h2 class="section-title">Что ты получаешь от платформы</h2>
+              <p class="p-muted">Сначала ценность и результат, затем детали реализации.</p>
+            </div>
+            <div class="value-grid">
+              <div v-for="pillar in valuePillars" :key="pillar.title" class="value-item">
+                <h3>{{ pillar.title }}</h3>
+                <p>{{ pillar.text }}</p>
+              </div>
+            </div>
+          </template>
+        </Card>
+      </section>
+
       <section class="tools-section">
         <div class="tools-head">
           <h2 class="section-title">Инструменты платформы</h2>
@@ -102,28 +113,23 @@
         </div>
       </section>
 
-      <section class="value-strip">
-        <Card class="value-card">
-          <template #content>
-            <div class="value-grid">
-              <div v-for="pillar in valuePillars" :key="pillar.title" class="value-item">
-                <h3>{{ pillar.title }}</h3>
-                <p>{{ pillar.text }}</p>
-              </div>
-            </div>
-          </template>
-        </Card>
-      </section>
-
       <section class="flow-section">
         <Card class="flow-card">
           <template #title>Как это работает</template>
           <template #content>
             <div class="flow-grid">
               <div v-for="step in steps" :key="step.title" class="flow-step">
-                <Tag :value="step.index" rounded />
+                <div class="flow-top">
+                  <Tag :value="step.index" rounded />
+                  <div class="flow-visual">
+                    <BrandIcon :name="step.icon" :size="22" />
+                  </div>
+                </div>
                 <h3>{{ step.title }}</h3>
                 <p>{{ step.description }}</p>
+                <ul class="flow-details">
+                  <li v-for="detail in step.details" :key="detail">{{ detail }}</li>
+                </ul>
               </div>
             </div>
           </template>
@@ -162,8 +168,8 @@ import Divider from 'primevue/divider'
 import Chart from 'primevue/chart'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
+import BrandIcon from '../components/BrandIcon.vue'
 import { useQuestionsStore } from '../store'
-import heroVisual from '../assets/media/hybrid/hero-interview.svg'
 
 const store = useQuestionsStore()
 const router = useRouter()
@@ -252,10 +258,43 @@ const features = [
   { route: '/hh-requirements', icon: 'pi pi-chart-bar', title: 'Навыки вакансий', description: 'Аналитика востребованных навыков по рынку.' }
 ]
 
+const heroBenefits = [
+  {
+    title: 'Фокус на приоритетах',
+    text: 'Сначала вопросы с высокой частотой и рыночной значимостью, а не случайный список тем.'
+  },
+  {
+    title: 'Тренировка в контексте интервью',
+    text: 'SM-2, mock и AI-диалог помогают не просто читать ответы, а формулировать их уверенно.'
+  },
+  {
+    title: 'Понимание реального спроса',
+    text: 'HH-аналитика и тестовые задания показывают, какие навыки дают максимальный эффект при подготовке.'
+  }
+]
+
 const steps = [
-  { index: '01', title: 'Загрузка и транскрибация', description: 'Whisper извлекает текст и структуру разговора из видео.' },
-  { index: '02', title: 'Извлечение вопросов', description: 'LLM выделяет релевантные вопросы и убирает дубликаты.' },
-  { index: '03', title: 'Подготовка и тренировка', description: 'Ты учишься по базе и закрепляешь материал в тренажере.' }
+  {
+    index: '01',
+    icon: 'recordings',
+    title: 'Загрузка и транскрибация',
+    description: 'Whisper обрабатывает видео и формирует структурированный текст интервью.',
+    details: ['Поддержка нескольких платформ и локальных файлов', 'Отслеживание прогресса обработки в реальном времени']
+  },
+  {
+    index: '02',
+    icon: 'questions',
+    title: 'Извлечение и нормализация вопросов',
+    description: 'LLM выделяет релевантные вопросы, а система дедупликации убирает повторы.',
+    details: ['Семантическая очистка схожих формулировок', 'Сортировка по частоте и вероятности появления']
+  },
+  {
+    index: '03',
+    icon: 'trainer',
+    title: 'Подготовка и проверка результата',
+    description: 'База вопросов, тренажер и mock-сценарии превращают материал в навык ответа.',
+    details: ['Интервальные повторения для долгого запоминания', 'Проверка понимания через практические сценарии']
+  }
 ]
 
 const valuePillars = [
@@ -304,13 +343,6 @@ function openFeature(route) {
   z-index: 1;
 }
 
-.hero-layout {
-  display: grid;
-  grid-template-columns: 1.1fr minmax(320px, .9fr);
-  gap: 1rem;
-  align-items: stretch;
-}
-
 .hero-copy {
   display: grid;
   gap: 1rem;
@@ -337,21 +369,33 @@ function openFeature(route) {
 .hero-sub {
   margin: 0;
   color: var(--p-text-muted-color);
-  max-width: 60ch;
+  max-width: 72ch;
   line-height: 1.68;
 }
 
-.hero-points {
-  margin: 0;
-  padding-left: 1.05rem;
+.hero-benefits {
   display: grid;
-  gap: 0.3rem;
-  color: var(--c-text-2);
-  font-size: 0.92rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
 }
 
-.hero-points li::marker {
-  color: var(--c-brand-h);
+.hero-benefit {
+  border: 1px solid color-mix(in srgb, var(--c-border) 82%, transparent);
+  border-radius: var(--r-md);
+  padding: .75rem .8rem;
+  background: color-mix(in srgb, var(--c-surface) 72%, transparent);
+}
+
+.hero-benefit h3 {
+  margin: 0 0 .25rem;
+  font-size: .9rem;
+}
+
+.hero-benefit p {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: .83rem;
+  line-height: 1.54;
 }
 
 .hero-actions {
@@ -364,41 +408,6 @@ function openFeature(route) {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.6rem;
-}
-
-.hero-visual {
-  position: relative;
-  min-height: 100%;
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in srgb, var(--c-border-h) 80%, transparent);
-  background:
-    radial-gradient(circle at 20% 12%, color-mix(in srgb, var(--c-brand) 22%, transparent), transparent 36%),
-    linear-gradient(145deg, color-mix(in srgb, var(--c-bg-2) 84%, transparent), color-mix(in srgb, var(--c-bg-1) 88%, transparent));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  padding: 1rem;
-}
-
-.hero-art {
-  width: min(100%, 540px);
-  height: auto;
-  filter: drop-shadow(0 22px 34px rgba(8, 20, 32, .5));
-}
-
-.hero-visual-badge {
-  position: absolute;
-  right: .8rem;
-  bottom: .8rem;
-  padding: .35rem .62rem;
-  border-radius: var(--r-full);
-  border: 1px solid color-mix(in srgb, var(--c-border-h) 72%, transparent);
-  background: color-mix(in srgb, var(--c-bg-1) 70%, transparent);
-  color: var(--c-text-2);
-  font-size: .74rem;
-  letter-spacing: .06em;
-  text-transform: uppercase;
 }
 
 .hero-stat-item {
@@ -530,6 +539,15 @@ function openFeature(route) {
   padding-top: .2rem;
 }
 
+.value-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .6rem;
+  margin-bottom: .7rem;
+  flex-wrap: wrap;
+}
+
 .value-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -561,6 +579,23 @@ function openFeature(route) {
   gap: 0.75rem;
 }
 
+.flow-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flow-visual {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 75%, transparent);
+  background: color-mix(in srgb, var(--c-brand-bg) 58%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .flow-step {
   border: 1px solid color-mix(in srgb, var(--p-content-border-color, #e2e8f0) 70%, transparent);
   border-radius: var(--app-radius-md);
@@ -579,6 +614,16 @@ function openFeature(route) {
   margin: 0;
   color: var(--p-text-muted-color);
   font-size: 0.92rem;
+}
+
+.flow-details {
+  margin: .1rem 0 0;
+  padding-left: 1.05rem;
+  display: grid;
+  gap: .28rem;
+  color: var(--c-text-3);
+  font-size: .84rem;
+  line-height: 1.5;
 }
 
 .cta-content {
@@ -606,7 +651,7 @@ function openFeature(route) {
 }
 
 @media (max-width: 980px) {
-  .hero-layout {
+  .hero-benefits {
     grid-template-columns: 1fr;
   }
 

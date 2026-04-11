@@ -152,7 +152,7 @@
               <h3>{{ iv.title || 'Без названия' }}</h3>
               <div class="iv-meta">
                 <span class="badge badge-muted">{{ iv.platform }}</span>
-                <span class="iv-count">{{ iv.question_count || 0 }} вопросов</span>
+                <span class="iv-count">{{ videoQuestionCount(iv) }} вопросов</span>
               </div>
             </div>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
@@ -227,6 +227,11 @@ const flashcardProgress = computed(() => {
 
 const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
 const formatAnswer = (t) => t ? t.replace(/\n/g, '<br>') : ''
+const videoQuestionCount = (v) => {
+  const raw = v?.question_count ?? v?.questions_count ?? v?.linked_questions ?? 0
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
 
 const flipCard = () => { cardFlipped.value = !cardFlipped.value }
 
@@ -273,7 +278,14 @@ const loadStats = async () => {
   loadError.value = ''
   try { const r = await api.getQuestions(); const qs = r.data.questions || []; totalQuestions.value = r.data.total || qs.length; topics.value = [...new Set(qs.map(q => q.topic).filter(Boolean))].sort() } catch { loadError.value = 'Не удалось загрузить список вопросов' }
   try { const r = await api.getSM2Cards({}); sm2Stats.value = r.data.stats || { total: 0, new: 0, review: 0, learned: 0 }; repeatCount.value = sm2Stats.value.review } catch { loadError.value = loadError.value || 'Не удалось загрузить статистику SM-2' }
-  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || []; availableInterviews.value = interviewVideos.value.length } catch { availableInterviews.value = 0; loadError.value = loadError.value || 'Не удалось загрузить записи' }
+  try {
+    const r = await api.getProcessedVideos()
+    interviewVideos.value = r.data?.videos || []
+    availableInterviews.value = interviewVideos.value.length
+  } catch {
+    availableInterviews.value = 0
+    loadError.value = loadError.value || 'Не удалось загрузить записи'
+  }
 }
 
 const loadFlashcards = async () => {

@@ -29,7 +29,7 @@
             <div class="progress"><div class="progress-fill" :style="{ width: (t.progress || 0) + '%' }"></div></div>
             <div class="task-step">{{ t.step || 'Ожидание...' }}</div>
             <div v-if="t.status === 'error' && t.error" class="task-err">{{ t.error }}</div>
-            <div v-if="t.status === 'completed' && t.result" class="task-ok">Найдено {{ t.result.questions_count }} вопросов</div>
+            <div v-if="t.status === 'completed' && t.result" class="task-ok">Найдено {{ taskQuestionCount(t) }} вопросов</div>
             <div class="logs-toggle" @click="toggleLogs(t.task_id)">{{ expandedLogs[t.task_id] ? '▲ Скрыть' : '▼ Показать' }} логи</div>
             <div v-if="expandedLogs[t.task_id] && t.logs?.length" class="task-logs">
               <div v-for="(l, i) in t.logs" :key="i" class="log-row" :class="'log-' + l.status">
@@ -155,7 +155,7 @@
                 </div>
               </td>
               <td><span class="badge badge-info">{{ v.platform }}</span></td>
-              <td>{{ v.question_count || v.linked_questions || 0 }}</td>
+              <td>{{ v.question_count || v.questions_count || v.linked_questions || 0 }}</td>
               <td>{{ fmtTime(v.processed_at) }}</td>
               <td>
                 <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm btn-icon" title="Открыть">↗</a>
@@ -387,32 +387,95 @@ const tabs = ['Вопросы', 'Предложения', 'Обратная св
 const activeTab = ref(0)
 const expandedLogs = ref({})
 
-const loadHiddenTaskIds = () => {
+const HIDDEN_TASKS_KEY = 'admin_hidden_tasks_v2'
+const LEGACY_HIDDEN_TASKS_KEY = 'admin_hidden_tasks'
+const MANUAL_HIDE_TTL_MS = 14 * 24 * 60 * 60 * 1000
+const AUTO_HIDE_TERMINAL_TASK_MS = 20 * 60 * 1000
+
+const normalizeHiddenTaskEntries = (entries) => {
+  const now = Date.now()
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => {
+      if (typeof entry === 'string' || typeof entry === 'number') {
+        return { id: String(entry), until: now + MANUAL_HIDE_TTL_MS }
+      }
+      if (!entry || typeof entry !== 'object') return null
+      const id = String(entry.id || '')
+      const until = Number(entry.until)
+      if (!id || !Number.isFinite(until) || until <= now) return null
+      return { id, until }
+    })
+    .filter(Boolean)
+}
+
+const loadHiddenTaskEntries = () => {
   try {
-    const raw = localStorage.getItem('admin_hidden_tasks')
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.map((id) => String(id)) : []
+    const raw = localStorage.getItem(HIDDEN_TASKS_KEY)
+    if (raw) return normalizeHiddenTaskEntries(JSON.parse(raw))
+  } catch {
+    // noop
+  }
+
+  try {
+    const legacyRaw = localStorage.getItem(LEGACY_HIDDEN_TASKS_KEY)
+    if (!legacyRaw) return []
+    const migrated = normalizeHiddenTaskEntries(JSON.parse(legacyRaw))
+    localStorage.setItem(HIDDEN_TASKS_KEY, JSON.stringify(migrated))
+    localStorage.removeItem(LEGACY_HIDDEN_TASKS_KEY)
+    return migrated
   } catch {
     return []
   }
 }
 
-const saveHiddenTaskIds = (ids) => {
+const saveHiddenTaskEntries = (entries) => {
   try {
-    localStorage.setItem('admin_hidden_tasks', JSON.stringify(ids))
+    localStorage.setItem(HIDDEN_TASKS_KEY, JSON.stringify(normalizeHiddenTaskEntries(entries)))
   } catch (e) {
     console.warn('Cannot save hidden admin tasks:', e)
   }
 }
 
-const hiddenTaskIds = ref(loadHiddenTaskIds())
-const hiddenTaskIdSet = computed(() => new Set(hiddenTaskIds.value))
+const hiddenTaskEntries = ref(loadHiddenTaskEntries())
+const hiddenTaskIdSet = computed(() => new Set(hiddenTaskEntries.value.map((entry) => entry.id)))
+
+const parseTaskTimestamp = (rawTs) => {
+  if (!rawTs || typeof rawTs !== 'string') return null
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(rawTs)
+  const normalized = hasTimezone ? rawTs : `${rawTs}Z`
+  const ts = Date.parse(normalized)
+  return Number.isFinite(ts) ? ts : null
+}
+
+const taskTerminalTs = (task) => {
+  const lastLogTs = Array.isArray(task?.logs) && task.logs.length ? task.logs[task.logs.length - 1]?.time : null
+  return parseTaskTimestamp(task?.finished_at)
+    ?? parseTaskTimestamp(task?.completed_at)
+    ?? parseTaskTimestamp(task?.updated_at)
+    ?? parseTaskTimestamp(lastLogTs)
+}
+
+const isTaskAutoHidden = (task) => {
+  if (!(task?.status === 'completed' || task?.status === 'error')) return false
+  const ts = taskTerminalTs(task)
+  return ts !== null && Date.now() - ts >= AUTO_HIDE_TERMINAL_TASK_MS
+}
+
+const pruneHiddenTaskEntries = () => {
+  const now = Date.now()
+  const pruned = hiddenTaskEntries.value.filter((entry) => entry.until > now)
+  if (pruned.length === hiddenTaskEntries.value.length) return
+  hiddenTaskEntries.value = pruned
+  saveHiddenTaskEntries(pruned)
+}
+
+pruneHiddenTaskEntries()
 
 // Tasks
-const allTasks = computed(() => tasksStore.tasks.filter((t) => !hiddenTaskIdSet.value.has(String(t.task_id))))
-const activeTasks = computed(() => tasksStore.activeTasks)
-const hasActive = computed(() => tasksStore.hasActiveTasks)
+const allTasks = computed(() => tasksStore.tasks.filter((t) => !hiddenTaskIdSet.value.has(String(t.task_id)) && !isTaskAutoHidden(t)))
+const activeTasks = computed(() => allTasks.value.filter((t) => t.status !== 'completed' && t.status !== 'error'))
+const hasActive = computed(() => activeTasks.value.length > 0)
+const taskQuestionCount = (task) => Number(task?.result?.questions_count ?? task?.result?.question_count ?? task?.result?.linked_questions ?? 0)
 const taskBadge = (s) => ({ completed: 'badge-ok', error: 'badge-err' }[s] || 'badge-info')
 const statusLabel = (s) => ({ pending: 'Ожидание', downloading: 'Скачивание', transcribing: 'Транскрибация', extracting: 'Извлечение', saving: 'Сохранение', completed: 'Готово', error: 'Ошибка' }[s] || s)
 const toggleLogs = (id) => { expandedLogs.value[id] = !expandedLogs.value[id] }
@@ -585,10 +648,12 @@ const loginChart = computed(() => chartify(anl.value.logins_30d || []))
 const viewsChart = computed(() => chartify(anl.value.views_30d || []))
 
 const dismissTask = (taskId) => {
+  pruneHiddenTaskEntries()
   const id = String(taskId)
   if (hiddenTaskIdSet.value.has(id)) return
-  hiddenTaskIds.value = [...hiddenTaskIds.value, id]
-  saveHiddenTaskIds(hiddenTaskIds.value)
+  const next = [...hiddenTaskEntries.value, { id, until: Date.now() + MANUAL_HIDE_TTL_MS }]
+  hiddenTaskEntries.value = next
+  saveHiddenTaskEntries(next)
   delete expandedLogs.value[id]
 }
 

@@ -49,7 +49,7 @@
             <span class="rec-date">{{ fmtDate(v.processed_at || v.created_at) }}</span>
           </div>
           <h3>{{ v.title || 'Без названия' }}</h3>
-          <p class="rec-meta">{{ v.question_count || 0 }} вопросов</p>
+          <p class="rec-meta">{{ videoQuestionCount(v) }} вопросов</p>
           <div class="rec-actions">
             <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm">Смотреть</a>
             <button class="btn btn-secondary btn-sm" @click="viewQuestions(v)">Вопросы</button>
@@ -112,6 +112,11 @@ const filtered = computed(() => videos.value.filter(v => {
 
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
 const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
+const videoQuestionCount = (v) => {
+  const raw = v?.question_count ?? v?.questions_count ?? v?.linked_questions ?? 0
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : 0
+}
 
 const viewQuestions = async (v) => {
   selectedVideo.value = v; videoQuestions.value = []; showDialog.value = true
