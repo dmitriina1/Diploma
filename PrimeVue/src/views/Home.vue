@@ -21,6 +21,12 @@
               рабочем пространстве без переключения между разными сервисами.
             </p>
 
+            <ul class="hero-points">
+              <li>Приоритизация тем по вероятности и рыночному спросу</li>
+              <li>Практика в формате интервью, а не просто чтение конспектов</li>
+              <li>Реальный цикл подготовки: изучил → закрепил → проверил</li>
+            </ul>
+
             <div class="hero-actions">
               <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
               <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
@@ -36,7 +42,7 @@
         </Card>
 
         <Card class="stats-card">
-          <template #title>Динамика по темам</template>
+          <template #title>Динамика и пайплайн</template>
           <template #content>
             <p class="stats-sub">Топ-6 тем по количеству собранных вопросов</p>
             <Divider />
@@ -46,6 +52,17 @@
               <div v-for="step in steps" :key="step.title" class="pipeline-item">
                 <Tag :value="step.index" severity="secondary" rounded />
                 <span>{{ step.title }}</span>
+              </div>
+            </div>
+
+            <div class="proof-mini">
+              <div class="proof-item">
+                <span class="proof-k">SM-2</span>
+                <span class="proof-v">алгоритм интервальных повторений</span>
+              </div>
+              <div class="proof-item">
+                <span class="proof-k">AI</span>
+                <span class="proof-v">извлечение вопросов и генерация ответов</span>
               </div>
             </div>
           </template>
@@ -74,6 +91,19 @@
             </template>
           </Card>
         </div>
+      </section>
+
+      <section class="value-strip">
+        <Card class="value-card">
+          <template #content>
+            <div class="value-grid">
+              <div v-for="pillar in valuePillars" :key="pillar.title" class="value-item">
+                <h3>{{ pillar.title }}</h3>
+                <p>{{ pillar.text }}</p>
+              </div>
+            </div>
+          </template>
+        </Card>
       </section>
 
       <section class="flow-section">
@@ -201,6 +231,12 @@ const steps = [
   { index: '03', title: 'Подготовка и тренировка', description: 'Ты учишься по базе и закрепляешь материал в тренажере.' }
 ]
 
+const valuePillars = [
+  { title: 'Скорость', text: 'Меньше времени на хаотичный поиск и больше времени на целенаправленную практику.' },
+  { title: 'Структура', text: 'Единый рабочий процесс: база вопросов, тренировка, проверка результата.' },
+  { title: 'Актуальность', text: 'Контент обновляется из свежих интервью и вакансий, а не из старых конспектов.' }
+]
+
 function openFeature(route) {
   router.push(route)
 }
@@ -267,6 +303,19 @@ function openFeature(route) {
   line-height: 1.68;
 }
 
+.hero-points {
+  margin: 0;
+  padding-left: 1.05rem;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--c-text-2);
+  font-size: 0.92rem;
+}
+
+.hero-points li::marker {
+  color: var(--c-brand-h);
+}
+
 .hero-actions {
   display: flex;
   gap: 0.7rem;
@@ -311,6 +360,34 @@ function openFeature(route) {
   margin-top: 0.8rem;
   display: grid;
   gap: 0.5rem;
+}
+
+.proof-mini {
+  margin-top: .85rem;
+  display: grid;
+  gap: .45rem;
+}
+
+.proof-item {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .45rem .6rem;
+  border: 1px solid color-mix(in srgb, var(--c-border) 88%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--c-surface) 68%, transparent);
+}
+
+.proof-k {
+  font-family: var(--app-font-heading);
+  font-size: .88rem;
+  color: var(--c-brand-h);
+  min-width: 40px;
+}
+
+.proof-v {
+  color: var(--c-text-3);
+  font-size: .82rem;
 }
 
 .pipeline-item {
@@ -372,6 +449,39 @@ function openFeature(route) {
   overflow: hidden;
 }
 
+.value-strip {
+  margin-top: -.2rem;
+}
+
+.value-card :deep(.p-card-content) {
+  padding-top: .2rem;
+}
+
+.value-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.value-item {
+  border: 1px solid color-mix(in srgb, var(--c-border) 86%, transparent);
+  border-radius: var(--r-md);
+  padding: .9rem;
+  background: color-mix(in srgb, var(--c-surface) 74%, transparent);
+}
+
+.value-item h3 {
+  margin: 0 0 .3rem;
+  font-size: .96rem;
+}
+
+.value-item p {
+  margin: 0;
+  color: var(--c-text-3);
+  font-size: .88rem;
+  line-height: 1.55;
+}
+
 .flow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -424,14 +534,16 @@ function openFeature(route) {
 
 @media (max-width: 1100px) {
   .tools-grid,
-  .flow-grid {
+  .flow-grid,
+  .value-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 700px) {
   .tools-grid,
-  .flow-grid {
+  .flow-grid,
+  .value-grid {
     grid-template-columns: 1fr;
   }
 

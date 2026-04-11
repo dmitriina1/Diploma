@@ -2,8 +2,13 @@
   <div class="page">
     <NavBar />
     <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="assignments" :size="34" /> Тестовые задания</h1>
-      <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
+      <div class="ta-headline">
+        <div>
+          <h1 class="heading h-page"><BrandIcon name="assignments" :size="34" /> Тестовые задания</h1>
+          <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
+        </div>
+        <div class="ta-kpi">{{ total }} в базе</div>
+      </div>
 
       <!-- Filters -->
       <div class="filters">
@@ -25,25 +30,31 @@
 
       <div v-if="loading" class="center-block"><div class="spinner"></div></div>
 
-      <div v-else-if="assignments.length" class="grid">
-        <div v-for="a in assignments" :key="a.id" class="ta-card card card-hover">
-          <div class="ta-head" :class="a.difficulty">
-            <span class="badge" :class="diffBadge(a.difficulty)">{{ a.difficulty }}</span>
-            <span v-if="a.company" class="company">{{ a.company }}</span>
-          </div>
-          <router-link :to="'/test-assignments/' + a.id" class="ta-title">{{ a.title }}</router-link>
-          <p class="ta-desc">{{ a.description }}</p>
-          <div v-if="a.profession" class="ta-prof">{{ a.profession }}</div>
-          <div v-if="a.skills_list?.length" class="ta-skills">
-            <span v-for="s in a.skills_list" :key="s" class="badge badge-info">{{ s }}</span>
-          </div>
-          <div class="ta-foot">
-            <router-link :to="'/test-assignments/' + a.id" class="btn btn-ghost btn-sm">Подробнее →</router-link>
-            <a v-if="a.link" :href="a.link" target="_blank" class="btn btn-secondary btn-sm">Открыть</a>
-            <span class="ta-date">{{ fmtDate(a.created_at) }}</span>
+      <template v-else-if="assignments.length">
+        <div class="list-meta">
+          <span>Показано {{ assignments.length }} из {{ total }}</span>
+        </div>
+
+        <div class="grid">
+          <div v-for="a in assignments" :key="a.id" class="ta-card card card-hover">
+            <div class="ta-head" :class="a.difficulty">
+              <span class="badge" :class="diffBadge(a.difficulty)">{{ a.difficulty }}</span>
+              <span v-if="a.company" class="company">{{ a.company }}</span>
+            </div>
+            <router-link :to="'/test-assignments/' + a.id" class="ta-title">{{ a.title }}</router-link>
+            <p class="ta-desc">{{ a.description }}</p>
+            <div v-if="a.profession" class="ta-prof">{{ a.profession }}</div>
+            <div v-if="a.skills_list?.length" class="ta-skills">
+              <span v-for="s in a.skills_list" :key="s" class="badge badge-info">{{ s }}</span>
+            </div>
+            <div class="ta-foot">
+              <router-link :to="'/test-assignments/' + a.id" class="btn btn-ghost btn-sm">Подробнее →</router-link>
+              <a v-if="a.link" :href="a.link" target="_blank" class="btn btn-secondary btn-sm">Открыть</a>
+              <span class="ta-date">{{ fmtDate(a.created_at) }}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
 
       <div v-else class="empty-state">
         <p>Тестовые задания не найдены</p>
@@ -105,19 +116,53 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.ta-headline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: .75rem;
+  margin-bottom: 1.2rem;
+  flex-wrap: wrap;
+}
+
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
+
+.ta-kpi {
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 82%, transparent);
+  background: color-mix(in srgb, var(--c-brand-bg) 58%, transparent);
+  border-radius: var(--r-full);
+  padding: .45rem .85rem;
+  font-size: .82rem;
+  color: var(--c-brand-h);
+  font-weight: 700;
+}
+
 .filters {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: .75rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: .85rem;
+  position: sticky;
+  top: calc(var(--nav-h) + .55rem);
+  z-index: 15;
+  padding: .55rem;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--c-bg-1) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 72%, transparent);
+  backdrop-filter: blur(10px);
 }
 .filters .input { min-width: 180px; }
 .search-wrap { position: relative; }
 .search-icon { position: absolute; left: .65rem; top: 50%; transform: translateY(-50%); color: var(--c-text-4); pointer-events: none; }
 .search-input { padding-left: 2.1rem; width: 100%; }
 .center-block { display: flex; justify-content: center; padding: 3rem; }
+
+.list-meta {
+  margin-bottom: .85rem;
+  color: var(--c-text-4);
+  font-size: .84rem;
+}
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.25rem; }
 .ta-card { 
@@ -138,7 +183,7 @@ onMounted(loadData)
   justify-content: space-between; 
   align-items: center; 
   padding: 1rem 1.25rem; 
-  background: linear-gradient(135deg, color-mix(in srgb, var(--c-bg-2) 84%, transparent), color-mix(in srgb, var(--c-surface) 92%, transparent));
+  background: linear-gradient(145deg, color-mix(in srgb, var(--c-bg-2) 82%, transparent), color-mix(in srgb, var(--c-surface-a) 72%, transparent));
   border-bottom: 1px solid var(--c-border);
 }
 .ta-head.junior { border-left: 4px solid var(--c-ok); }
@@ -208,8 +253,15 @@ onMounted(loadData)
 .empty-state { text-align: center; padding: 3rem; color: var(--c-text-4); }
 
 @media (max-width: 640px) {
+  .heading,
+  .sub {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
   .filters {
     grid-template-columns: 1fr;
+    top: calc(var(--nav-h) + .45rem);
   }
   .filters .input, .search-wrap { min-width: auto; max-width: none; width: 100%; }
   .grid { grid-template-columns: 1fr; }

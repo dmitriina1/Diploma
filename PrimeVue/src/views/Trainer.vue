@@ -357,7 +357,8 @@ const startInterviewSession = async (v) => {
   width: 100%;
   max-width: 720px;
   min-height: 360px;
-  perspective: 1000px;
+  perspective: 1400px;
+  transform-style: preserve-3d;
   cursor: pointer;
   margin-bottom: 1.5rem;
 }
@@ -367,7 +368,7 @@ const startInterviewSession = async (v) => {
   position: relative;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
-  transition: transform .5s var(--ease);
+  transition: transform .55s var(--ease);
 }
 .fc-card.flipped { transform: rotateY(180deg); }
 .fc-face {
@@ -375,8 +376,6 @@ const startInterviewSession = async (v) => {
   inset: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  transform: translateZ(0);
-  will-change: transform;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
@@ -388,6 +387,7 @@ const startInterviewSession = async (v) => {
   box-shadow: var(--shadow-md);
 }
 .fc-front {
+  transform: rotateY(0deg);
   z-index: 2;
 }
 .fc-back {
@@ -472,7 +472,8 @@ const startInterviewSession = async (v) => {
 @media (max-width: 640px) {
   .mode-grid { grid-template-columns: 1fr; }
   .fc-actions { flex-direction: column; }
-  .fc-scene { min-height: 260px; }
-  .fc-card { min-height: 260px; }
+  .fc-scene { min-height: 300px; }
+  .fc-card { min-height: 300px; }
+  .fc-question { font-size: 1.2rem; }
 }
 </style>

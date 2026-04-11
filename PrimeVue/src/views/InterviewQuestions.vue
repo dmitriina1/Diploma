@@ -176,23 +176,22 @@ onMounted(async () => {
 }
 
 .filters {
-  display: flex;
-  gap: .6rem;
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 1fr));
+  gap: .58rem;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
   position: sticky;
-  top: calc(var(--nav-h) + .45rem);
+  top: calc(var(--nav-h) + .55rem);
   z-index: 20;
-  background: transparent;
-  backdrop-filter: none;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
+  background: color-mix(in srgb, var(--c-bg-1) 68%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 78%, transparent);
+  border-radius: var(--r-md);
+  padding: .55rem;
 }
 .search-wrap {
   position: relative;
-  flex: 1;
-  min-width: 200px;
+  min-width: 0;
 }
 .search-icon {
   position: absolute;
@@ -202,14 +201,19 @@ onMounted(async () => {
   color: var(--c-text-4);
   pointer-events: none;
 }
-.search-input { padding-left: 2.2rem; }
+.search-input {
+  padding-left: 2.2rem;
+  min-width: 0;
+}
 .filter-select { 
-  min-width: 210px;
-  max-width: 290px;
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  font-size: .92rem;
 }
 .filter-sort { 
-  min-width: 180px;
-  max-width: 220px;
+  min-width: 0;
+  max-width: none;
 }
 
 .list-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
@@ -256,7 +260,10 @@ onMounted(async () => {
 .pag-info { font-size: .85rem; color: var(--c-text-3); font-weight: 500; }
 
 @media (max-width: 640px) {
-  .filters { flex-direction: column; }
+  .filters {
+    grid-template-columns: 1fr;
+    top: calc(var(--nav-h) + .45rem);
+  }
   .filter-select, .filter-sort {
     min-width: auto;
     max-width: none;

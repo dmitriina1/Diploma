@@ -29,6 +29,13 @@
         </label>
       </div>
 
+      <div class="source-presets">
+        <button class="btn btn-sm" :class="activePreset === 'skills' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('skills')">График: навыки</button>
+        <button class="btn btn-sm" :class="activePreset === 'description' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('description')">График: описание</button>
+        <button class="btn btn-sm" :class="activePreset === 'title' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('title')">График: заголовок</button>
+        <button class="btn btn-sm" :class="activePreset === 'mixed' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('mixed')">Смешанный источник</button>
+      </div>
+
       <!-- Professions -->
       <div class="prof-row">
         <button v-for="p in professions" :key="p.profession" class="btn btn-sm"
@@ -55,6 +62,7 @@
           <h2>{{ selected || 'Все профессии' }}</h2>
           <span v-if="skills[0]?.total_vacancies" class="muted">~{{ skills[0].total_vacancies }} вакансий</span>
           <span class="muted">{{ totalSkills }} навыков</span>
+          <span class="muted">Режим: {{ activeSourceTitle }}</span>
         </div>
 
         <div class="chart">
@@ -81,6 +89,8 @@
           <div class="sum-card nice"><h4>Nice-to-have (20–50%)</h4><div class="sum-tags"><span v-for="s in niceToHave" :key="s.skill" class="badge badge-warn">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
           <div class="sum-card bonus"><h4>Дополнительно (&lt;20%)</h4><div class="sum-tags"><span v-for="s in bonusSkills" :key="s.skill" class="badge badge-info">{{ s.skill }} ({{ s.percentage.toFixed(0) }}%)</span></div></div>
         </div>
+
+        <p class="method-note">Категории зависят от выбранного источника: при переключении между навыками, описанием и заголовками распределение может заметно меняться.</p>
       </template>
 
       <StatePanel
@@ -113,6 +123,7 @@ const perPage = ref(30)
 const totalSkills = ref(0)
 const loadError = ref('')
 const auth = useAuthStore()
+const activePreset = ref('skills')
 
 // Source filters
 const sources = ref({
@@ -125,6 +136,13 @@ const mustHave = computed(() => skills.value.filter(s => s.percentage > 50))
 const niceToHave = computed(() => skills.value.filter(s => s.percentage >= 20 && s.percentage <= 50))
 const bonusSkills = computed(() => skills.value.filter(s => s.percentage < 20))
 
+const activeSourceTitle = computed(() => {
+  if (activePreset.value === 'skills') return 'Навыки'
+  if (activePreset.value === 'description') return 'Описание'
+  if (activePreset.value === 'title') return 'Заголовок'
+  return 'Смешанный'
+})
+
 const barColor = (p) => {
   if (p >= 70) return 'linear-gradient(90deg, var(--c-err), #dc2626)'
   if (p >= 50) return 'linear-gradient(90deg, var(--c-warn), #ea580c)'
@@ -133,6 +151,16 @@ const barColor = (p) => {
 }
 
 const selectProfession = async (p) => { selected.value = p; page.value = 1; await loadSkills() }
+
+const applySourcePreset = async (preset) => {
+  activePreset.value = preset
+  if (preset === 'skills') sources.value = { skills: true, description: false, title: false }
+  if (preset === 'description') sources.value = { skills: false, description: true, title: false }
+  if (preset === 'title') sources.value = { skills: false, description: false, title: true }
+  if (preset === 'mixed') sources.value = { skills: true, description: true, title: true }
+  page.value = 1
+  await loadSkills()
+}
 
 const loadSkills = async () => {
   loading.value = true
@@ -143,6 +171,10 @@ const loadSkills = async () => {
     if (sources.value.skills) selectedSources.push('skills')
     if (sources.value.description) selectedSources.push('description')
     if (sources.value.title) selectedSources.push('title')
+
+    if (selectedSources.length === 1) activePreset.value = selectedSources[0]
+    else if (selectedSources.length === 3) activePreset.value = 'mixed'
+    else activePreset.value = 'mixed'
     
     const sourcesParam = selectedSources.length > 0 ? selectedSources.join(',') : null
     
@@ -201,6 +233,15 @@ onMounted(async () => {
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   flex-wrap: wrap;
+}
+
+.source-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  justify-content: center;
+  margin-top: -0.35rem;
+  margin-bottom: 1.25rem;
 }
 .source-filters:has(input:checked) {
   border-color: color-mix(in srgb, var(--c-brand) 40%, var(--c-border));
@@ -280,6 +321,11 @@ onMounted(async () => {
 .sum-tags .badge {
   text-transform: none;
   letter-spacing: 0;
+}
+.method-note {
+  margin-top: .85rem;
+  color: var(--c-text-4);
+  font-size: .82rem;
 }
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 

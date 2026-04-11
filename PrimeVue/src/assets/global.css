@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap');
 
 /* ========================================
    InterviewHub v4 — Clean Modern Design
@@ -6,31 +6,36 @@
 
 :root,
 html[data-theme='dark'] {
+  --app-font-body: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --app-font-heading: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --app-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --app-radius-md: 14px;
+
   /* -- Palette -- */
-  --c-bg:        #0c0c0f;
-  --c-bg-1:      #141418;
-  --c-bg-2:      #1b1b22;
-  --c-bg-3:      #24242e;
-  --c-surface:   rgba(255,255,255,0.03);
-  --c-surface-h: rgba(255,255,255,0.06);
-  --c-surface-a: rgba(255,255,255,0.09);
+  --c-bg:        #07131c;
+  --c-bg-1:      #0c1c28;
+  --c-bg-2:      #112737;
+  --c-bg-3:      #18374a;
+  --c-surface:   rgba(255,255,255,0.04);
+  --c-surface-h: rgba(255,255,255,0.08);
+  --c-surface-a: rgba(255,255,255,0.11);
 
-  --c-border:    rgba(255,255,255,0.07);
-  --c-border-h:  rgba(255,255,255,0.14);
+  --c-border:    rgba(167, 208, 227, 0.18);
+  --c-border-h:  rgba(190, 224, 240, 0.34);
 
-  --c-text:      #f0f0f3;
-  --c-text-2:    #b4b6c7;
-  --c-text-3:    #8d91a7;
-  --c-text-4:    #48485a;
+  --c-text:      #f3fbff;
+  --c-text-2:    #c3d7e2;
+  --c-text-3:    #90a8b6;
+  --c-text-4:    #628094;
 
   --c-brand:     #1f8a70;
-  --c-brand-h:   #2cbf98;
-  --c-brand-bg:  rgba(31,138,112,0.12);
-  --c-brand-glow:rgba(44,191,152,0.32);
-  --c-accent:    #15b5c9;
-  --c-accent-bg: rgba(21,181,201,.14);
-  --c-violet:    #5f7dff;
-  --c-violet-bg: rgba(95,125,255,.14);
+  --c-brand-h:   #29b791;
+  --c-brand-bg:  rgba(41,183,145,0.16);
+  --c-brand-glow:rgba(41,183,145,0.34);
+  --c-accent:    #18b4d8;
+  --c-accent-bg: rgba(24,180,216,.16);
+  --c-violet:    #4f7ecf;
+  --c-violet-bg: rgba(79,126,207,.16);
 
   --c-ok:        #34d399;
   --c-ok-bg:     rgba(52,211,153,0.10);
@@ -77,6 +82,11 @@ html[data-theme='dark'] {
 }
 
 html[data-theme='light'] {
+  --app-font-body: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+  --app-font-heading: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --app-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --app-radius-md: 14px;
+
   --c-bg:        #f2f5f8;
   --c-bg-1:      #ffffff;
   --c-bg-2:      #e9eef3;
@@ -115,15 +125,17 @@ html {
 }
 
 body {
-  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--app-font-body);
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(circle at 0% 0%, var(--c-brand-bg) 0%, transparent 52%),
-    radial-gradient(circle at 100% 100%, var(--c-info-bg) 0%, transparent 48%),
-    linear-gradient(140deg, color-mix(in srgb, var(--c-bg) 92%, var(--c-brand-bg)) 0%, var(--c-bg) 55%, color-mix(in srgb, var(--c-bg) 92%, var(--c-info-bg)) 100%),
+    radial-gradient(circle at 7% 4%, color-mix(in srgb, var(--c-brand) 24%, transparent), transparent 42%),
+    radial-gradient(circle at 92% 94%, color-mix(in srgb, var(--c-accent) 20%, transparent), transparent 44%),
+    conic-gradient(from 230deg at 50% 50%, transparent, color-mix(in srgb, var(--c-violet-bg) 42%, transparent), transparent 35%),
+    linear-gradient(152deg, color-mix(in srgb, var(--c-bg) 90%, #0a2130) 0%, var(--c-bg) 58%, color-mix(in srgb, var(--c-bg) 90%, #0d2d2b) 100%),
     var(--c-bg);
   color: var(--c-text);
-  line-height: 1.62;
+  line-height: 1.64;
+  letter-spacing: .002em;
   overflow-x: hidden;
 }
 
@@ -143,19 +155,19 @@ body::after {
 body::before {
   inset: -15% -10%;
   background:
-    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--c-brand) 20%, transparent) 0%, transparent 32%),
-    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--c-info) 17%, transparent) 0%, transparent 28%);
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--c-brand) 24%, transparent) 0%, transparent 32%),
+    radial-gradient(circle at 80% 70%, color-mix(in srgb, var(--c-info) 20%, transparent) 0%, transparent 28%);
   filter: blur(24px);
   animation: ambientFloat 16s ease-in-out infinite alternate;
 }
 
 body::after {
   inset: 0;
-  opacity: .12;
+  opacity: .1;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, .06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, .06) 1px, transparent 1px);
-  background-size: 34px 34px;
+    linear-gradient(to right, rgba(255, 255, 255, .05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, .05) 1px, transparent 1px);
+  background-size: 42px 42px;
 }
 
 @keyframes ambientFloat {
@@ -163,12 +175,20 @@ body::after {
   to { transform: translate3d(1.5%, -2%, 0) scale(1.06); }
 }
 
-#app { min-height: 100vh; display: flex; flex-direction: column; }
+#app { min-height: 100vh; display: flex; flex-direction: column; isolation: isolate; }
+
+.page,
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 img { max-width: 100%; }
-code, kbd, pre { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+h1, h2, h3, h4, h5, h6 { font-family: var(--app-font-heading); letter-spacing: -.015em; }
+code, kbd, pre { font-family: var(--app-font-mono); }
 
 /* ── ScrollBar ── */
 ::-webkit-scrollbar { width: 6px; }
@@ -177,9 +197,9 @@ code, kbd, pre { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Me
 ::-webkit-scrollbar-thumb:hover { background: var(--c-text-3); }
 
 /* ── Utilities ── */
-.container    { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; }
-.container-lg { max-width: var(--max-w-lg); margin: 0 auto; padding: 0 1.5rem; }
-.container-sm { max-width: var(--max-w-sm); margin: 0 auto; padding: 0 1.5rem; }
+.container    { width: 100%; max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; }
+.container-lg { width: 100%; max-width: var(--max-w-lg); margin: 0 auto; padding: 0 1.5rem; }
+.container-sm { width: 100%; max-width: var(--max-w-sm); margin: 0 auto; padding: 0 1.5rem; }
 
 .h-display {
   font-size: clamp(2rem, 5vw, 3.5rem);
@@ -204,7 +224,7 @@ code, kbd, pre { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Me
 .input {
   width: 100%;
   padding: .8rem 1.15rem;
-  background: var(--c-bg-2);
+  background: color-mix(in srgb, var(--c-bg-2) 88%, transparent);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   color: var(--c-text);
@@ -224,6 +244,7 @@ select.input {
   background-repeat: no-repeat;
   background-position: right .75rem center;
   padding-right: 2rem;
+  text-overflow: ellipsis;
 }
 
 /* ── Button base ── */
@@ -235,7 +256,7 @@ select.input {
   padding: .75rem 1.5rem;
   border: 1px solid transparent;
   border-radius: var(--r-md);
-  font-size: 1rem;
+  font-size: .96rem;
   font-weight: 600;
   transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease);
   white-space: nowrap;
@@ -245,13 +266,13 @@ select.input {
 .btn:active { transform: translateY(0); }
 
 .btn-primary {
-  background: var(--c-brand);
+  background: linear-gradient(130deg, var(--c-brand), color-mix(in srgb, var(--c-brand-h) 84%, #35f8c2));
   color: #fff;
 }
 .btn-primary:hover { background: var(--c-brand-h); box-shadow: 0 0 20px var(--c-brand-glow); }
 
 .btn-secondary {
-  background: var(--c-surface);
+  background: color-mix(in srgb, var(--c-surface) 86%, transparent);
   border-color: var(--c-border);
   color: var(--c-text);
 }
@@ -299,15 +320,16 @@ select.input {
 
 /* ── Card ── */
 .card {
-  background: var(--c-surface);
+  background: linear-gradient(170deg, color-mix(in srgb, var(--c-surface) 92%, transparent), color-mix(in srgb, var(--c-surface-a) 70%, transparent));
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
+  box-shadow: 0 14px 34px -32px rgba(2, 16, 23, 0.9);
   transition: transform var(--dur) var(--ease-out), border-color var(--dur) var(--ease), background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .card-hover:hover {
-  background: var(--c-surface-h);
+  background: linear-gradient(175deg, color-mix(in srgb, var(--c-surface-h) 90%, transparent), color-mix(in srgb, var(--c-surface-a) 82%, transparent));
   border-color: var(--c-border-h);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-md);
   will-change: transform;
 }
@@ -454,6 +476,49 @@ select.input {
 .page-leave-active { transition: opacity .2s var(--ease), transform .2s var(--ease); }
 .page-enter-from { opacity: 0; transform: translateY(8px); }
 .page-leave-to { opacity: 0; }
+
+/* ── PrimeVue Harmonization ── */
+.p-card {
+  background: transparent;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 36px -32px rgba(0, 20, 30, 0.95);
+}
+
+.p-card .p-card-title,
+.p-card .p-card-content,
+.p-card .p-card-footer {
+  color: var(--c-text);
+}
+
+.p-button {
+  border-radius: var(--r-md);
+  font-weight: 600;
+}
+
+.p-tag {
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.p-inputtext,
+.p-select,
+.p-textarea {
+  background: color-mix(in srgb, var(--c-bg-2) 88%, transparent);
+  border-color: var(--c-border);
+  color: var(--c-text);
+}
+
+.p-inputtext:enabled:focus,
+.p-select.p-focus,
+.p-textarea:enabled:focus {
+  border-color: var(--c-brand);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-brand) 18%, transparent);
+}
+
+.p-divider.p-divider-horizontal:before {
+  border-top-color: color-mix(in srgb, var(--c-border-h) 76%, transparent);
+}
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
