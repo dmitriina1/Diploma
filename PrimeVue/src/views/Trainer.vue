@@ -120,7 +120,7 @@
 
         <!-- Session Complete -->
         <div v-if="sessionComplete" class="fc-results card">
-          <div class="fr-emoji">🎉</div>
+          <div class="fr-icon"><BrandIcon name="flashcards" :size="56" /></div>
           <h2>Сессия завершена!</h2>
           <div class="fr-stats">
             <div class="fr-s"><span class="fr-val ok">{{ knownCount }}</span><span class="fr-lbl">Знаю</span></div>
@@ -369,6 +369,7 @@ const startInterviewSession = async (v) => {
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
   transition: transform .55s var(--ease);
+  will-change: transform;
 }
 .fc-card.flipped { transform: rotateY(180deg); }
 .fc-face {
@@ -376,7 +377,9 @@ const startInterviewSession = async (v) => {
   inset: 0;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  background: var(--c-surface);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--c-surface) 84%, transparent), color-mix(in srgb, var(--c-surface-a) 80%, transparent)),
+    url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat;
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
   padding: 2rem;
@@ -396,6 +399,9 @@ const startInterviewSession = async (v) => {
   overflow-y: auto;
   justify-content: flex-start;
   align-items: flex-start;
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--c-bg-2) 72%, transparent), color-mix(in srgb, var(--c-surface) 86%, transparent)),
+    url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat;
 }
 .fc-tags { 
   display: flex; 
@@ -438,7 +444,17 @@ const startInterviewSession = async (v) => {
 
 /* Results */
 .fc-results { padding: 2.5rem; text-align: center; max-width: 440px; width: 100%; }
-.fr-emoji { font-size: 3rem; margin-bottom: .75rem; }
+.fr-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  height: 74px;
+  margin-bottom: .72rem;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 76%, transparent);
+  background: color-mix(in srgb, var(--c-brand-bg) 56%, transparent);
+}
 .fc-results h2 { font-size: 1.3rem; margin-bottom: 1.25rem; }
 .fr-stats { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem; }
 .fr-s { display: flex; flex-direction: column; align-items: center; }

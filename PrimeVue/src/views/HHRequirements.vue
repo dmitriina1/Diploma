@@ -5,6 +5,14 @@
       <h1 class="heading h-page"><BrandIcon name="skills" :size="34" /> Навыки из вакансий</h1>
       <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
 
+      <div class="skills-hero card reveal-pop" style="--delay:80ms">
+        <div class="skills-hero-copy">
+          <h3>Рынок в динамике, а не в ощущениях</h3>
+          <p>Сравнивайте источники (навыки, описание, заголовок), чтобы видеть реальный спрос и приоритеты подготовки.</p>
+        </div>
+        <img :src="skillsOrbit" alt="Иллюстрация аналитики навыков" class="skills-hero-art float-soft" />
+      </div>
+
       <div v-if="auth.isAdmin" class="sync-actions">
         <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="runSyncNow">
           {{ syncing ? 'Синхронизация...' : 'Обновить из HH сейчас' }}
@@ -112,6 +120,7 @@ import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
 import { useAuthStore } from '../store/auth'
+import skillsOrbit from '../assets/media/hybrid/skills-orbit.svg'
 
 const loading = ref(false)
 const syncing = ref(false)
@@ -213,6 +222,37 @@ onMounted(async () => {
 <style scoped>
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
+.skills-hero {
+  margin: 0 auto 1.2rem;
+  max-width: 980px;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1.2fr minmax(180px, 280px);
+  gap: .9rem;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--c-border-h) 74%, transparent);
+}
+
+.skills-hero-copy h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+
+.skills-hero-copy p {
+  margin: .28rem 0 0;
+  color: var(--c-text-3);
+  font-size: .9rem;
+  line-height: 1.58;
+}
+
+.skills-hero-art {
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--c-border) 78%, transparent);
+  background: color-mix(in srgb, var(--c-bg-2) 75%, transparent);
+}
+
 .sync-actions {
   display: flex;
   align-items: center;
@@ -330,6 +370,10 @@ onMounted(async () => {
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 
 @media (max-width: 640px) {
+  .skills-hero {
+    grid-template-columns: 1fr;
+  }
+
   .source-filters { justify-content: flex-start; }
   .skill-row { grid-template-columns: 1fr; gap: .2rem; }
   .sk-count { text-align: left; }

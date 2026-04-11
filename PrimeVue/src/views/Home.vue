@@ -4,49 +4,58 @@
 
     <main class="container-lg home-page">
       <section class="hero-grid">
-        <Card class="hero-card">
+        <Card class="hero-card reveal-pop">
           <template #content>
-            <div class="hero-badges">
-              <Tag value="AI-powered подготовка" severity="success" rounded class="hero-tag" />
-              <Tag value="PrimeVue Edition" severity="contrast" rounded />
-            </div>
+            <div class="hero-layout">
+              <div class="hero-copy">
+                <div class="hero-badges">
+                  <Tag value="AI-powered подготовка" severity="success" rounded class="hero-tag" />
+                  <Tag value="PrimeVue Edition" severity="contrast" rounded />
+                </div>
 
-            <h1 class="h-page hero-title">
-              Готовься к <span>IT-собеседованиям</span>
-              системно и быстрее
-            </h1>
+                <h1 class="h-page hero-title">
+                  Готовься к <span>IT-собеседованиям</span>
+                  системно и быстрее
+                </h1>
 
-            <p class="hero-sub">
-              Вопросы, тренажер SM-2, mock-интервью, анализ вакансий и обработка видео в едином
-              рабочем пространстве без переключения между разными сервисами.
-            </p>
+                <p class="hero-sub">
+                  Вопросы, тренажер SM-2, mock-интервью, анализ вакансий и обработка видео в едином
+                  рабочем пространстве без переключения между разными сервисами.
+                </p>
 
-            <ul class="hero-points">
-              <li>Приоритизация тем по вероятности и рыночному спросу</li>
-              <li>Практика в формате интервью, а не просто чтение конспектов</li>
-              <li>Реальный цикл подготовки: изучил → закрепил → проверил</li>
-            </ul>
+                <ul class="hero-points">
+                  <li>Приоритизация тем по вероятности и рыночному спросу</li>
+                  <li>Практика в формате интервью, а не просто чтение конспектов</li>
+                  <li>Реальный цикл подготовки: изучил → закрепил → проверил</li>
+                </ul>
 
-            <div class="hero-actions">
-              <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
-              <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
-            </div>
+                <div class="hero-actions">
+                  <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
+                  <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
+                </div>
 
-            <div class="hero-stats">
-              <div v-for="item in stats" :key="item.label" class="hero-stat-item">
-                <div class="hero-stat-value">{{ item.value }}</div>
-                <div class="hero-stat-label">{{ item.label }}</div>
+                <div class="hero-stats">
+                  <div v-for="item in stats" :key="item.label" class="hero-stat-item">
+                    <div class="hero-stat-value">{{ item.value }}</div>
+                    <div class="hero-stat-label">{{ item.label }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hero-visual media-glow">
+                <img :src="heroVisual" alt="Схема подготовки к интервью" class="hero-art float-soft" />
+                <div class="hero-visual-badge">AI pipeline • Q&A • SM-2</div>
               </div>
             </div>
           </template>
         </Card>
 
-        <Card class="stats-card">
+        <Card class="stats-card reveal-pop" style="--delay:120ms">
           <template #title>Динамика и пайплайн</template>
           <template #content>
             <p class="stats-sub">Топ-6 тем по количеству собранных вопросов</p>
             <Divider />
-            <Chart type="line" :data="chartData" :options="chartOptions" class="home-chart" />
+            <Chart type="bar" :data="chartData" :options="chartOptions" class="home-chart" />
 
             <div class="pipeline-mini">
               <div v-for="step in steps" :key="step.title" class="pipeline-item">
@@ -154,6 +163,7 @@ import Chart from 'primevue/chart'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import { useQuestionsStore } from '../store'
+import heroVisual from '../assets/media/hybrid/hero-interview.svg'
 
 const store = useQuestionsStore()
 const router = useRouter()
@@ -192,16 +202,21 @@ const chartData = computed(() => {
       {
         label: 'Вопросы',
         data: top.map((entry) => entry[1]),
-        fill: true,
-        tension: 0.35,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.2)'
+        borderRadius: 10,
+        maxBarThickness: 30,
+        backgroundColor: ['#20b28a', '#1aa4c0', '#5b8ef2', '#20b28a', '#1aa4c0', '#5b8ef2'],
+        borderColor: 'rgba(255,255,255,.1)',
+        borderWidth: 1
       }
     ]
   }
 })
 
 const chartOptions = {
+  animation: {
+    duration: 950,
+    easing: 'easeOutQuart'
+  },
   plugins: {
     legend: { display: false }
   },
@@ -209,7 +224,19 @@ const chartOptions = {
     y: {
       beginAtZero: true,
       ticks: {
-        precision: 0
+        precision: 0,
+        color: '#8da8bc'
+      },
+      grid: {
+        color: 'rgba(134, 171, 194, .2)'
+      }
+    },
+    x: {
+      ticks: {
+        color: '#a5bdd0'
+      },
+      grid: {
+        display: false
       }
     }
   },
@@ -274,6 +301,17 @@ function openFeature(route) {
 
 .hero-card :deep(.p-card-content) {
   position: relative;
+  z-index: 1;
+}
+
+.hero-layout {
+  display: grid;
+  grid-template-columns: 1.1fr minmax(320px, .9fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.hero-copy {
   display: grid;
   gap: 1rem;
 }
@@ -326,6 +364,41 @@ function openFeature(route) {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.6rem;
+}
+
+.hero-visual {
+  position: relative;
+  min-height: 100%;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 80%, transparent);
+  background:
+    radial-gradient(circle at 20% 12%, color-mix(in srgb, var(--c-brand) 22%, transparent), transparent 36%),
+    linear-gradient(145deg, color-mix(in srgb, var(--c-bg-2) 84%, transparent), color-mix(in srgb, var(--c-bg-1) 88%, transparent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.hero-art {
+  width: min(100%, 540px);
+  height: auto;
+  filter: drop-shadow(0 22px 34px rgba(8, 20, 32, .5));
+}
+
+.hero-visual-badge {
+  position: absolute;
+  right: .8rem;
+  bottom: .8rem;
+  padding: .35rem .62rem;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--c-border-h) 72%, transparent);
+  background: color-mix(in srgb, var(--c-bg-1) 70%, transparent);
+  color: var(--c-text-2);
+  font-size: .74rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
 }
 
 .hero-stat-item {
@@ -532,7 +605,11 @@ function openFeature(route) {
   flex-wrap: wrap;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 980px) {
+  .hero-layout {
+    grid-template-columns: 1fr;
+  }
+
   .tools-grid,
   .flow-grid,
   .value-grid {

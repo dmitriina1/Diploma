@@ -12,6 +12,14 @@
         <button v-if="professionSlug" class="btn btn-ghost btn-sm" @click="clearProfession">✕ Сбросить профессию</button>
       </div>
 
+      <div class="questions-hero card reveal-pop" style="--delay:80ms">
+        <img :src="questionsBanner" alt="Визуал каталога вопросов" class="questions-hero-img" />
+        <div class="questions-hero-copy">
+          <h3>Каталог из реальных интервью</h3>
+          <p>Фильтруйте по технологиям, уровню и сортируйте по вероятности вопроса.</p>
+        </div>
+      </div>
+
       <!-- Filters -->
       <div class="filters">
         <div class="search-wrap">
@@ -98,6 +106,7 @@ import { useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import api from '../api/client'
+import questionsBanner from '../assets/media/hybrid/questions-banner.svg'
 
 const route = useRoute()
 const loading = ref(true)
@@ -173,6 +182,44 @@ onMounted(async () => {
   bottom: -10px;
   height: 1px;
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c-brand) 60%, transparent), transparent);
+}
+
+.questions-hero {
+  margin-bottom: .95rem;
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--c-border-h) 82%, transparent);
+}
+
+.questions-hero-img {
+  width: 100%;
+  height: clamp(120px, 15vw, 188px);
+  object-fit: cover;
+  display: block;
+  opacity: .92;
+}
+
+.questions-hero-copy {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: .85rem;
+  padding: .65rem .8rem;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--c-bg-1) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c-border) 75%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.questions-hero-copy h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.questions-hero-copy p {
+  margin: .18rem 0 0;
+  color: var(--c-text-3);
+  font-size: .84rem;
 }
 
 .filters {
@@ -260,6 +307,11 @@ onMounted(async () => {
 .pag-info { font-size: .85rem; color: var(--c-text-3); font-weight: 500; }
 
 @media (max-width: 640px) {
+  .questions-hero-copy {
+    position: static;
+    margin: .55rem;
+  }
+
   .filters {
     grid-template-columns: 1fr;
     top: calc(var(--nav-h) + .45rem);

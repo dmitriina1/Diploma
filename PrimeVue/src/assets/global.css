@@ -36,6 +36,10 @@ html[data-theme='dark'] {
   --c-accent-bg: rgba(24,180,216,.16);
   --c-violet:    #4f7ecf;
   --c-violet-bg: rgba(79,126,207,.16);
+  --c-pop:       #ff6b35;
+  --c-pop-bg:    rgba(255,107,53,.16);
+  --c-lime:      #ccff00;
+  --c-lime-bg:   rgba(204,255,0,.14);
 
   --c-ok:        #34d399;
   --c-ok-bg:     rgba(52,211,153,0.10);
@@ -111,6 +115,10 @@ html[data-theme='light'] {
   --c-accent-bg: rgba(12,145,173,.14);
   --c-violet:    #4864e0;
   --c-violet-bg: rgba(72,100,224,.16);
+  --c-pop:       #ff7a45;
+  --c-pop-bg:    rgba(255,122,69,.18);
+  --c-lime:      #9aba00;
+  --c-lime-bg:   rgba(154,186,0,.16);
 
   --shadow-sm: 0 1px 3px rgba(16, 40, 72, .12);
   --shadow-md: 0 12px 24px rgba(16, 40, 72, .12);
@@ -402,6 +410,29 @@ select.input {
   animation-delay: var(--delay, 0ms);
 }
 
+.reveal-pop {
+  animation: popIn var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.float-soft {
+  animation: floatSoft 5.8s ease-in-out infinite alternate;
+}
+
+.media-glow {
+  position: relative;
+}
+
+.media-glow::after {
+  content: '';
+  position: absolute;
+  inset: -20% -8%;
+  background: radial-gradient(circle at 40% 20%, color-mix(in srgb, var(--c-brand) 22%, transparent), transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: .4;
+}
+
 .stagger > * {
   opacity: 0;
   transform: translateY(10px);
@@ -469,6 +500,16 @@ select.input {
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes floatSoft {
+  from { transform: translateY(0px); }
+  to   { transform: translateY(-10px); }
 }
 
 /* ── Page transition ── */
