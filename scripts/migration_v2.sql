@@ -89,8 +89,13 @@ CREATE TABLE IF NOT EXISTS question_views (
     id SERIAL PRIMARY KEY,
     question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
     user_session VARCHAR(100),
+    path TEXT,
+    referrer TEXT,
     viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE question_views ADD COLUMN IF NOT EXISTS path TEXT;
+ALTER TABLE question_views ADD COLUMN IF NOT EXISTS referrer TEXT;
 
 -- 8. Таблица заметок пользователя к вопросам
 CREATE TABLE IF NOT EXISTS user_notes (

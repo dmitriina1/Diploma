@@ -1,8 +1,9 @@
 import re
+import json
 from typing import Optional
 
 import asyncpg
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
 
 from core.config import DATABASE_URL
@@ -10,6 +11,24 @@ from similarity_search import get_similar_questions as search_similar_questions
 
 
 router = APIRouter(tags=["Public"])
+
+
+def _normalize_user_session(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    return str(raw).strip()[:100]
+
+
+def _normalize_event_name(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    return str(raw).strip()[:100]
+
+
+def _normalize_page_attr(raw: Optional[str]) -> str:
+    if not raw:
+        return ""
+    return str(raw).strip()[:1000]
 
 
 def is_valid_video_url(url: str) -> bool:
@@ -74,7 +93,7 @@ async def get_similar_questions_api(query: str, limit: int = 5):
 
 
 @router.get("/api/questions/{question_id}")
-async def get_public_question_detail(question_id: int):
+async def get_public_question_detail(question_id: int, user_session: Optional[str] = None):
     conn = await asyncpg.connect(DATABASE_URL)
     try:
         total_videos = await conn.fetchval("SELECT COUNT(*) FROM processed_videos") or 0
@@ -95,6 +114,22 @@ async def get_public_question_detail(question_id: int):
         )
         if not q:
             raise HTTPException(status_code=404, detail="Question not found")
+
+        # Track real question views for admin analytics.
+        normalized_session = _normalize_user_session(user_session)
+        if normalized_session:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO question_views (question_id, user_session, viewed_at)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP)
+                    """,
+                    question_id,
+                    normalized_session,
+                )
+            except Exception:
+                # Do not fail question loading if analytics insert fails.
+                pass
 
         videos = await conn.fetch(
             """
@@ -143,6 +178,72 @@ async def get_public_question_detail(question_id: int):
             "similar_questions": similar,
         }
         return JSONResponse(content=result)
+    finally:
+        await conn.close()
+
+
+@router.post("/api/analytics/page-view")
+async def track_page_view(data: dict = Body(...)):
+    """Store generic page visit events for lightweight internal analytics."""
+    user_session = _normalize_user_session(data.get("user_session"))
+    path = _normalize_page_attr(data.get("path"))
+    referrer = _normalize_page_attr(data.get("referrer"))
+    if not user_session:
+        raise HTTPException(status_code=400, detail="user_session is required")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            """
+            INSERT INTO question_views (question_id, user_session, path, referrer, viewed_at)
+            VALUES (NULL, $1, $2, $3, CURRENT_TIMESTAMP)
+            """,
+            user_session,
+            path,
+            referrer,
+        )
+        return {"ok": True}
+    finally:
+        await conn.close()
+
+
+@router.post("/api/analytics/event")
+async def track_analytics_event(data: dict = Body(...)):
+    """Store lightweight goal/events in local DB without third-party keys."""
+    user_session = _normalize_user_session(data.get("user_session"))
+    event_name = _normalize_event_name(data.get("event_name"))
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        params = {"value": params}
+
+    if not user_session:
+        raise HTTPException(status_code=400, detail="user_session is required")
+    if not event_name:
+        raise HTTPException(status_code=400, detail="event_name is required")
+
+    conn = await asyncpg.connect(DATABASE_URL)
+    try:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analytics_events (
+                id SERIAL PRIMARY KEY,
+                user_session VARCHAR(100) NOT NULL,
+                event_name VARCHAR(100) NOT NULL,
+                params JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await conn.execute(
+            """
+            INSERT INTO analytics_events (user_session, event_name, params)
+            VALUES ($1, $2, $3::jsonb)
+            """,
+            user_session,
+            event_name,
+            json.dumps(params, ensure_ascii=False),
+        )
+        return {"ok": True}
     finally:
         await conn.close()
 
