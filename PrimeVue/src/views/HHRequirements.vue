@@ -120,8 +120,8 @@ const auth = useAuthStore()
 // Source filters
 const sources = ref({
   skills: true,
-  description: false,
-  title: false
+  description: true,
+  title: true
 })
 
 const mustHave = computed(() => skills.value.filter(s => s.percentage > 50))
@@ -155,10 +155,12 @@ const loadSkills = async () => {
     if (sources.value.description) selectedSources.push('description')
     if (sources.value.title) selectedSources.push('title')
 
-    // Keep at least one source selected so analytics mode is always explicit.
+    // Keep at least one source selected; default back to combined mode.
     if (!selectedSources.length) {
       sources.value.skills = true
-      selectedSources.push('skills')
+      sources.value.description = true
+      sources.value.title = true
+      selectedSources.push('skills', 'description', 'title')
     }
 
     const sourcesParam = selectedSources.join(',')

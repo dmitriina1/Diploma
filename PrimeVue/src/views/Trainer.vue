@@ -367,8 +367,8 @@ const startInterviewSession = async (v) => {
 /* 3D Flip */
 .fc-scene {
   width: 100%;
-  max-width: 720px;
-  min-height: 360px;
+  max-width: 1080px;
+  min-height: 540px;
   perspective: 1400px;
   transform-style: preserve-3d;
   cursor: pointer;
@@ -376,7 +376,7 @@ const startInterviewSession = async (v) => {
 }
 .fc-card {
   width: 100%;
-  min-height: 360px;
+  min-height: 540px;
   position: relative;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;

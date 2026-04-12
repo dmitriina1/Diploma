@@ -3779,16 +3779,27 @@ async def get_hh_skills(
                 *params,
             )
 
-            # Aggregate by (profession, technology) - sum vacancy counts, average percentage
+            # Aggregate by (profession, technology) across selected sources.
+            # For mixed sources we use a combined share based on summed mentions,
+            # but cap by total vacancies to avoid inflated percentages over 100.
             skills = await conn.fetch(
                 f"""
                 SELECT 
                     profession,
                     technology as skill,
-                    MAX(source) as source,  -- Take any source (or use array_agg)
-                    SUM(vacancy_count) as vacancy_count,
-                    MAX(total_vacancies) as total_vacancies,  -- Same total_vacancies for profession
-                    AVG(percentage)::float as percentage,  -- Average percentage across sources
+                    STRING_AGG(DISTINCT source, ',') as source,
+                    LEAST(SUM(vacancy_count), MAX(total_vacancies)) as vacancy_count,
+                    MAX(total_vacancies) as total_vacancies,
+                    COALESCE(
+                        ROUND(
+                            LEAST(
+                                100.0,
+                                (SUM(vacancy_count)::float / NULLIF(MAX(total_vacancies), 0)) * 100.0
+                            )::numeric,
+                            2
+                        ),
+                        0
+                    )::float as percentage,
                     MAX(created_at) as created_at,
                     MAX(updated_at) as updated_at
                 FROM hh_tech_mentions
