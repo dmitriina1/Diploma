@@ -700,7 +700,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.admin-wrap { max-width: 1400px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+.admin-wrap {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 3rem;
+  box-sizing: border-box;
+}
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border); }
 .admin-header h1 { font-size: 1.85rem; font-weight: 700; margin-bottom: .2rem; display:flex; align-items:center; gap:.55rem; }
 .sub { color: var(--c-text-3); font-size: 1rem; }
@@ -744,7 +750,17 @@ onUnmounted(() => {
 }
 .tab-btn.active { color: var(--c-brand); border-bottom-color: var(--c-brand); }
 .tab-btn:hover:not(.active) { color: var(--c-text); }
-.tab-panel { padding: 1.25rem 0; }
+.tab-panel {
+  padding: 1.25rem 0;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tab-panel > .tbl,
+.tab-panel .table-wrap .tbl {
+  min-width: 1040px;
+}
 
 .tp-toolbar { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .tp-filters { display: flex; gap: .5rem; margin-bottom: .75rem; flex-wrap: wrap; }
@@ -761,6 +777,11 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .tbl {
+    min-width: 760px;
+  }
+
+  .tab-panel > .tbl,
+  .tab-panel .table-wrap .tbl {
     min-width: 760px;
   }
 }
@@ -881,5 +902,9 @@ onUnmounted(() => {
   .qd-actions .btn { flex: 1 1 calc(50% - .25rem); }
   .qd-actions .btn-primary { margin-right: 0; flex-basis: 100%; }
   .tab-btn { padding: .6rem .8rem; font-size: .82rem; }
+}
+
+:global(html) {
+  scrollbar-gutter: stable;
 }
 </style>

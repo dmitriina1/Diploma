@@ -15,7 +15,7 @@
     </linearGradient>
   </defs>
 
-  <rect x="8" y="8" width="1584" height="404" rx="28" fill="url(#bg)" stroke="#25465E"/>
+  <rect x="1" y="1" width="1598" height="418" rx="28" fill="url(#bg)" stroke="#25465E"/>
 
   <rect x="78" y="92" width="344" height="84" rx="20" fill="#133148" stroke="#315A77"/>
   <rect x="110" y="125" width="204" height="14" rx="7" fill="#3B6A8A"/>

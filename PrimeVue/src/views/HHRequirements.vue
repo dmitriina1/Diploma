@@ -5,19 +5,6 @@
       <h1 class="heading h-page"><BrandIcon name="skills" :size="34" /> Навыки из вакансий</h1>
       <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
 
-      <div class="skills-hero card reveal-pop" style="--delay:80ms">
-        <div class="skills-hero-copy">
-          <h3>Рынок в динамике, а не в ощущениях</h3>
-          <p>Сравнивайте источники (навыки, описание, заголовок), чтобы видеть реальный спрос и приоритеты подготовки.</p>
-        </div>
-        <div class="skills-hero-signals">
-          <span class="skills-chip must">Must-have: {{ mustHave.length }}</span>
-          <span class="skills-chip nice">Nice-to-have: {{ niceToHave.length }}</span>
-          <span class="skills-chip bonus">Дополнительно: {{ bonusSkills.length }}</span>
-          <span class="skills-chip source">Источник: {{ activeSourceTitle }}</span>
-        </div>
-      </div>
-
       <div v-if="auth.isAdmin" class="sync-actions">
         <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="runSyncNow">
           {{ syncing ? 'Синхронизация...' : 'Обновить из HH сейчас' }}
@@ -40,13 +27,6 @@
           <input type="checkbox" v-model="sources.title" @change="loadSkills" />
           <span>Заголовок</span>
         </label>
-      </div>
-
-      <div class="source-presets">
-        <button class="btn btn-sm" :class="activePreset === 'skills' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('skills')">График: навыки</button>
-        <button class="btn btn-sm" :class="activePreset === 'description' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('description')">График: описание</button>
-        <button class="btn btn-sm" :class="activePreset === 'title' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('title')">График: заголовок</button>
-        <button class="btn btn-sm" :class="activePreset === 'mixed' ? 'btn-primary' : 'btn-secondary'" @click="applySourcePreset('mixed')">Смешанный источник</button>
       </div>
 
       <!-- Professions -->
@@ -136,7 +116,6 @@ const perPage = ref(30)
 const totalSkills = ref(0)
 const loadError = ref('')
 const auth = useAuthStore()
-const activePreset = ref('skills')
 
 // Source filters
 const sources = ref({
@@ -150,10 +129,11 @@ const niceToHave = computed(() => skills.value.filter(s => s.percentage >= 20 &&
 const bonusSkills = computed(() => skills.value.filter(s => s.percentage < 20))
 
 const activeSourceTitle = computed(() => {
-  if (activePreset.value === 'skills') return 'Навыки'
-  if (activePreset.value === 'description') return 'Описание'
-  if (activePreset.value === 'title') return 'Заголовок'
-  return 'Смешанный'
+  const labels = []
+  if (sources.value.skills) labels.push('Навыки')
+  if (sources.value.description) labels.push('Описание')
+  if (sources.value.title) labels.push('Заголовок')
+  return labels.length ? labels.join(' + ') : 'Навыки'
 })
 
 const barColor = (p) => {
@@ -165,16 +145,6 @@ const barColor = (p) => {
 
 const selectProfession = async (p) => { selected.value = p; page.value = 1; await loadSkills() }
 
-const applySourcePreset = async (preset) => {
-  activePreset.value = preset
-  if (preset === 'skills') sources.value = { skills: true, description: false, title: false }
-  if (preset === 'description') sources.value = { skills: false, description: true, title: false }
-  if (preset === 'title') sources.value = { skills: false, description: false, title: true }
-  if (preset === 'mixed') sources.value = { skills: true, description: true, title: true }
-  page.value = 1
-  await loadSkills()
-}
-
 const loadSkills = async () => {
   loading.value = true
   loadError.value = ''
@@ -185,11 +155,13 @@ const loadSkills = async () => {
     if (sources.value.description) selectedSources.push('description')
     if (sources.value.title) selectedSources.push('title')
 
-    if (selectedSources.length === 1) activePreset.value = selectedSources[0]
-    else if (selectedSources.length === 3) activePreset.value = 'mixed'
-    else activePreset.value = 'mixed'
-    
-    const sourcesParam = selectedSources.length > 0 ? selectedSources.join(',') : null
+    // Keep at least one source selected so analytics mode is always explicit.
+    if (!selectedSources.length) {
+      sources.value.skills = true
+      selectedSources.push('skills')
+    }
+
+    const sourcesParam = selectedSources.join(',')
     
     const r = await api.getHHSkills(selected.value, page.value, perPage.value, sourcesParam)
     skills.value = (r.data.skills || []).sort((a, b) => b.percentage - a.percentage)
@@ -226,63 +198,6 @@ onMounted(async () => {
 <style scoped>
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
 .sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
-.skills-hero {
-  margin: 0 auto 1.2rem;
-  max-width: 980px;
-  padding: 1rem 1.05rem;
-  display: grid;
-  gap: .7rem;
-  border-color: color-mix(in srgb, var(--c-border-h) 74%, transparent);
-}
-
-.skills-hero-copy h3 {
-  margin: 0;
-  font-size: 1.12rem;
-}
-
-.skills-hero-copy p {
-  margin: .28rem 0 0;
-  color: var(--c-text-3);
-  font-size: .9rem;
-  line-height: 1.58;
-}
-
-.skills-hero-signals {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .45rem;
-}
-
-.skills-chip {
-  padding: .33rem .62rem;
-  border-radius: var(--r-full);
-  border: 1px solid color-mix(in srgb, var(--c-border) 85%, transparent);
-  background: color-mix(in srgb, var(--c-surface) 76%, transparent);
-  color: var(--c-text-2);
-  font-size: .78rem;
-  letter-spacing: .01em;
-}
-
-.skills-chip.must {
-  border-color: color-mix(in srgb, var(--c-err) 40%, transparent);
-  color: var(--c-err);
-}
-
-.skills-chip.nice {
-  border-color: color-mix(in srgb, var(--c-warn) 40%, transparent);
-  color: var(--c-warn);
-}
-
-.skills-chip.bonus {
-  border-color: color-mix(in srgb, var(--c-ok) 40%, transparent);
-  color: var(--c-ok);
-}
-
-.skills-chip.source {
-  border-color: color-mix(in srgb, var(--c-brand-h) 40%, transparent);
-  color: var(--c-brand-h);
-}
-
 .sync-actions {
   display: flex;
   align-items: center;
@@ -303,15 +218,6 @@ onMounted(async () => {
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
   flex-wrap: wrap;
-}
-
-.source-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .45rem;
-  justify-content: center;
-  margin-top: -0.35rem;
-  margin-bottom: 1.25rem;
 }
 .source-filters:has(input:checked) {
   border-color: color-mix(in srgb, var(--c-brand) 40%, var(--c-border));

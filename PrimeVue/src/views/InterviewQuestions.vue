@@ -188,6 +188,7 @@ onMounted(async () => {
   margin-bottom: .95rem;
   position: relative;
   overflow: hidden;
+  padding: 0;
   border-color: color-mix(in srgb, var(--c-border-h) 82%, transparent);
 }
 
@@ -195,6 +196,7 @@ onMounted(async () => {
   width: 100%;
   height: clamp(120px, 15vw, 188px);
   object-fit: cover;
+  object-position: center;
   display: block;
   opacity: .92;
 }
