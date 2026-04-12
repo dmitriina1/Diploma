@@ -2,7 +2,7 @@ import { apiClient, getUserSession } from './base'
 
 export const questionsApi = {
   getQuestions: (p = {}) => apiClient.get('/api/questions', { params: p }),
-  getPublicQuestionDetail: (id) => apiClient.get(`/api/questions/${id}`),
+  getPublicQuestionDetail: (id) => apiClient.get(`/api/questions/${id}`, { params: { user_session: getUserSession() } }),
   getSimilarQuestions: (q, l = 5) => apiClient.get('/api/questions/similar', { params: { query: q, limit: l } }),
 
   getAllTags: () => apiClient.get('/api/tags'),

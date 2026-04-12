@@ -96,6 +96,7 @@ import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'
+import { trackMetrikaGoal } from '../utils/metrika'
 
 const mode = ref('setup')
 const loading = ref(false)
@@ -160,6 +161,12 @@ async function mark(isCorrect) {
   try {
     const r = await api.submitMockInterview(interviewId.value, { answers: answers.value, duration_seconds })
     result.value = r.data
+    trackMetrikaGoal('submit_mock', {
+      score: Number(r.data?.score || 0),
+      total: Number(r.data?.total || answers.value.length),
+      topic: topic.value || 'any',
+      difficulty: difficulty.value || 'any'
+    })
     mode.value = 'result'
     await loadHistory()
   } catch {

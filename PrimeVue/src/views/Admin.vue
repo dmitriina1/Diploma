@@ -43,7 +43,7 @@
 
       <!-- Tabs -->
       <div class="tab-bar">
-        <button v-for="(t, i) in tabs" :key="i" class="tab-btn" :class="{ active: activeTab === i }" @click="activeTab = i">{{ t }}</button>
+        <button v-for="(t, i) in tabs" :key="i" class="tab-btn" :class="{ active: activeTab === i }" @click="handleTabClick(i)">{{ t }}</button>
       </div>
 
       <!-- Tab: Questions -->
@@ -192,63 +192,16 @@
 
       <!-- Tab: Analytics -->
       <div v-show="activeTab === 5" class="tab-panel">
-        <div v-if="anlLoading" class="center-block"><div class="spinner"></div></div>
-        <template v-else>
-          <div class="metrics-grid">
-            <div class="metric-card"><div class="mv">{{ questionsStore.questions.length }}</div><div class="ml">Вопросов</div><div class="ms">{{ questionsStore.approvedQuestions.length }} одобрено</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.users?.total || 0 }}</div><div class="ml">Пользователей</div><div class="ms">{{ anl.users?.active_30d || 0 }} активных</div></div>
-            <div class="metric-card"><div class="mv">{{ videosProcessed }}</div><div class="ml">Видео</div><div class="ms">~{{ anl.videos?.avg_questions || 0 }} вопр/видео</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.test_assignments?.total || 0 }}</div><div class="ml">Тестовых заданий</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.community?.total_answers || 0 }}</div><div class="ml">Ответов сообщества</div><div class="ms">{{ anl.community?.active_voters || 0 }} голосовали</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.trainer?.unique_users || 0 }}</div><div class="ml">Тренажёр</div><div class="ms">{{ anl.trainer?.total_reviews || 0 }} повторений</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.users?.registered_30d || 0 }}</div><div class="ml">Регистраций за 30д</div><div class="ms">admin: {{ anl.users?.admins || 0 }}, users: {{ anl.users?.regular || 0 }}</div></div>
-            <div class="metric-card"><div class="mv">{{ anl.sessions?.anonymous_sessions || 0 }}</div><div class="ml">Анонимные сессии</div><div class="ms">авторизованные: {{ anl.sessions?.authorized_sessions || 0 }}</div></div>
+        <div class="ext-analytics card">
+          <h3>Встроенная аналитика отключена</h3>
+          <p class="subtle">Раздел статистики перенесён во внешний BI-инструмент для более детального анализа воронок, retention, сегментов и SQL-отчётов.</p>
+          <div class="ext-actions">
+            <button class="btn btn-primary btn-sm" @click="openExternalAnalytics">Открыть Metabase (BI)</button>
           </div>
-
-          <div class="anl-row" v-if="registrationChart.length || loginChart.length || viewsChart.length">
-            <div class="anl-panel card" v-if="registrationChart.length">
-              <h4>Регистрации (30 дней)</h4>
-              <LineChart :points="registrationChart" unit="чел" y-label="Регистрации" x-label="Дни" />
-            </div>
-            <div class="anl-panel card" v-if="loginChart.length">
-              <h4>Логины (30 дней)</h4>
-              <LineChart :points="loginChart" unit="входов" y-label="Логины" x-label="Дни" />
-            </div>
+          <div class="ext-links">
+            <div>Metabase: {{ EXTERNAL_BI_ANALYTICS_URL }}</div>
           </div>
-
-          <div class="anl-panel card" v-if="viewsChart.length">
-            <h4>Просмотры вопросов (30 дней)</h4>
-            <LineChart :points="viewsChart" unit="просмотров" y-label="Просмотры" x-label="Дни" />
-          </div>
-
-          <!-- Topic distribution -->
-          <div class="anl-panel card" v-if="topicDist.length">
-            <h4>Распределение по технологиям</h4>
-            <table class="tbl tbl-sm">
-              <thead><tr><th>Технология</th><th style="width:70px">Всего</th><th style="width:70px">Одобр.</th><th style="width:80px">С ответом</th></tr></thead>
-              <tbody><tr v-for="t in topicDist" :key="t.topic"><td>{{ t.topic }}</td><td>{{ t.count }}</td><td>{{ t.approved }}</td><td>{{ t.with_answers }}</td></tr></tbody>
-            </table>
-          </div>
-
-          <!-- Top bookmarked -->
-          <div class="anl-row">
-            <div class="anl-panel card" v-if="anl.top_bookmarked?.length">
-              <h4>Топ сохранённых</h4>
-              <div class="top-list"><div v-for="(q, i) in anl.top_bookmarked" :key="q.id" class="top-item"><span class="top-rank">#{{ i+1 }}</span><div class="top-txt">{{ trunc(q.question, 60) }}</div><span class="badge badge-warn">{{ q.saves }}</span></div></div>
-            </div>
-            <div class="anl-panel card" v-if="anl.top_probable?.length">
-              <h4>Топ по вероятности</h4>
-              <div class="top-list"><div v-for="(q, i) in anl.top_probable" :key="q.id" class="top-item"><span class="top-rank">#{{ i+1 }}</span><div class="top-txt">{{ trunc(q.question, 60) }}</div><span class="badge badge-ok">{{ q.probability }}%</span></div></div>
-            </div>
-          </div>
-
-          <div class="sys-actions">
-            <button class="btn btn-ghost btn-sm" @click="loadAnalytics">Обновить</button>
-            <button class="btn btn-secondary btn-sm" @click="recalcProb" :disabled="recalculating">{{ recalculating ? '...' : 'Пересчитать вероятности' }}</button>
-            <button class="btn btn-ghost btn-sm" @click="exportJSON">JSON</button>
-            <button class="btn btn-ghost btn-sm" @click="exportCSV">CSV</button>
-          </div>
-        </template>
+        </div>
       </div>
     </div>
 
@@ -377,7 +330,6 @@ import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
-import LineChart from '../components/LineChart.vue'
 import api from '../api/client'
 
 const questionsStore = useQuestionsStore()
@@ -386,6 +338,22 @@ const tasksStore = useTasksStore()
 const tabs = ['Вопросы', 'Предложения', 'Обратная связь', 'Видео', 'Тестовые задания', 'Аналитика']
 const activeTab = ref(0)
 const expandedLogs = ref({})
+const EXTERNAL_BI_ANALYTICS_URL = String(import.meta.env.VITE_ADMIN_ANALYTICS_URL || 'http://localhost:3035').trim()
+
+const openExternalAnalytics = () => {
+  if (typeof window === 'undefined') return
+  const targetUrl = EXTERNAL_BI_ANALYTICS_URL
+  if (!targetUrl) return
+  window.location.assign(targetUrl)
+}
+
+const handleTabClick = (index) => {
+  if (index === 5) {
+    openExternalAnalytics()
+    return
+  }
+  activeTab.value = index
+}
 
 const HIDDEN_TASKS_KEY = 'admin_hidden_tasks_v2'
 const LEGACY_HIDDEN_TASKS_KEY = 'admin_hidden_tasks'
@@ -626,13 +594,33 @@ const deleteTA = async (a) => { if (!confirm(`Удалить «${a.title}»?`)) 
 
 // Analytics tab
 const anl = ref({}); const anlLoading = ref(false); const recalculating = ref(false)
+const selectedGoalEvent = ref('open_question')
 const videosProcessed = computed(() => new Set(questionsStore.questions.map(q => q.video_url)).size)
 const topicDist = computed(() => questionsStore.topics.map(topic => {
   const qs = questionsStore.questions.filter(q => q.topic === topic)
   return { topic, count: qs.length, approved: qs.filter(q => q.is_approved || q.approved).length, with_answers: qs.filter(q => q.answer).length }
 }).sort((a, b) => b.count - a.count))
 
-const loadAnalytics = async () => { anlLoading.value = true; try { const r = await api.getAdminAnalytics(); anl.value = r.data } catch {} anlLoading.value = false }
+const goalLabel = {
+  open_question: 'Открытие вопроса',
+  start_trainer: 'Старт тренажёра',
+  submit_mock: 'Завершение mock'
+}
+
+const loadAnalytics = async () => {
+  anlLoading.value = true
+  try {
+    const r = await api.getAdminAnalytics()
+    anl.value = r.data
+    const names = (r.data?.goal_events?.totals || []).map((row) => row.event_name).filter(Boolean)
+    if (names.includes('open_question')) {
+      if (!names.includes(selectedGoalEvent.value)) selectedGoalEvent.value = 'open_question'
+    } else if (names.length && !names.includes(selectedGoalEvent.value)) {
+      selectedGoalEvent.value = names[0]
+    }
+  } catch {}
+  anlLoading.value = false
+}
 const recalcProb = async () => { if (!confirm('Пересчитать?')) return; recalculating.value = true; try { await api.recalculateProbabilities(); await questionsStore.fetchQuestions() } catch {} recalculating.value = false }
 const exportJSON = async () => { try { const r = await api.getAdminQuestions(); const b = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.json'; a.click(); URL.revokeObjectURL(u) } catch {} }
 const exportCSV = async () => { try { const r = await api.exportCSV(); const b = new Blob([r.data], { type: 'text/csv' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = 'questions.csv'; a.click(); URL.revokeObjectURL(u) } catch {} }
@@ -646,6 +634,69 @@ const chartify = (rows = []) => {
 const registrationChart = computed(() => chartify(anl.value.registrations_30d || []))
 const loginChart = computed(() => chartify(anl.value.logins_30d || []))
 const viewsChart = computed(() => chartify(anl.value.views_30d || []))
+
+const goalEventsPayload = computed(() => anl.value.goal_events || {})
+const goalEventTotals = computed(() => Array.isArray(goalEventsPayload.value.totals) ? goalEventsPayload.value.totals : [])
+const goalEventDaily = computed(() => Array.isArray(goalEventsPayload.value.daily) ? goalEventsPayload.value.daily : [])
+const goalFunnel = computed(() => {
+  const f = goalEventsPayload.value.funnel || {}
+  return {
+    start_from_open_pct: Number(f.start_from_open_pct || 0),
+    submit_from_start_pct: Number(f.submit_from_start_pct || 0),
+    submit_from_open_pct: Number(f.submit_from_open_pct || 0)
+  }
+})
+
+const goalTotalsMap = computed(() => {
+  const map = {}
+  for (const row of goalEventTotals.value) {
+    const key = String(row.event_name || '')
+    if (!key) continue
+    map[key] = {
+      count: Number(row.count || 0),
+      unique_sessions: Number(row.unique_sessions || 0)
+    }
+  }
+  return map
+})
+
+const goalCount = (eventName) => goalTotalsMap.value[eventName]?.count || 0
+const goalSessions = (eventName) => goalTotalsMap.value[eventName]?.unique_sessions || 0
+
+const goalEventOptions = computed(() => {
+  const options = [
+    { value: 'open_question', label: goalLabel.open_question },
+    { value: 'start_trainer', label: goalLabel.start_trainer },
+    { value: 'submit_mock', label: goalLabel.submit_mock }
+  ]
+  for (const row of goalEventTotals.value) {
+    const value = String(row.event_name || '')
+    if (!value || options.some((opt) => opt.value === value)) continue
+    options.push({ value, label: value })
+  }
+  return options
+})
+
+const goalEventsVisible = computed(() => goalEventOptions.value.length > 0 || goalEventDaily.value.length > 0)
+
+const activeGoalEvent = computed(() => {
+  const current = selectedGoalEvent.value
+  if (goalEventOptions.value.some((opt) => opt.value === current)) return current
+  return goalEventOptions.value[0]?.value || 'open_question'
+})
+
+const goalDailyByEvent = computed(() => {
+  const grouped = {}
+  for (const row of goalEventDaily.value) {
+    const eventName = String(row.event_name || '')
+    if (!eventName) continue
+    if (!grouped[eventName]) grouped[eventName] = []
+    grouped[eventName].push({ day: row.day, count: Number(row.count || 0) })
+  }
+  return grouped
+})
+
+const goalTrendChart = computed(() => chartify(goalDailyByEvent.value[activeGoalEvent.value] || []))
 
 const dismissTask = (taskId) => {
   pruneHiddenTaskEntries()
@@ -687,8 +738,7 @@ onMounted(async () => {
     questionsStore.fetchAdminQuestions(),
     tasksStore.fetchAllTasks(),
     loadVids(), loadTA(),
-    loadSuggestions(), loadFeedback(),
-    loadAnalytics()
+    loadSuggestions(), loadFeedback()
   ])
   tasksStore.startGlobalPolling()
   for (const t of tasksStore.activeTasks) tasksStore.startPolling(t.task_id)
@@ -793,6 +843,12 @@ onUnmounted(() => {
 .link { color: var(--c-brand); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
+.ext-analytics { padding: 1.15rem; display: flex; flex-direction: column; gap: .75rem; max-width: 760px; }
+.ext-analytics h3 { margin: 0; font-size: 1.12rem; font-weight: 700; }
+.ext-analytics .subtle { margin: 0; color: var(--c-text-3); font-size: .92rem; line-height: 1.45; }
+.ext-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.ext-links { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; color: var(--c-text-4); }
+
 .title-cell { display: flex; align-items: center; gap: .25rem; }
 .edit-inline { display: flex; align-items: center; gap: .25rem; }
 
@@ -808,6 +864,20 @@ onUnmounted(() => {
 .anl-panel { padding: 1.15rem; margin-bottom: 1rem; }
 .anl-panel h4 { font-size: 1.02rem; font-weight: 600; margin-bottom: .75rem; }
 .anl-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.goal-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .6rem; margin-bottom: .85rem; }
+.goal-card { background: var(--c-bg-2); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: .7rem .8rem; }
+.goal-title { font-size: .8rem; color: var(--c-text-3); }
+.goal-value { font-size: 1.4rem; font-weight: 800; color: var(--c-text); line-height: 1.2; margin-top: .2rem; }
+.goal-sub { font-size: .75rem; color: var(--c-text-4); margin-top: .1rem; }
+.funnel-grid { display: grid; gap: .55rem; margin-bottom: .85rem; }
+.funnel-item { background: var(--c-bg-2); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: .5rem .6rem; }
+.funnel-head { display: flex; justify-content: space-between; align-items: center; font-size: .8rem; color: var(--c-text-3); margin-bottom: .35rem; }
+.funnel-head strong { color: var(--c-text); font-weight: 700; }
+.funnel-track { width: 100%; height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--c-brand) 18%, var(--c-bg-2)); overflow: hidden; }
+.funnel-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--c-brand-h), var(--c-accent)); transition: width var(--dur); }
+.goal-series-toolbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.goal-series-toolbar label { font-size: .8rem; color: var(--c-text-3); }
+.goal-empty { font-size: .85rem; color: var(--c-text-4); }
 .top-list { display: flex; flex-direction: column; gap: .35rem; max-height: 300px; overflow-y: auto; }
 .top-item { display: flex; align-items: center; gap: .5rem; padding: .35rem .5rem; background: var(--c-bg-2); border-radius: var(--r-sm); }
 .top-rank { font-size: .84rem; font-weight: 700; color: var(--c-text-4); min-width: 22px; }

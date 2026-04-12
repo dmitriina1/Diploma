@@ -1,4 +1,22 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { API_BASE_URL, getUserSession } from '../api/base'
+
+const trackInternalPageView = (to) => {
+  if (typeof window === 'undefined') return
+  const userSession = getUserSession()
+  if (!userSession) return
+
+  fetch(`${API_BASE_URL}/analytics/page-view`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_session: userSession,
+      path: to.fullPath,
+      referrer: document.referrer || ''
+    }),
+    keepalive: true
+  }).catch(() => {})
+}
 
 const routes = [
   { path: '/',                    name: 'Home',                 component: () => import('../views/Home.vue'),                 meta: { title: 'InterviewHub' } },
@@ -30,6 +48,10 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !isAuth) return next({ name: 'Login', query: { redirect: to.fullPath } })
   if (to.meta.requiresAdmin && !isAdmin) return next({ name: 'Login', query: { redirect: to.fullPath } })
   next()
+})
+
+router.afterEach((to) => {
+  trackInternalPageView(to)
 })
 
 export default router

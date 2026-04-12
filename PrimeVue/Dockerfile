@@ -3,6 +3,9 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+ARG VITE_ADMIN_ANALYTICS_URL="http://localhost:3035"
+ENV VITE_ADMIN_ANALYTICS_URL=$VITE_ADMIN_ANALYTICS_URL
+
 COPY package*.json ./
 RUN npm ci
 

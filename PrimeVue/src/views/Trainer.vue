@@ -198,6 +198,7 @@ import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
+import { trackMetrikaGoal } from '../utils/metrika'
 
 const mode = ref('select')
 const totalQuestions = ref(0)
@@ -300,6 +301,14 @@ const loadFlashcards = async () => {
     flashcards.value = cards.slice(0, cardCount.value)
     currentCardIndex.value = 0; knownCount.value = 0; repeatQueue.value = []; cardFlipped.value = false; sessionComplete.value = false
     mode.value = 'flashcard'
+    if (flashcards.value.length > 0) {
+      trackMetrikaGoal('start_trainer', {
+        mode: 'flashcards',
+        cards: flashcards.value.length,
+        topic: selectedTopic.value || 'any',
+        difficulty: selectedDifficulty.value || 'any'
+      })
+    }
   } catch (e) { console.error(e); loadError.value = 'Не удалось подготовить карточки. Попробуйте снова.' }
   loadingCards.value = false
 }

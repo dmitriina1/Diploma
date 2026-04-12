@@ -291,6 +291,13 @@ async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_adm
 
     conn = await asyncpg.connect(DATABASE_URL)
     try:
+        key_goal_events = ["open_question", "start_trainer", "submit_mock"]
+
+        def _safe_pct(numerator: float, denominator: float) -> float:
+            if not denominator:
+                return 0.0
+            return round((numerator / denominator) * 100.0, 1)
+
         by_topic = await conn.fetch(
             """
             SELECT topic, COUNT(*) AS count
@@ -314,7 +321,8 @@ async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_adm
               COUNT(*) AS total,
               COUNT(*) FILTER (WHERE role = 'admin') AS admins,
               COUNT(*) FILTER (WHERE role <> 'admin') AS regular,
-              COUNT(*) FILTER (WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')) AS registered_period
+                            COUNT(*) FILTER (WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')) AS registered_period,
+                            COUNT(*) FILTER (WHERE last_login IS NOT NULL AND last_login >= NOW() - ($1::int * INTERVAL '1 day')) AS active_period
             FROM users
             """,
             days,
@@ -346,6 +354,8 @@ async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_adm
             """
             SELECT
               COUNT(*) AS total_views,
+                            COUNT(*) FILTER (WHERE question_id IS NULL) AS page_views,
+                            COUNT(*) FILTER (WHERE question_id IS NOT NULL) AS question_views,
               COUNT(DISTINCT user_session) AS unique_sessions,
               COUNT(DISTINCT user_session) FILTER (
                 WHERE user_session IS NOT NULL AND user_session IN (SELECT username FROM users)
@@ -368,8 +378,166 @@ async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_adm
             days,
         )
 
+        question_daily_views = await conn.fetch(
+            """
+            SELECT TO_CHAR(viewed_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
+            FROM question_views
+            WHERE question_id IS NOT NULL AND viewed_at >= NOW() - ($1::int * INTERVAL '1 day')
+            GROUP BY viewed_at::date
+            ORDER BY viewed_at::date
+            """,
+            days,
+        )
+
+        page_daily_views = await conn.fetch(
+            """
+            SELECT TO_CHAR(viewed_at::date, 'YYYY-MM-DD') AS day, COUNT(*) AS count
+            FROM question_views
+            WHERE question_id IS NULL AND viewed_at >= NOW() - ($1::int * INTERVAL '1 day')
+            GROUP BY viewed_at::date
+            ORDER BY viewed_at::date
+            """,
+            days,
+        )
+
+        trainer = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(DISTINCT user_session) AS unique_users,
+              COALESCE(SUM(total_reviews), 0) AS total_reviews
+            FROM sr_cards
+            """
+        )
+
+        community = await conn.fetchrow(
+            """
+            SELECT
+              (SELECT COUNT(*) FROM user_answers) AS total_answers,
+              (SELECT COUNT(DISTINCT user_session) FROM answer_votes) AS active_voters
+            """
+        )
+
+        test_assignments_total = await conn.fetchval(
+            "SELECT COUNT(*) FROM test_assignments"
+        )
+
+        videos = await conn.fetchrow(
+            """
+            SELECT
+              COUNT(*) AS total,
+              COALESCE(ROUND(AVG(questions_count)::numeric, 1), 0) AS avg_questions
+            FROM processed_videos
+            """
+        )
+
+        analytics_events_exists = await conn.fetchval(
+            "SELECT to_regclass('public.analytics_events') IS NOT NULL"
+        )
+        goal_events_totals = []
+        goal_events_daily = []
+        goal_funnel = {
+            "open_question": 0,
+            "start_trainer": 0,
+            "submit_mock": 0,
+            "open_question_sessions": 0,
+            "start_trainer_sessions": 0,
+            "submit_mock_sessions": 0,
+            "start_from_open_pct": 0.0,
+            "submit_from_start_pct": 0.0,
+            "submit_from_open_pct": 0.0,
+        }
+
+        if analytics_events_exists:
+            goal_events_totals_raw = await conn.fetch(
+                """
+                SELECT
+                  event_name,
+                  COUNT(*)::int AS count,
+                  COUNT(DISTINCT user_session)::int AS unique_sessions
+                FROM analytics_events
+                WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+                GROUP BY event_name
+                ORDER BY count DESC, event_name
+                """,
+                days,
+            )
+            totals_map = {
+                str(row["event_name"]): {
+                    "event_name": str(row["event_name"]),
+                    "count": int(row["count"] or 0),
+                    "unique_sessions": int(row["unique_sessions"] or 0),
+                }
+                for row in goal_events_totals_raw
+            }
+
+            for event_name in key_goal_events:
+                goal_events_totals.append(
+                    totals_map.get(
+                        event_name,
+                        {
+                            "event_name": event_name,
+                            "count": 0,
+                            "unique_sessions": 0,
+                        },
+                    )
+                )
+
+            # Keep non-key custom events available for diagnostics and future UI toggles.
+            for event_name, event_row in totals_map.items():
+                if event_name not in key_goal_events:
+                    goal_events_totals.append(event_row)
+
+            goal_events_daily_rows = await conn.fetch(
+                """
+                SELECT
+                  TO_CHAR(created_at::date, 'YYYY-MM-DD') AS day,
+                  event_name,
+                  COUNT(*)::int AS count
+                FROM analytics_events
+                WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+                GROUP BY created_at::date, event_name
+                ORDER BY created_at::date, event_name
+                """,
+                days,
+            )
+            goal_events_daily = [
+                {
+                    "day": str(row["day"]),
+                    "event_name": str(row["event_name"]),
+                    "count": int(row["count"] or 0),
+                }
+                for row in goal_events_daily_rows
+            ]
+
+            open_row = totals_map.get("open_question", {"count": 0, "unique_sessions": 0})
+            start_row = totals_map.get("start_trainer", {"count": 0, "unique_sessions": 0})
+            submit_row = totals_map.get("submit_mock", {"count": 0, "unique_sessions": 0})
+
+            open_count = int(open_row.get("count", 0) or 0)
+            start_count = int(start_row.get("count", 0) or 0)
+            submit_count = int(submit_row.get("count", 0) or 0)
+
+            goal_funnel = {
+                "open_question": open_count,
+                "start_trainer": start_count,
+                "submit_mock": submit_count,
+                "open_question_sessions": int(open_row.get("unique_sessions", 0) or 0),
+                "start_trainer_sessions": int(start_row.get("unique_sessions", 0) or 0),
+                "submit_mock_sessions": int(submit_row.get("unique_sessions", 0) or 0),
+                "start_from_open_pct": _safe_pct(start_count, open_count),
+                "submit_from_start_pct": _safe_pct(submit_count, start_count),
+                "submit_from_open_pct": _safe_pct(submit_count, open_count),
+            }
+        else:
+            goal_events_totals = [
+                {"event_name": event_name, "count": 0, "unique_sessions": 0}
+                for event_name in key_goal_events
+            ]
+
         users = dict(user_totals) if user_totals else {}
         users["registered_30d"] = users.get("registered_period", 0)
+        users["active_30d"] = users.get("active_period", 0)
+        videos_data = dict(videos) if videos else {"total": 0, "avg_questions": 0}
 
         return {
             "topics": [{"topic": r["topic"], "count": r["count"]} for r in by_topic],
@@ -383,6 +551,20 @@ async def get_admin_analytics(days: int = 30, _admin: dict = Depends(require_adm
             "logins_30d": [dict(r) for r in logins_period],
             "sessions": dict(sessions) if sessions else {},
             "views_30d": [dict(r) for r in daily_views],
+            "question_views_30d": [dict(r) for r in question_daily_views],
+            "page_views_30d": [dict(r) for r in page_daily_views],
+            "trainer": dict(trainer) if trainer else {"unique_users": 0, "total_reviews": 0},
+            "community": dict(community) if community else {"total_answers": 0, "active_voters": 0},
+            "test_assignments": {"total": int(test_assignments_total or 0)},
+            "videos": {
+                "total": int(videos_data.get("total", 0)),
+                "avg_questions": float(videos_data.get("avg_questions", 0) or 0),
+            },
+            "goal_events": {
+                "totals": goal_events_totals,
+                "daily": goal_events_daily,
+                "funnel": goal_funnel,
+            },
         }
     finally:
         await conn.close()

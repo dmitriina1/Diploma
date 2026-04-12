@@ -135,6 +135,7 @@ import { useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import api from '../api/client'
+import { trackMetrikaGoal } from '../utils/metrika'
 
 const route = useRoute()
 const loading = ref(true)
@@ -162,6 +163,12 @@ async function loadQuestion() {
   try {
     const r = await api.getPublicQuestionDetail(route.params.id)
     question.value = r.data
+    if (question.value?.id) {
+      trackMetrikaGoal('open_question', {
+        question_id: Number(question.value.id) || Number(route.params.id) || 0,
+        topic: question.value.topic || 'unknown'
+      })
+    }
 
     // check bookmark
     try { const bk = await api.getBookmarks(); isBookmarked.value = (bk.data.bookmarks || []).some(b => b.question_id == route.params.id) } catch {}

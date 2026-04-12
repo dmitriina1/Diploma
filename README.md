@@ -86,6 +86,8 @@ docker logs -f diploma-whisper-worker
 | http://localhost:3000/admin | Панель администратора (новый) |
 | http://localhost:3001/admin | Панель администратора (старый) |
 | http://localhost:8000/docs | Swagger API документация |
+| http://localhost:3035 | Metabase (BI аналитика из PostgreSQL) |
+| http://localhost:8030 | PostHog (self-hosted, профиль posthog-selfhost) |
 
 ---
 
@@ -159,6 +161,47 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 # Production-сборка нового фронтенда
 cd frontend-new && npm run build
 ```
+
+---
+
+## Product Analytics: Metabase + PostHog
+
+Проект поддерживает одновременное использование двух систем:
+
+- **Metabase** для BI-аналитики по данным PostgreSQL (SQL, дашборды, отчеты)
+- **PostHog** для продуктовой аналитики поведения (events, funnels, retention)
+
+### 1) Запуск Metabase
+
+```bash
+docker compose up -d metabase
+```
+
+Открыть: `http://localhost:3035`
+
+### 2) Подключение PostHog в PrimeVue (порт 3020)
+
+По умолчанию PostHog отключен. Для локального запуска self-hosted PostHog используйте отдельный профиль:
+
+```bash
+docker compose --profile posthog-selfhost up -d \
+	posthog-proxy posthog-web posthog-worker posthog-plugins \
+	posthog-capture posthog-feature-flags \
+	posthog-db posthog-redis posthog-clickhouse posthog-kafka
+```
+
+После первого запуска откройте `http://localhost:8030`, создайте пользователя и скопируйте Project API Key.
+
+Затем задайте env перед сборкой PrimeVue:
+
+```bash
+# PowerShell
+$env:VITE_POSTHOG_KEY="phc_xxx"
+$env:VITE_POSTHOG_HOST="http://localhost:8030"
+docker compose up -d --build primevue
+```
+
+Если переменная `VITE_POSTHOG_KEY` не задана, приложение продолжает работать только с внутренней аналитикой (без ошибок).
 
 ---
 

@@ -8,15 +8,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.0",
-    "pinia": "^2.1.7",
-    "axios": "^1.6.2",
-    "@vueuse/core": "^10.7.0",
-    "primevue": "^4.5.4",
-    "primeicons": "^7.0.0",
     "@primeuix/themes": "^2.0.3",
-    "chart.js": "^4.5.1"
+    "@vueuse/core": "^10.7.0",
+    "axios": "^1.6.2",
+    "chart.js": "^4.5.1",
+    "pinia": "^2.1.7",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.5.4",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",
