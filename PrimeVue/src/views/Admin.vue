@@ -758,7 +758,7 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--c-border); }
-.admin-header h1 { font-size: 1.85rem; font-weight: 700; margin-bottom: .2rem; display:flex; align-items:center; gap:.55rem; }
+.admin-header h1 { font-size: 1.85rem; font-weight: 500; letter-spacing: -.025em; margin-bottom: .2rem; display:flex; align-items:center; gap:.55rem; }
 .sub { color: var(--c-text-3); font-size: 1rem; }
 
 /* Tasks */

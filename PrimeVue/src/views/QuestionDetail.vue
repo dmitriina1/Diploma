@@ -261,7 +261,7 @@ watch(() => route.params.id, loadQuestion)
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-3); }
 
 .q-header { margin-bottom: 2rem; }
-.q-header h1 { font-size: 1.9rem; font-weight: 700; line-height: 1.35; margin-bottom: .85rem; }
+.q-header h1 { font-size: 1.9rem; font-weight: 500; line-height: 1.25; letter-spacing: -.025em; margin-bottom: .85rem; }
 .q-meta { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .meta-prob { font-size: .78rem; color: var(--c-text-3); }
 

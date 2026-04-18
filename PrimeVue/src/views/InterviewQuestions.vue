@@ -1,13 +1,13 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container" style="padding-top:2rem; padding-bottom:3rem;">
+    <div class="container" style="padding-top:3rem; padding-bottom:4rem;">
 
       <!-- Header -->
       <div class="page-top">
         <div>
-          <h1 class="page-heading h-page">{{ pageHeading }}</h1>
-          <p class="page-desc p-muted">Реальные вопросы с IT-собеседований</p>
+          <h1 class="section-heading">{{ pageHeading }}</h1>
+          <p class="section-lead" style="margin-top:.5rem">Реальные вопросы с IT-собеседований</p>
         </div>
         <button v-if="professionSlug" class="btn btn-ghost btn-sm" @click="clearProfession">✕ Сбросить профессию</button>
       </div>
@@ -170,7 +170,7 @@ onMounted(async () => {
 
 <style scoped>
 .page-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; gap: 1rem; }
-.page-heading { font-size: 1.85rem; font-weight: 700; }
+.page-heading { font-size: 1.85rem; font-weight: 500; letter-spacing: -.025em; }
 .page-desc { color: var(--c-text-3); font-size: 1rem; margin-top: .3rem; }
 
 .page-top { position: relative; }

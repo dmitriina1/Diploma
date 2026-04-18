@@ -228,7 +228,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-heading { font-size: 1.85rem; font-weight: 700; text-align: center; margin-bottom: .3rem; }
+.page-heading { font-size: 1.85rem; font-weight: 500; letter-spacing: -.025em; text-align: center; margin-bottom: .3rem; }
 .page-desc { text-align: center; color: var(--c-text-3); font-size: 1rem; margin-bottom: 1.75rem; }
 
 /* Setup */

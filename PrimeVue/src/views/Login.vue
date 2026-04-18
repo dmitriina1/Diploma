@@ -107,7 +107,7 @@ async function handleSubmit() {
 }
 .logo h1 {
   font-size: 1.55rem;
-  font-weight: 800;
+  font-weight: 500;
   background: linear-gradient(135deg, var(--c-brand), var(--c-brand-h));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;

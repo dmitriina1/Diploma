@@ -1,11 +1,11 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
+    <div class="container-lg" style="padding-top:3rem;padding-bottom:4rem">
       <div class="ta-headline">
         <div>
-          <h1 class="heading h-page"><BrandIcon name="assignments" :size="34" /> Тестовые задания</h1>
-          <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
+          <h1 class="section-heading" style="display:flex;align-items:center;gap:.6rem"><BrandIcon name="assignments" :size="32" /> Тестовые задания</h1>
+          <p class="section-lead" style="margin-top:.6rem">Реальные тестовые задания от IT-компаний для практики</p>
         </div>
         <div class="ta-kpi">{{ total }} в базе</div>
       </div>

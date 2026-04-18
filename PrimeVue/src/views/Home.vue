@@ -75,9 +75,9 @@
       <section class="value-strip">
         <Card class="value-card">
           <template #content>
-            <div class="value-head">
-              <h2 class="section-title">Что ты получаешь от платформы</h2>
-              <p class="p-muted">Сначала ценность и результат, затем детали реализации.</p>
+            <div class="section-header centered">
+              <h2 class="section-heading">Что ты получаешь от платформы</h2>
+              <p class="section-lead">Сначала ценность и результат, затем детали реализации.</p>
             </div>
             <div class="value-grid">
               <div v-for="pillar in valuePillars" :key="pillar.title" class="value-item">
@@ -90,26 +90,23 @@
       </section>
 
       <section class="tools-section">
-        <div class="tools-head">
-          <h2 class="section-title">Инструменты платформы</h2>
-          <p class="p-muted">Ежедневная практика, контроль прогресса и приоритизация тем в одном интерфейсе.</p>
+        <div class="section-header centered">
+          <h2 class="section-heading">Инструменты платформы</h2>
+          <p class="section-lead">Ежедневная практика, контроль прогресса и приоритизация тем в одном интерфейсе.</p>
         </div>
 
         <div class="tools-grid">
-          <Card v-for="item in features" :key="item.route" class="tool-card" @click="openFeature(item.route)">
-            <template #title>
-              <div class="tool-title">
-                <i :class="item.icon" />
-                <span>{{ item.title }}</span>
-              </div>
-            </template>
-            <template #content>
-              <p class="tool-desc">{{ item.description }}</p>
-            </template>
-            <template #footer>
-              <Button label="Открыть" text icon="pi pi-arrow-right" iconPos="right" @click.stop="openFeature(item.route)" />
-            </template>
-          </Card>
+          <div
+            v-for="(item, i) in features"
+            :key="item.route"
+            class="blob-card"
+            :class="`blob-card-${(i % 6) + 1}`"
+            @click="openFeature(item.route)"
+          >
+            <i :class="item.icon" class="blob-icon" />
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.description }}</p>
+          </div>
         </div>
       </section>
 
@@ -311,15 +308,15 @@ function openFeature(route) {
 <style scoped>
 .home-page {
   display: grid;
-  gap: 1.25rem;
-  padding-top: 1.15rem;
-  padding-bottom: 2.4rem;
+  gap: 5rem;
+  padding-top: 3.5rem;
+  padding-bottom: 5rem;
 }
 
 .hero-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .hero-card {
@@ -357,9 +354,11 @@ function openFeature(route) {
 
 .hero-title {
   margin: 0;
-  font-size: clamp(2rem, 3.4vw, 2.9rem);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  font-size: clamp(2rem, calc(2rem + 2 * ((100vw - 375px) / 1065)), 4rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 500;
+  text-wrap: balance;
 }
 
 .hero-title span {
@@ -370,7 +369,8 @@ function openFeature(route) {
   margin: 0;
   color: var(--p-text-muted-color);
   max-width: 72ch;
-  line-height: 1.68;
+  font-size: 1.1rem;
+  line-height: 1.65;
 }
 
 .hero-benefits {
@@ -405,27 +405,32 @@ function openFeature(route) {
 }
 
 .hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
+  display: flex;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--c-border);
 }
 
 .hero-stat-item {
-  border: 1px solid color-mix(in srgb, var(--p-content-border-color, #e2e8f0) 70%, transparent);
-  border-radius: var(--app-radius-md);
-  padding: 0.8rem;
-  background: color-mix(in srgb, var(--p-primary-color, #10b981) 8%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
 }
 
 .hero-stat-value {
   font-family: var(--app-font-heading);
-  font-size: 1.6rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--c-text);
+  line-height: 1;
 }
 
 .hero-stat-label {
   font-size: 0.82rem;
-  color: var(--p-text-muted-color);
+  color: var(--c-text-3);
+  margin-top: .2rem;
 }
 
 .stats-sub {
@@ -482,101 +487,64 @@ function openFeature(route) {
 
 .tools-section {
   display: grid;
-  gap: 0.85rem;
-}
-
-.tools-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.65rem;
-  flex-wrap: wrap;
+  gap: 2.5rem;
 }
 
 .tools-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
-}
-
-.tool-card {
-  cursor: pointer;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
-}
-
-.tool-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.8);
-}
-
-.tool-title {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-}
-
-.tool-title i {
-  color: var(--p-primary-color, #10b981);
-}
-
-.tool-desc {
-  margin: 0;
-  color: var(--p-text-muted-color);
-  min-height: 3.4rem;
-  line-height: 1.6;
+  gap: 1rem;
 }
 
 .flow-card {
   overflow: hidden;
 }
 
+.flow-section :deep(.p-card-title) {
+  font-size: clamp(1.3rem, 2.5vw, 1.9rem);
+  letter-spacing: -.025em;
+  font-weight: 500;
+}
+
 .value-strip {
-  margin-top: -.2rem;
+  margin-top: 0;
 }
 
 .value-card :deep(.p-card-content) {
   padding-top: .2rem;
 }
 
-.value-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: .6rem;
-  margin-bottom: .7rem;
-  flex-wrap: wrap;
-}
-
 .value-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .75rem;
+  gap: 1rem;
+  margin-top: 2rem;
 }
 
 .value-item {
   border: 1px solid color-mix(in srgb, var(--c-border) 86%, transparent);
-  border-radius: var(--r-md);
-  padding: .9rem;
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
   background: color-mix(in srgb, var(--c-surface) 74%, transparent);
 }
 
 .value-item h3 {
-  margin: 0 0 .3rem;
-  font-size: .96rem;
+  margin: 0 0 .5rem;
+  font-size: 1.05rem;
 }
 
 .value-item p {
   margin: 0;
   color: var(--c-text-3);
-  font-size: .88rem;
-  line-height: 1.55;
+  font-size: .9rem;
+  line-height: 1.6;
 }
 
 .flow-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 1rem;
+  margin-top: .5rem;
 }
 
 .flow-top {
@@ -597,23 +565,25 @@ function openFeature(route) {
 }
 
 .flow-step {
-  border: 1px solid color-mix(in srgb, var(--p-content-border-color, #e2e8f0) 70%, transparent);
-  border-radius: var(--app-radius-md);
-  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--c-border) 80%, transparent);
+  border-radius: var(--r-lg);
+  padding: 1.4rem;
   display: grid;
-  gap: 0.45rem;
-  background: color-mix(in srgb, var(--p-primary-color, #10b981) 5%, transparent);
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--c-surface) 70%, transparent);
 }
 
 .flow-step h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  letter-spacing: -.01em;
 }
 
 .flow-step p {
   margin: 0;
-  color: var(--p-text-muted-color);
-  font-size: 0.92rem;
+  color: var(--c-text-3);
+  font-size: 0.9rem;
+  line-height: 1.6;
 }
 
 .flow-details {
@@ -630,24 +600,28 @@ function openFeature(route) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
 
 .cta-content h2 {
   margin: 0;
-  font-size: clamp(1.25rem, 2.2vw, 1.8rem);
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  letter-spacing: -.025em;
+  font-weight: 500;
 }
 
 .cta-content p {
-  margin: 0.35rem 0 0;
-  color: var(--p-text-muted-color);
+  margin: 0.4rem 0 0;
+  color: var(--c-text-3);
+  line-height: 1.6;
 }
 
 .cta-actions {
   display: flex;
-  gap: 0.65rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 @media (max-width: 980px) {
@@ -663,6 +637,12 @@ function openFeature(route) {
 }
 
 @media (max-width: 700px) {
+  .home-page {
+    gap: 3rem;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+  }
+
   .tools-grid,
   .flow-grid,
   .value-grid {
@@ -670,7 +650,7 @@ function openFeature(route) {
   }
 
   .hero-stats {
-    grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
 
   .hero-title {

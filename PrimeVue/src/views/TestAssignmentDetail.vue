@@ -64,7 +64,7 @@ onMounted(async () => {
 .center-block { display: flex; justify-content: center; padding: 4rem; }
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-4); }
 .link { color: var(--c-brand); text-decoration: none; font-weight: 600; }
-.title { font-size: 1.85rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.3; }
+.title { font-size: 1.85rem; font-weight: 500; margin-bottom: 1rem; line-height: 1.2; letter-spacing: -.025em; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
 .meta-item { color: var(--c-text-3); font-size: .94rem; display: flex; align-items: center; gap: .3rem; }
 .section { margin-bottom: 1.5rem; }

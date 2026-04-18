@@ -1,9 +1,11 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="skills" :size="34" /> Навыки из вакансий</h1>
-      <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
+    <div class="container-lg" style="padding-top:3rem;padding-bottom:4rem">
+      <div style="margin-bottom:2rem">
+        <h1 class="section-heading" style="display:flex;align-items:center;gap:.6rem"><BrandIcon name="skills" :size="32" /> Навыки из вакансий</h1>
+        <p class="section-lead" style="margin-top:.6rem">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
+      </div>
 
       <div v-if="auth.isAdmin" class="sync-actions">
         <button class="btn btn-secondary btn-sm" :disabled="syncing" @click="runSyncNow">

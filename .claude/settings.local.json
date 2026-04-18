@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep \"\\\\.css$\")",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}
