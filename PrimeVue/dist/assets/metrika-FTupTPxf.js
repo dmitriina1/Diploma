@@ -1,1 +1,0 @@
-import{a9 as n,aa as o,ab as a}from"./index-DGc9ZqjH.js";const i=(e,t={})=>{if(!e||typeof window>"u")return;n(e,t);const s=o();s&&fetch(`${a}/analytics/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_session:s,event_name:e,params:t}),keepalive:!0}).catch(()=>{})},c=(e,t={})=>{i(e,t)};export{c as t};

@@ -2,155 +2,147 @@
   <div class="page-shell">
     <NavBar />
 
-    <main class="container-lg home-page">
-      <section class="hero-grid">
-        <Card class="hero-card reveal-pop">
-          <template #content>
-            <div class="hero-copy">
-              <div class="hero-badges">
-                <Tag value="Что дает платформа" severity="success" rounded class="hero-tag" />
-                <Tag value="Практика + аналитика" severity="contrast" rounded />
-              </div>
-
-              <h1 class="h-page hero-title">
-                Подготовка к <span>IT-собеседованиям</span>
-                с понятным планом и приоритетами
-              </h1>
-
-              <p class="hero-sub">
-                InterviewHub собирает вопросы из реальных интервью, показывает что спрашивают чаще,
-                и превращает подготовку в управляемый цикл: изучил, закрепил, проверил результат.
-              </p>
-
-              <div class="hero-benefits">
-                <article v-for="benefit in heroBenefits" :key="benefit.title" class="hero-benefit">
-                  <h3>{{ benefit.title }}</h3>
-                  <p>{{ benefit.text }}</p>
-                </article>
-              </div>
-
-              <div class="hero-actions">
-                <Button label="Начать подготовку" icon="pi pi-play" @click="router.push('/interview-questions')" />
-                <Button label="Тренажер SM-2" icon="pi pi-bolt" severity="secondary" outlined @click="router.push('/trainer')" />
-              </div>
-
-              <div class="hero-stats">
-                <div v-for="item in stats" :key="item.label" class="hero-stat-item">
-                  <div class="hero-stat-value">{{ item.value }}</div>
-                  <div class="hero-stat-label">{{ item.label }}</div>
-                </div>
-              </div>
+    <main class="openai-home">
+      <section class="section section-hero">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="hero-wrap reveal-pop">
+            <p class="hero-kicker">InterviewHub API Platform</p>
+            <h1>Создавайте сильную подготовку к IT-собеседованиям на платформе InterviewHub</h1>
+            <p class="hero-sub">
+              Платформа извлекает вопросы из видео интервью, структурирует их в единую базу,
+              а затем помогает закреплять ответы через SM-2, mock и AI-практику.
+            </p>
+            <div class="hero-actions">
+              <Button label="Начать подготовку" @click="router.push('/interview-questions')" />
+              <Button label="Открыть тренажер" outlined @click="router.push('/trainer')" />
             </div>
-          </template>
-        </Card>
-
-        <Card class="stats-card reveal-pop" style="--delay:120ms">
-          <template #title>Динамика и пайплайн</template>
-          <template #content>
-            <p class="stats-sub">Топ-6 тем по количеству собранных вопросов</p>
-            <Divider />
-            <Chart type="bar" :data="chartData" :options="chartOptions" class="home-chart" />
-
-            <div class="pipeline-mini">
-              <div v-for="step in steps" :key="step.title" class="pipeline-item">
-                <Tag :value="step.index" severity="secondary" rounded />
-                <span>{{ step.title }}</span>
-              </div>
-            </div>
-
-            <div class="proof-mini">
-              <div class="proof-item">
-                <span class="proof-k">SM-2</span>
-                <span class="proof-v">алгоритм интервальных повторений</span>
-              </div>
-              <div class="proof-item">
-                <span class="proof-k">AI</span>
-                <span class="proof-v">извлечение вопросов и генерация ответов</span>
-              </div>
-            </div>
-          </template>
-        </Card>
-      </section>
-
-      <section class="value-strip">
-        <Card class="value-card">
-          <template #content>
-            <div class="value-head">
-              <h2 class="section-title">Что ты получаешь от платформы</h2>
-              <p class="p-muted">Сначала ценность и результат, затем детали реализации.</p>
-            </div>
-            <div class="value-grid">
-              <div v-for="pillar in valuePillars" :key="pillar.title" class="value-item">
-                <h3>{{ pillar.title }}</h3>
-                <p>{{ pillar.text }}</p>
-              </div>
-            </div>
-          </template>
-        </Card>
-      </section>
-
-      <section class="tools-section">
-        <div class="tools-head">
-          <h2 class="section-title">Инструменты платформы</h2>
-          <p class="p-muted">Ежедневная практика, контроль прогресса и приоритизация тем в одном интерфейсе.</p>
-        </div>
-
-        <div class="tools-grid">
-          <Card v-for="item in features" :key="item.route" class="tool-card" @click="openFeature(item.route)">
-            <template #title>
-              <div class="tool-title">
-                <i :class="item.icon" />
-                <span>{{ item.title }}</span>
-              </div>
-            </template>
-            <template #content>
-              <p class="tool-desc">{{ item.description }}</p>
-            </template>
-            <template #footer>
-              <Button label="Открыть" text icon="pi pi-arrow-right" iconPos="right" @click.stop="openFeature(item.route)" />
-            </template>
-          </Card>
+          </div>
         </div>
       </section>
 
-      <section class="flow-section">
-        <Card class="flow-card">
-          <template #title>Как это работает</template>
-          <template #content>
-            <div class="flow-grid">
-              <div v-for="step in steps" :key="step.title" class="flow-step">
-                <div class="flow-top">
-                  <Tag :value="step.index" rounded />
-                  <div class="flow-visual">
-                    <BrandIcon :name="step.icon" :size="22" />
-                  </div>
-                </div>
-                <h3>{{ step.title }}</h3>
-                <p>{{ step.description }}</p>
-                <ul class="flow-details">
-                  <li v-for="detail in step.details" :key="detail">{{ detail }}</li>
+      <section class="section section-logos">
+        <div class="openai-container max-w-container @container grid w-full">
+          <p class="logos-label">Используется для подготовки по направлениям</p>
+          <div class="logos-grid">
+            <span v-for="item in professionsLine" :key="item">{{ item }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-models">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="section-head">
+            <h2>Работает на практических модулях платформы</h2>
+          </div>
+
+          <div class="cards-shell" role="list">
+            <article
+              v-for="card in modelCards"
+              :key="card.title"
+              class="model-card"
+              role="listitem"
+              tabindex="0"
+              @click="openFeature(card.route)"
+              @keydown.enter.prevent="openFeature(card.route)"
+            >
+              <img :src="card.image" :alt="card.title" class="model-image" />
+              <div class="model-overlay">
+                <h3>{{ card.title }}</h3>
+                <ul>
+                  <li v-for="point in card.points" :key="point">{{ point }}</li>
                 </ul>
+                <button class="model-link" type="button" @click.stop="openFeature(card.route)">Подробнее</button>
               </div>
-            </div>
-          </template>
-        </Card>
+            </article>
+          </div>
+        </div>
       </section>
 
-      <section class="cta-section">
-        <Card class="cta-card">
-          <template #content>
-            <div class="cta-content">
+      <section class="section section-grid">
+        <div class="openai-container grid-wrap max-w-container @container grid w-full">
+          <div class="grid-copy">
+            <h2>Универсальная платформа для подготовки</h2>
+            <p>
+              Выстраивайте цикл обучения: сначала сбор и фильтрация вопросов,
+              затем практика ответов, после этого проверка навыков через mock и аналитику рынка.
+            </p>
+          </div>
+
+          <div class="media-grid col-span-12 grid w-full grid-cols-1 items-stretch gap-lg @md:gap-xl">
+            <article class="media-card">
+              <img src="../assets/media/hybrid/questions-banner.svg" alt="Каталог вопросов" />
+              <h3>Собирайте</h3>
+              <p>Автосбор вопросов из интервью с дедупликацией и тегами.</p>
+            </article>
+            <article class="media-card">
+              <img src="../assets/media/hybrid/trainer-grid.svg" alt="Тренажер" />
+              <h3>Тренируйте</h3>
+              <p>SM-2 интервальные повторения и практика формулировки ответов.</p>
+            </article>
+            <article class="media-card">
+              <img src="../assets/media/hybrid/skills-orbit.svg" alt="Навыки" />
+              <h3>Оптимизируйте</h3>
+              <p>Приоритизируйте подготовку по статистике навыков HH.ru.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-video">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="section-head">
+            <h2>Видеоконтент, который превращается в структуру</h2>
+            <p>Загрузка видео, транскрибация и извлечение вопросов в одном пайплайне</p>
+          </div>
+
+          <div class="video-grid col-span-12 grid w-full grid-cols-1 items-stretch gap-lg @md:gap-xl">
+            <article class="video-card big">
+              <img src="../assets/media/hybrid/hero-interview.svg" alt="Видео интервью" />
               <div>
-                <h2>Готов начать подготовку?</h2>
-                <p>Собери персональный ритм: вопросы, карточки и аналитика навыков в одном цикле.</p>
+                <h3>Pipeline обработки видео</h3>
+                <p>Поддержка YouTube, VK, Rutube и локальных файлов, прогресс в real-time.</p>
               </div>
-              <div class="cta-actions">
-                <Button label="К вопросам" icon="pi pi-compass" @click="router.push('/interview-questions')" />
-                <Button label="Открыть записи" icon="pi pi-video" severity="secondary" outlined @click="router.push('/recordings')" />
-              </div>
-            </div>
-          </template>
-        </Card>
+            </article>
+
+            <article class="video-card">
+              <h3>Whisper + LLM</h3>
+              <p>Транскрибация речи и извлечение релевантных вопросов с нормализацией.</p>
+              <Button label="Открыть записи" outlined @click="router.push('/recordings')" />
+            </article>
+
+            <article class="video-card">
+              <h3>Семантический поиск</h3>
+              <p>FAISS и эмбеддинги помогают находить похожие вопросы по смыслу.</p>
+              <Button label="Перейти к вопросам" outlined @click="router.push('/interview-questions')" />
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-usecases">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="section-head">
+            <h2>Сценарии использования платформы</h2>
+          </div>
+          <div class="usecases-grid">
+            <article v-for="item in features" :key="item.title" class="usecase-card" @click="openFeature(item.route)">
+              <i :class="item.icon" />
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.description }}</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-cta">
+        <div class="openai-container cta-inner max-w-container @container grid w-full">
+          <h2>Начать подготовку</h2>
+          <p>Соберите собственный план: вопросы, тренажер, mock, навыки и тестовые задания.</p>
+          <div class="hero-actions">
+            <Button label="К вопросам" @click="router.push('/interview-questions')" />
+            <Button label="Навыки вакансий" outlined @click="router.push('/hh-requirements')" />
+          </div>
+        </div>
       </section>
     </main>
 
@@ -161,15 +153,14 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import Card from 'primevue/card'
 import Button from 'primevue/button'
-import Tag from 'primevue/tag'
-import Divider from 'primevue/divider'
-import Chart from 'primevue/chart'
 import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
-import BrandIcon from '../components/BrandIcon.vue'
 import { useQuestionsStore } from '../store'
+
+import modelA from '../assets/media/hybrid/questions-banner.svg'
+import modelB from '../assets/media/hybrid/trainer-grid.svg'
+import modelC from '../assets/media/hybrid/skills-orbit.svg'
 
 const store = useQuestionsStore()
 const router = useRouter()
@@ -178,129 +169,40 @@ onMounted(() => {
   store.fetchQuestions()
 })
 
-const stats = computed(() => {
-  const videos = new Set(
-    store.questions
-      .map((q) => q.video_url || q.youtube_url || q.source_url || q.video_id || q.processed_video_id)
-      .filter(Boolean)
-  ).size
-  return [
-    { label: 'Вопросов', value: store.questions.length || '0' },
-    { label: 'Технологий', value: store.topics.length || '0' },
-    { label: 'Видео', value: videos || '0' }
-  ]
+const professionsLine = computed(() => {
+  const source = store.professions?.map((item) => item.title).filter(Boolean) || []
+  if (source.length) return source.slice(0, 14)
+  return ['Backend', 'Frontend', 'DevOps', 'Data Scientist', 'QA', 'Android', 'iOS', 'System Design']
 })
 
-const chartData = computed(() => {
-  const byTopic = {}
-  for (const q of store.questions) {
-    if (!q.topic) continue
-    byTopic[q.topic] = (byTopic[q.topic] || 0) + 1
-  }
-
-  const top = Object.entries(byTopic)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-
-  return {
-    labels: top.map((entry) => entry[0]),
-    datasets: [
-      {
-        label: 'Вопросы',
-        data: top.map((entry) => entry[1]),
-        borderRadius: 10,
-        maxBarThickness: 30,
-        backgroundColor: ['#20b28a', '#1aa4c0', '#5b8ef2', '#20b28a', '#1aa4c0', '#5b8ef2'],
-        borderColor: 'rgba(255,255,255,.1)',
-        borderWidth: 1
-      }
-    ]
-  }
-})
-
-const chartOptions = {
-  animation: {
-    duration: 950,
-    easing: 'easeOutQuart'
+const modelCards = [
+  {
+    title: 'Каталог вопросов',
+    route: '/interview-questions',
+    image: modelA,
+    points: ['Фильтры по теме и уровню', 'Вероятность и частота', 'Похожие вопросы'],
   },
-  plugins: {
-    legend: { display: false }
+  {
+    title: 'SM-2 тренажер',
+    route: '/trainer',
+    image: modelB,
+    points: ['Интервальные повторения', 'Карточки вопрос/ответ', 'Прогресс по сессии'],
   },
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        precision: 0,
-        color: '#8da8bc'
-      },
-      grid: {
-        color: 'rgba(134, 171, 194, .2)'
-      }
-    },
-    x: {
-      ticks: {
-        color: '#a5bdd0'
-      },
-      grid: {
-        display: false
-      }
-    }
+  {
+    title: 'Навыки вакансий',
+    route: '/hh-requirements',
+    image: modelC,
+    points: ['Статистика HH.ru', 'Must-have навыки', 'Фокус на рынке'],
   },
-  maintainAspectRatio: false
-}
+]
 
 const features = [
-  { route: '/interview-questions', icon: 'pi pi-question-circle', title: 'База вопросов', description: 'Фильтры по темам, сложности и вероятности вопроса.' },
-  { route: '/trainer', icon: 'pi pi-bolt', title: 'Тренажер SM-2', description: 'Интервальные повторения и закрепление ответа.' },
-  { route: '/ai-interview', icon: 'pi pi-comments', title: 'AI Interview', description: 'Практика формулировок в диалоге с AI-интервьюером.' },
-  { route: '/test-assignments', icon: 'pi pi-briefcase', title: 'Тестовые задания', description: 'Коллекция задач от компаний для портфолио-практики.' },
-  { route: '/recordings', icon: 'pi pi-video', title: 'Записи', description: 'Архив обработанных интервью с таймкодами и вопросами.' },
-  { route: '/hh-requirements', icon: 'pi pi-chart-bar', title: 'Навыки вакансий', description: 'Аналитика востребованных навыков по рынку.' }
-]
-
-const heroBenefits = [
-  {
-    title: 'Фокус на приоритетах',
-    text: 'Сначала вопросы с высокой частотой и рыночной значимостью, а не случайный список тем.'
-  },
-  {
-    title: 'Тренировка в контексте интервью',
-    text: 'SM-2, mock и AI-диалог помогают не просто читать ответы, а формулировать их уверенно.'
-  },
-  {
-    title: 'Понимание реального спроса',
-    text: 'HH-аналитика и тестовые задания показывают, какие навыки дают максимальный эффект при подготовке.'
-  }
-]
-
-const steps = [
-  {
-    index: '01',
-    icon: 'recordings',
-    title: 'Загрузка и транскрибация',
-    description: 'Whisper обрабатывает видео и формирует структурированный текст интервью.',
-    details: ['Поддержка нескольких платформ и локальных файлов', 'Отслеживание прогресса обработки в реальном времени']
-  },
-  {
-    index: '02',
-    icon: 'questions',
-    title: 'Извлечение и нормализация вопросов',
-    description: 'LLM выделяет релевантные вопросы, а система дедупликации убирает повторы.',
-    details: ['Семантическая очистка схожих формулировок', 'Сортировка по частоте и вероятности появления']
-  },
-  {
-    index: '03',
-    icon: 'trainer',
-    title: 'Подготовка и проверка результата',
-    description: 'База вопросов, тренажер и mock-сценарии превращают материал в навык ответа.',
-    details: ['Интервальные повторения для долгого запоминания', 'Проверка понимания через практические сценарии']
-  }
-]
-
-const valuePillars = [
-  { title: 'Скорость', text: 'Меньше времени на хаотичный поиск и больше времени на целенаправленную практику.' },
-  { title: 'Структура', text: 'Единый рабочий процесс: база вопросов, тренировка, проверка результата.' },
-  { title: 'Актуальность', text: 'Контент обновляется из свежих интервью и вакансий, а не из старых конспектов.' }
+  { route: '/interview-questions', icon: 'pi pi-question-circle', title: 'База вопросов', description: 'Быстрый доступ к частым вопросам по профессиям и темам.' },
+  { route: '/trainer', icon: 'pi pi-bolt', title: 'Тренажер', description: 'Закрепление знаний по алгоритму интервальных повторений.' },
+  { route: '/ai-interview', icon: 'pi pi-comments', title: 'AI Interview', description: 'Диалоговый режим для тренировки уверенных формулировок.' },
+  { route: '/mock-interview', icon: 'pi pi-stopwatch', title: 'Mock интервью', description: 'Проверка навыка ответа в формате реального собеседования.' },
+  { route: '/test-assignments', icon: 'pi pi-briefcase', title: 'Тестовые задания', description: 'Практические задания от технологических компаний.' },
+  { route: '/recordings', icon: 'pi pi-video', title: 'Записи интервью', description: 'Видео-источники, таймкоды и извлеченные вопросы.' },
 ]
 
 function openFeature(route) {
@@ -309,93 +211,54 @@ function openFeature(route) {
 </script>
 
 <style scoped>
-.home-page {
+.openai-home {
   display: grid;
-  gap: 1.25rem;
-  padding-top: 1.15rem;
-  padding-bottom: 2.4rem;
+  gap: 0;
 }
 
-.hero-grid {
+.openai-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 1.5rem;
+}
+
+.section {
+  padding: 2.35rem 0;
+}
+
+.section-hero {
+  padding-top: 2.9rem;
+  padding-bottom: 1.8rem;
+}
+
+.hero-wrap {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
+  gap: 1.05rem;
 }
 
-.hero-card {
-  position: relative;
-  overflow: hidden;
+.hero-kicker {
+  font-family: var(--app-font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
 }
 
-.hero-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 16% 4%, color-mix(in srgb, var(--p-primary-color, #10b981) 20%, transparent), transparent 38%),
-    radial-gradient(circle at 96% 96%, color-mix(in srgb, #38bdf8 14%, transparent), transparent 40%);
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.hero-card :deep(.p-card-content) {
-  position: relative;
-  z-index: 1;
-}
-
-.hero-copy {
-  display: grid;
-  gap: 1rem;
-}
-
-.hero-badges {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.hero-title {
+.hero-wrap h1 {
   margin: 0;
-  font-size: clamp(2rem, 3.4vw, 2.9rem);
-  line-height: 1.12;
-  letter-spacing: -0.02em;
-}
-
-.hero-title span {
-  color: var(--p-primary-color, #10b981);
+  max-width: 16ch;
+  font-family: var(--app-font-heading);
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  line-height: 1.01;
+  letter-spacing: -0.034em;
 }
 
 .hero-sub {
   margin: 0;
-  color: var(--p-text-muted-color);
-  max-width: 72ch;
-  line-height: 1.68;
-}
-
-.hero-benefits {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .55rem;
-}
-
-.hero-benefit {
-  border: 1px solid color-mix(in srgb, var(--c-border) 82%, transparent);
-  border-radius: var(--r-md);
-  padding: .75rem .8rem;
-  background: color-mix(in srgb, var(--c-surface) 72%, transparent);
-}
-
-.hero-benefit h3 {
-  margin: 0 0 .25rem;
-  font-size: .9rem;
-}
-
-.hero-benefit p {
-  margin: 0;
-  color: var(--c-text-3);
-  font-size: .83rem;
-  line-height: 1.54;
+  max-width: 64ch;
+  color: var(--text-secondary);
+  font-size: 1.03rem;
+  line-height: 1.66;
 }
 
 .hero-actions {
@@ -404,277 +267,286 @@ function openFeature(route) {
   flex-wrap: wrap;
 }
 
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
+.section-logos {
+  padding-top: 1rem;
+  padding-bottom: 2.2rem;
 }
 
-.hero-stat-item {
-  border: 1px solid color-mix(in srgb, var(--p-content-border-color, #e2e8f0) 70%, transparent);
-  border-radius: var(--app-radius-md);
-  padding: 0.8rem;
-  background: color-mix(in srgb, var(--p-primary-color, #10b981) 8%, transparent);
-}
-
-.hero-stat-value {
-  font-family: var(--app-font-heading);
-  font-size: 1.6rem;
-  font-weight: 700;
-}
-
-.hero-stat-label {
+.logos-label {
+  margin: 0 0 0.55rem;
   font-size: 0.82rem;
-  color: var(--p-text-muted-color);
+  color: var(--text-secondary);
 }
 
-.stats-sub {
-  margin: 0;
-  color: var(--p-text-muted-color);
-  font-size: 0.92rem;
-}
-
-.home-chart {
-  height: 200px;
-}
-
-.pipeline-mini {
-  margin-top: 0.8rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.proof-mini {
-  margin-top: .85rem;
-  display: grid;
-  gap: .45rem;
-}
-
-.proof-item {
+.logos-grid {
   display: flex;
-  align-items: center;
-  gap: .55rem;
-  padding: .45rem .6rem;
-  border: 1px solid color-mix(in srgb, var(--c-border) 88%, transparent);
-  border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--c-surface) 68%, transparent);
-}
-
-.proof-k {
-  font-family: var(--app-font-heading);
-  font-size: .88rem;
-  color: var(--c-brand-h);
-  min-width: 40px;
-}
-
-.proof-v {
-  color: var(--c-text-3);
-  font-size: .82rem;
-}
-
-.pipeline-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--p-text-color);
-  font-size: 0.88rem;
-}
-
-.tools-section {
-  display: grid;
-  gap: 0.85rem;
-}
-
-.tools-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.65rem;
   flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
-.tools-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
+.logos-grid span {
+  padding: 0.32rem 0.62rem;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
-.tool-card {
-  cursor: pointer;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+.section-head {
+  margin-bottom: 1.15rem;
 }
 
-.tool-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.8);
+.section-head h2 {
+  margin: 0;
+  max-width: 20ch;
+  font-size: clamp(1.52rem, 2.25vw, 2.06rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
 }
 
-.tool-title {
+.section-head p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+}
+
+.cards-shell {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  gap: .9rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scroll-snap-type: x mandatory;
+}
+
+.model-card {
+  transition: transform var(--dur-250) var(--ease-curve-a), box-shadow var(--dur-250) var(--ease-curve-a), border-color var(--dur-250) ease;
+  color: #101010;
+  position: relative;
+  display: flex;
+  min-width: 286px;
+  flex: 1;
+  cursor: pointer;
+  scroll-snap-align: start;
+  align-items: flex-end;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #8ad1fd;
+  aspect-ratio: 4 / 5;
+  border: 1px solid rgba(12, 24, 42, 0.12);
+}
+
+.model-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--c-brand) 48%, white);
+  outline-offset: 2px;
+}
+
+.model-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 18px 36px -28px rgba(10, 22, 38, .44);
+}
+
+.model-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-400) var(--ease-curve-b);
+}
+
+.model-card:hover .model-image {
+  transform: scale(1.045);
+}
+
+.model-overlay {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: .92rem;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.82) 62%, rgba(255, 255, 255, 0) 100%);
+}
+
+.model-overlay h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.02rem;
+}
+
+.model-overlay ul {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.model-link {
+  margin-top: 0.6rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #1f8a70;
+}
+
+.grid-wrap {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.grid-copy p {
+  margin: 0.35rem 0 0;
+  max-width: 72ch;
+  color: var(--text-secondary);
+}
+
+.media-grid,
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.media-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.media-card,
+.video-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: .88rem;
+  background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
+}
+
+.media-card:hover,
+.video-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--c-border-h) 85%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.media-card img,
+.video-card img {
+  width: 100%;
+  border-radius: 9px;
+  margin-bottom: 0.55rem;
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.media-card h3,
+.video-card h3 {
+  margin: 0 0 0.28rem;
   font-size: 1rem;
 }
 
-.tool-title i {
-  color: var(--p-primary-color, #10b981);
-}
-
-.tool-desc {
+.media-card p,
+.video-card p {
   margin: 0;
-  color: var(--p-text-muted-color);
-  min-height: 3.4rem;
-  line-height: 1.6;
-}
-
-.flow-card {
-  overflow: hidden;
-}
-
-.value-strip {
-  margin-top: -.2rem;
-}
-
-.value-card :deep(.p-card-content) {
-  padding-top: .2rem;
-}
-
-.value-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: .6rem;
-  margin-bottom: .7rem;
-  flex-wrap: wrap;
-}
-
-.value-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .75rem;
-}
-
-.value-item {
-  border: 1px solid color-mix(in srgb, var(--c-border) 86%, transparent);
-  border-radius: var(--r-md);
-  padding: .9rem;
-  background: color-mix(in srgb, var(--c-surface) 74%, transparent);
-}
-
-.value-item h3 {
-  margin: 0 0 .3rem;
-  font-size: .96rem;
-}
-
-.value-item p {
-  margin: 0;
-  color: var(--c-text-3);
-  font-size: .88rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
   line-height: 1.55;
 }
 
-.flow-grid {
+.video-grid {
+  grid-template-columns: 1.2fr .8fr .8fr;
+}
+
+.video-card.big {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.video-card {
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.usecases-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 
-.flow-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.usecase-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
+  padding: 0.88rem;
+  cursor: pointer;
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
 }
 
-.flow-visual {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--c-border-h) 75%, transparent);
-  background: color-mix(in srgb, var(--c-brand-bg) 58%, transparent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.usecase-card:hover {
+  background: var(--surface-soft);
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--c-border-h) 85%, transparent);
 }
 
-.flow-step {
-  border: 1px solid color-mix(in srgb, var(--p-content-border-color, #e2e8f0) 70%, transparent);
-  border-radius: var(--app-radius-md);
-  padding: 1rem;
-  display: grid;
-  gap: 0.45rem;
-  background: color-mix(in srgb, var(--p-primary-color, #10b981) 5%, transparent);
+.usecase-card i {
+  color: var(--brand-color);
 }
 
-.flow-step h3 {
+.usecase-card h3 {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.98rem;
+}
+
+.usecase-card p {
   margin: 0;
-  font-size: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
-.flow-step p {
+.section-cta {
+  padding-bottom: 2.9rem;
+}
+
+.cta-inner {
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
+  padding: 1.2rem;
+}
+
+.cta-inner h2 {
   margin: 0;
-  color: var(--p-text-muted-color);
-  font-size: 0.92rem;
 }
 
-.flow-details {
-  margin: .1rem 0 0;
-  padding-left: 1.05rem;
-  display: grid;
-  gap: .28rem;
-  color: var(--c-text-3);
-  font-size: .84rem;
-  line-height: 1.5;
+.cta-inner p {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--text-secondary);
 }
 
-.cta-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.cta-content h2 {
-  margin: 0;
-  font-size: clamp(1.25rem, 2.2vw, 1.8rem);
-}
-
-.cta-content p {
-  margin: 0.35rem 0 0;
-  color: var(--p-text-muted-color);
-}
-
-.cta-actions {
-  display: flex;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 980px) {
-  .hero-benefits {
-    grid-template-columns: 1fr;
-  }
-
-  .tools-grid,
-  .flow-grid,
-  .value-grid {
+@media (max-width: 1080px) {
+  .media-grid,
+  .video-grid,
+  .usecases-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-@media (max-width: 700px) {
-  .tools-grid,
-  .flow-grid,
-  .value-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 760px) {
+  .openai-container {
+    padding: 0 1rem;
   }
 
-  .hero-stats {
-    grid-template-columns: 1fr;
+  .section {
+    padding: 1.5rem 0;
   }
 
-  .hero-title {
-    font-size: clamp(1.75rem, 8vw, 2.25rem);
+  .hero-wrap h1 {
+    max-width: 100%;
+    font-size: clamp(1.95rem, 9vw, 2.75rem);
+  }
+
+  .media-grid,
+  .video-grid,
+  .usecases-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

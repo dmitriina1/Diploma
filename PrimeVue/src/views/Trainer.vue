@@ -1,11 +1,12 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container" style="padding-top:2rem; padding-bottom:3rem;">
+    <div class="max-w-container tr-page">
 
       <!-- Mode Select -->
       <div v-if="mode === 'select'" class="mode-select">
-        <h1 class="page-heading h-page">Тренажёр SM-2</h1>
+        <p class="eyebrow">Trainer</p>
+        <h1 class="page-heading h-page">Тренажер SM-2</h1>
         <p class="page-desc p-muted">Интервальные повторения по алгоритму SuperMemo 2</p>
 
         <div v-if="loadError" class="state-panel" style="margin:0 auto 1.2rem; max-width:680px;">
@@ -327,8 +328,34 @@ const startInterviewSession = async (v) => {
 </script>
 
 <style scoped>
-.page-heading { font-size: 1.85rem; font-weight: 700; text-align: center; margin-bottom: .3rem; }
-.page-desc { text-align: center; color: var(--c-text-3); font-size: 1rem; margin-bottom: 1.75rem; }
+.tr-page {
+  padding-top: 2.15rem;
+  padding-bottom: 3rem;
+}
+
+.eyebrow {
+  margin: 0 0 .28rem;
+  text-align: center;
+  font-family: var(--app-font-mono);
+  color: var(--text-secondary);
+  font-size: .76rem;
+  letter-spacing: .03em;
+}
+
+.page-heading {
+  font-size: clamp(1.75rem, 2.7vw, 2.18rem);
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: .3rem;
+  letter-spacing: -.02em;
+}
+
+.page-desc {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: .97rem;
+  margin-bottom: 1.75rem;
+}
 
 /* SM-2 stats */
 .sm2-row { display: flex; justify-content: center; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
@@ -340,7 +367,13 @@ const startInterviewSession = async (v) => {
 
 /* Mode cards */
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.mode-card { padding: 2rem; text-align: center; cursor: pointer; }
+.mode-card {
+  padding: 1.35rem;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
+}
 .mode-card { position: relative; overflow: hidden; }
 .mode-card::after {
   content: '';
@@ -357,6 +390,10 @@ const startInterviewSession = async (v) => {
 .mode-card h3 { font-size: 1.22rem; font-weight: 600; margin-bottom: .4rem; }
 .mode-card p { font-size: .97rem; color: var(--c-text-3); line-height: 1.55; margin-bottom: .85rem; }
 .mc-footer { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; }
+
+.mode-card:hover {
+  transform: translateY(-2px);
+}
 
 /* Setup */
 .form-stack { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.25rem; }
@@ -389,7 +426,7 @@ const startInterviewSession = async (v) => {
   position: relative;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
-  transition: transform .55s var(--ease);
+  transition: transform .55s var(--ease-curve-a);
   will-change: transform;
 }
 .fc-card.flipped { transform: rotateY(180deg); }
@@ -402,7 +439,7 @@ const startInterviewSession = async (v) => {
     linear-gradient(145deg, color-mix(in srgb, var(--c-surface) 84%, transparent), color-mix(in srgb, var(--c-surface-a) 80%, transparent)),
     url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat;
   border: 1px solid var(--c-border);
-  border-radius: var(--r-lg);
+  border-radius: 12px;
   padding: 2rem;
   display: flex;
   flex-direction: column;
@@ -452,13 +489,13 @@ const startInterviewSession = async (v) => {
   gap: .5rem;
   padding: .8rem 1rem;
   border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
+  border-radius: 999px;
   background: var(--c-surface);
   color: var(--c-text);
   font-size: .9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--dur) var(--ease);
+  transition: all var(--dur-250) var(--ease-curve-a);
 }
 .fc-btn.repeat:hover { background: var(--c-warn-bg); border-color: var(--c-warn); color: var(--c-warn); }
 .fc-btn.known:hover  { background: var(--c-ok-bg);   border-color: var(--c-ok);   color: var(--c-ok); }
@@ -488,6 +525,14 @@ const startInterviewSession = async (v) => {
 /* Interview */
 .iv-list { display: flex; flex-direction: column; gap: .5rem; }
 .iv-item { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; cursor: pointer; }
+.iv-item {
+  border-radius: 10px;
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease;
+}
+
+.iv-item:hover {
+  transform: translateY(-1px);
+}
 .iv-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: .3rem; }
 .iv-meta { display: flex; align-items: center; gap: .5rem; }
 .iv-count { font-size: .78rem; color: var(--c-text-3); }
@@ -498,6 +543,9 @@ const startInterviewSession = async (v) => {
 .iv-counter { font-size: .82rem; color: var(--c-text-3); white-space: nowrap; }
 
 .iv-card { padding: 2rem; text-align: center; }
+.iv-card {
+  border-radius: 12px;
+}
 .iv-card h2 { font-size: 1.3rem; font-weight: 600; line-height: 1.45; margin-bottom: 1.25rem; }
 .iv-answer { text-align: left; color: var(--c-text-2); line-height: 1.7; background: var(--c-bg-2); border-radius: var(--r-md); padding: 1.25rem; margin-bottom: 1.25rem; font-size: .96rem; }
 .iv-actions { display: flex; justify-content: center; gap: .75rem; }

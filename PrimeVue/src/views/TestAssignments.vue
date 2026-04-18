@@ -1,10 +1,11 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
+    <div class="max-w-container ta-page">
       <div class="ta-headline">
         <div>
-          <h1 class="heading h-page"><BrandIcon name="assignments" :size="34" /> Тестовые задания</h1>
+          <p class="eyebrow">Assignments</p>
+          <h1 class="heading h-page"><BrandIcon name="assignments" :size="30" /> Тестовые задания</h1>
           <p class="sub">Реальные тестовые задания от IT-компаний для практики</p>
         </div>
         <div class="ta-kpi">{{ total }} в базе</div>
@@ -116,6 +117,19 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.ta-page {
+  padding-top: 2.15rem;
+  padding-bottom: 3rem;
+}
+
+.eyebrow {
+  margin: 0 0 .28rem;
+  font-family: var(--app-font-mono);
+  color: var(--text-secondary);
+  font-size: .76rem;
+  letter-spacing: .03em;
+}
+
 .ta-headline {
   display: flex;
   justify-content: space-between;
@@ -126,12 +140,12 @@ onMounted(loadData)
 }
 
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
+.sub { text-align: center; color: var(--text-secondary); font-size: .95rem; margin-bottom: 1.5rem; }
 
 .ta-kpi {
   border: 1px solid color-mix(in srgb, var(--c-border-h) 82%, transparent);
   background: color-mix(in srgb, var(--c-brand-bg) 58%, transparent);
-  border-radius: var(--r-full);
+  border-radius: 999px;
   padding: .45rem .85rem;
   font-size: .82rem;
   color: var(--c-brand-h);
@@ -147,7 +161,7 @@ onMounted(loadData)
   top: calc(var(--nav-h) + .55rem);
   z-index: 15;
   padding: .55rem;
-  border-radius: var(--r-md);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--c-bg-1) 68%, transparent);
   border: 1px solid color-mix(in srgb, var(--c-border-h) 72%, transparent);
   backdrop-filter: blur(10px);
@@ -171,10 +185,11 @@ onMounted(loadData)
   display: flex; 
   flex-direction: column;
   border: 1px solid var(--c-border);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  border-radius: 10px;
+  transition: transform var(--dur-250) var(--ease-curve-a), box-shadow var(--dur-250) var(--ease-curve-a), border-color var(--dur-250) ease;
 }
 .ta-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-lg);
   border-color: var(--c-border-h);
 }

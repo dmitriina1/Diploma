@@ -1,65 +1,43 @@
 <template>
   <nav class="nav">
     <div class="nav-inner">
-      <router-link to="/" class="nav-logo">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-        <span class="logo-title">InterviewHub</span>
-        <span class="logo-sub">IT interview readiness</span>
+      <router-link to="/" class="nav-logo" @click="menuOpen = false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+        <span>InterviewHub</span>
       </router-link>
 
       <div class="nav-links" :class="{ open: menuOpen }">
         <router-link to="/interview-questions" class="nav-link" @click="menuOpen = false">Вопросы</router-link>
-        <router-link to="/trainer" class="nav-link" @click="menuOpen = false">Тренажёр</router-link>
+        <router-link to="/trainer" class="nav-link" @click="menuOpen = false">Тренажер</router-link>
         <router-link to="/ai-interview" class="nav-link" @click="menuOpen = false">AI Interview</router-link>
         <router-link to="/test-assignments" class="nav-link" @click="menuOpen = false">Задания</router-link>
         <router-link to="/hh-requirements" class="nav-link" @click="menuOpen = false">Навыки</router-link>
         <router-link to="/recordings" class="nav-link" @click="menuOpen = false">Записи</router-link>
-        <router-link v-if="auth.isAdmin" to="/admin" class="nav-link" @click="menuOpen = false">Админка</router-link>
-        <router-link
-          v-if="auth.isAuthenticated"
-          to="/profile"
-          class="nav-link nav-mobile-only"
-          @click="menuOpen = false"
-        >
-          Профиль
-        </router-link>
-        <button
-          v-if="auth.isAuthenticated"
-          class="nav-link nav-link-btn nav-mobile-only"
-          @click="logoutAndClose"
-        >
-          Выйти
-        </button>
-        <router-link
-          v-else
-          to="/login"
-          class="nav-link nav-mobile-only"
-          @click="menuOpen = false"
-        >
-          Войти
-        </router-link>
+        <router-link v-if="auth.isAdmin" to="/admin" class="nav-link" @click="menuOpen = false">Админ</router-link>
+        <router-link v-if="auth.isAuthenticated" to="/profile" class="nav-link nav-mobile-only" @click="menuOpen = false">Профиль</router-link>
+        <button v-if="auth.isAuthenticated" class="nav-link nav-link-btn nav-mobile-only" @click="logoutAndClose">Выйти</button>
+        <router-link v-else to="/login" class="nav-link nav-mobile-only" @click="menuOpen = false">Войти</router-link>
       </div>
 
       <div class="nav-right">
-        <button class="btn btn-ghost btn-sm theme-toggle" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Тёмная тема'">
-          <BrandIcon :name="theme.isDark ? 'theme-light' : 'theme-dark'" :size="24" />
+        <button class="theme-toggle" @click="theme.toggle()" :title="theme.isDark ? 'Светлая тема' : 'Темная тема'">
+          <BrandIcon :name="theme.isDark ? 'theme-light' : 'theme-dark'" :size="18" />
         </button>
         <template v-if="auth.isAuthenticated">
-          <router-link to="/profile" class="nav-user">
+          <router-link to="/profile" class="nav-user" @click="menuOpen = false">
             <div class="nav-avatar">{{ initials }}</div>
             <span class="nav-username">{{ auth.displayName }}</span>
           </router-link>
-          <button class="btn btn-ghost btn-sm" @click="logout">Выйти</button>
+          <button class="nav-action" @click="logout">Выйти</button>
         </template>
-        <router-link v-else to="/login" class="btn btn-primary btn-sm">Войти</router-link>
+        <router-link v-else to="/login" class="nav-action nav-action-primary">Начать</router-link>
       </div>
 
-      <button class="nav-burger" @click="menuOpen = !menuOpen" :class="{ active: menuOpen }">
+      <button class="nav-burger" @click="menuOpen = !menuOpen" :class="{ active: menuOpen }" aria-label="Открыть меню">
         <span></span><span></span><span></span>
       </button>
     </div>
 
-    <!-- Mobile overlay -->
     <transition name="overlay">
       <div v-if="menuOpen" class="nav-overlay" @click="menuOpen = false"></div>
     </transition>
@@ -102,75 +80,56 @@ function logoutAndClose() {
   position: sticky;
   top: 0;
   z-index: 120;
-  background: color-mix(in srgb, var(--c-bg) 74%, transparent);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border-bottom: 1px solid color-mix(in srgb, var(--c-border-h) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-bg) 82%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--surface-border);
   height: var(--nav-h);
 }
+
 .nav-inner {
-  max-width: var(--max-w-lg);
+  max-width: var(--max-w);
   margin: 0 auto;
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 1.75rem;
-  gap: .9rem;
+  padding: 0 1.5rem;
+  gap: .8rem;
 }
 
-/* Logo */
 .nav-logo {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
+  display: inline-flex;
   align-items: center;
-  column-gap: .6rem;
-  color: var(--c-text);
+  gap: .45rem;
+  color: var(--text-primary);
+  font-family: var(--app-font-heading);
+  font-size: .96rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
   flex-shrink: 0;
 }
+
 .nav-logo svg {
-  grid-row: 1 / span 2;
-  color: var(--c-brand);
-  width: 28px;
-  height: 28px;
-  padding: .2rem;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--c-brand-bg) 70%, transparent);
-}
-.logo-title {
-  font-family: var(--app-font-heading);
-  font-size: 1.02rem;
-  line-height: 1;
-  font-weight: 700;
-  background: linear-gradient(132deg, var(--c-text), color-mix(in srgb, var(--c-text) 66%, var(--c-brand-h)));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.logo-sub {
-  font-size: .65rem;
-  line-height: 1;
-  color: var(--c-text-4);
-  text-transform: uppercase;
-  letter-spacing: .09em;
+  color: var(--text-primary);
 }
 
-/* Links */
 .nav-links {
   display: flex;
   align-items: center;
-  gap: .22rem;
+  gap: .1rem;
   margin-left: auto;
 }
+
 .nav-link {
-  padding: .53rem .86rem;
-  border-radius: var(--r-full);
-  font-size: .92rem;
+  padding: .5rem .72rem;
+  border-radius: 10px;
+  font-size: .88rem;
   font-weight: 500;
-  color: var(--c-text-2);
-  transition: all var(--dur) var(--ease);
-  position: relative;
+  color: var(--text-secondary);
+  transition: color .2s ease, background .2s ease;
   white-space: nowrap;
 }
+
 .nav-link-btn {
   width: 100%;
   text-align: left;
@@ -178,70 +137,98 @@ function logoutAndClose() {
   background: transparent;
   font: inherit;
 }
+
 .nav-mobile-only { display: none; }
-.nav-link::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid transparent;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--c-brand), var(--c-accent));
-  opacity: 0;
-  transform: scale(.96);
-  transition: opacity var(--dur), transform var(--dur);
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
+
 .nav-link:hover,
 .nav-link.router-link-active {
-  color: var(--c-text);
-  background: color-mix(in srgb, var(--c-surface) 58%, var(--c-brand-bg));
+  color: var(--text-primary);
+  background: var(--surface-soft);
 }
-.nav-link:hover::after,
-.nav-link.router-link-active::after { opacity: 1; transform: scaleX(1); }
 
-/* Right */
 .nav-right {
   display: flex;
   align-items: center;
-  gap: .42rem;
+  gap: .4rem;
   margin-left: .5rem;
   flex-shrink: 0;
 }
+
 .theme-toggle {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-bg);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.theme-toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface-soft);
+}
+
 .nav-user {
   display: flex;
   align-items: center;
   gap: .45rem;
-  padding: .25rem .5rem;
-  border-radius: var(--r-md);
-  transition: background var(--dur) var(--ease);
+  padding: .25rem .45rem;
+  border-radius: 10px;
+  transition: background .2s ease;
 }
-.nav-user:hover { background: var(--c-surface); }
+
+.nav-user:hover {
+  background: var(--surface-soft);
+}
+
 .nav-avatar {
-  width: 34px; height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: var(--c-brand-bg);
-  color: var(--c-brand-h);
+  background: var(--brand-soft);
+  color: var(--brand-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: .9rem;
-  font-weight: 700;
+  font-size: .84rem;
+  font-weight: 600;
 }
+
 .nav-username {
-  font-size: .9rem;
-  color: var(--c-text-2);
+  font-size: .85rem;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
-/* Burger */
+.nav-action {
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  background: var(--surface-bg);
+  color: var(--text-primary);
+  padding: .46rem .86rem;
+  font-size: .84rem;
+  font-weight: 600;
+}
+
+.nav-action:hover {
+  background: var(--surface-soft);
+}
+
+.nav-action-primary {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+
+.nav-action-primary:hover {
+  background: #2a2a2a;
+  border-color: #2a2a2a;
+}
+
 .nav-burger {
   display: none;
   flex-direction: column;
@@ -252,8 +239,9 @@ function logoutAndClose() {
   cursor: pointer;
 }
 .nav-burger span {
-  width: 18px; height: 2px;
-  background: var(--c-text-2);
+  width: 18px;
+  height: 2px;
+  background: var(--text-secondary);
   border-radius: 1px;
   transition: all .2s var(--ease);
 }
@@ -261,31 +249,19 @@ function logoutAndClose() {
 .nav-burger.active span:nth-child(2) { opacity: 0; }
 .nav-burger.active span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
 
-/* Overlay */
 .nav-overlay {
   position: fixed;
   inset: var(--nav-h) 0 0 0;
-  background: rgba(0,0,0,.5);
+  background: rgba(0,0,0,.36);
   z-index: 90;
 }
 .overlay-enter-active, .overlay-leave-active { transition: opacity .2s; }
 .overlay-enter-from, .overlay-leave-to { opacity: 0; }
 
-/* Mobile */
 @media (max-width: 768px) {
   .nav-inner {
-    padding: 0 .9rem;
-    gap: .45rem;
-  }
-
-  .nav-logo {
-    display: flex;
-    gap: .45rem;
-    font-size: 1rem;
-  }
-
-  .logo-sub {
-    display: none;
+    padding: 0 1rem;
+    gap: .4rem;
   }
 
   .nav-right {
@@ -311,8 +287,8 @@ function logoutAndClose() {
     right: 0;
     width: 260px;
     height: calc(100vh - var(--nav-h));
-    background: var(--c-bg-1);
-    border-left: 1px solid var(--c-border);
+    background: var(--surface-bg);
+    border-left: 1px solid var(--surface-border);
     flex-direction: column;
     align-items: stretch;
     padding: 1rem;
@@ -330,9 +306,5 @@ function logoutAndClose() {
   }
   .nav-link { padding: .65rem .75rem; font-size: .9rem; }
   .nav-username { display: none; }
-}
-
-@media (max-width: 460px) {
-  .logo-title { display: none; }
 }
 </style>

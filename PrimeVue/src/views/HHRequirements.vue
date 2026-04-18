@@ -1,8 +1,9 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="skills" :size="34" /> Навыки из вакансий</h1>
+    <div class="max-w-container hh-page">
+      <p class="eyebrow">Vacancy Skills</p>
+      <h1 class="heading h-page"><BrandIcon name="skills" :size="30" /> Навыки из вакансий</h1>
       <p class="sub">Какие навыки требуют работодатели и как часто они встречаются (данные обновляются автоматически из hh.ru)</p>
 
       <div v-if="auth.isAdmin" class="sync-actions">
@@ -198,8 +199,22 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.hh-page {
+  padding-top: 2.15rem;
+  padding-bottom: 3rem;
+}
+
+.eyebrow {
+  margin: 0 0 .28rem;
+  text-align: center;
+  font-family: var(--app-font-mono);
+  color: var(--text-secondary);
+  font-size: .76rem;
+  letter-spacing: .03em;
+}
+
 .heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
+.sub { text-align: center; color: var(--text-secondary); font-size: .95rem; margin-bottom: 1.5rem; }
 .sync-actions {
   display: flex;
   align-items: center;
@@ -218,7 +233,7 @@ onMounted(async () => {
   padding: 1rem;
   background: var(--c-surface);
   border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
+  border-radius: 10px;
   flex-wrap: wrap;
 }
 .source-filters:has(input:checked) {
@@ -262,7 +277,17 @@ onMounted(async () => {
 .skill-row {
   display: grid; grid-template-columns: 180px 1fr 90px;
   align-items: center; gap: .75rem; padding: .4rem 0;
-  animation: fadeUp .4s var(--ease) backwards;
+  animation: fadeUp .4s var(--ease-curve-a) backwards;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: .52rem .6rem;
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
+}
+
+.skill-row:hover {
+  background: color-mix(in srgb, var(--surface-soft) 80%, transparent);
+  border-color: var(--surface-border);
+  transform: translateY(-1px);
 }
 .sk-info { display: flex; align-items: center; gap: .4rem; }
 .sk-rank { font-weight: 800; color: var(--c-text-4); font-size: .88rem; min-width: 26px; }
@@ -274,7 +299,7 @@ onMounted(async () => {
   height: 28px;
   background: color-mix(in srgb, var(--c-bg-2) 88%, transparent);
   border: 1px solid var(--c-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 2px 8px 2px 2px;
 }
 .sk-bar {
@@ -291,6 +316,9 @@ onMounted(async () => {
 
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
 .sum-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 1.15rem; }
+.sum-card {
+  border-radius: 10px;
+}
 .sum-card h4 { font-size: .94rem; font-weight: 600; margin-bottom: .6rem; }
 .must h4 { color: var(--c-err); }
 .nice h4 { color: var(--c-warn); }

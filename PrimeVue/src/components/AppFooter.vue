@@ -7,6 +7,7 @@
       </div>
       <div class="footer-links">
         <router-link to="/suggest">Предложить видео</router-link>
+        <router-link to="/interview-questions">Каталог вопросов</router-link>
         <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
       </div>
     </div>
@@ -20,44 +21,54 @@ const year = new Date().getFullYear()
 <style scoped>
 .footer {
   margin-top: auto;
-  border-top: 1px solid color-mix(in srgb, var(--c-border-h) 82%, transparent);
-  background: color-mix(in srgb, var(--c-surface) 78%, transparent);
-  padding: 1.2rem 0;
+  border-top: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
+  padding: 1.4rem 0;
 }
 .footer-inner {
-  max-width: var(--max-w-lg);
+  max-width: var(--max-w);
   margin: 0 auto;
-  padding: 0 1.75rem;
+  padding: 0 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: .8rem;
+  gap: .9rem;
 }
 .footer-brand {
   display: grid;
-  gap: .15rem;
+  gap: .2rem;
 }
 .footer-copy {
-  color: var(--c-text-3);
-  font-size: .86rem;
+  color: var(--text-secondary);
+  font-size: .84rem;
   font-weight: 600;
 }
 .footer-note {
   color: var(--c-text-4);
-  font-size: .76rem;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-size: .78rem;
 }
-.footer-links { display: flex; gap: 1.5rem; }
+
+.footer-links {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .footer-links a {
-  color: var(--c-text-3);
+  color: var(--text-secondary);
   font-size: .84rem;
-  padding: .25rem .45rem;
-  border-radius: var(--r-sm);
-  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+  padding: .35rem .62rem;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-bg) 86%, transparent);
+  transition: color .2s ease, background .2s ease;
 }
-.footer-links a:hover { color: var(--c-text); }
-.footer-links a:hover { background: color-mix(in srgb, var(--c-surface-h) 66%, transparent); }
+
+.footer-links a:hover {
+  color: var(--text-primary);
+  background: var(--surface-soft);
+}
 
 @media (max-width: 480px) {
   .footer-inner {
@@ -65,6 +76,10 @@ const year = new Date().getFullYear()
     gap: .5rem;
     text-align: center;
     padding: 0 1rem;
+  }
+
+  .footer-links {
+    justify-content: center;
   }
 }
 </style>

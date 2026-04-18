@@ -1,11 +1,12 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container" style="padding-top:2rem; padding-bottom:3rem;">
+    <div class="max-w-container iq-page">
 
       <!-- Header -->
       <div class="page-top">
         <div>
+          <p class="eyebrow">Question Library</p>
           <h1 class="page-heading h-page">{{ pageHeading }}</h1>
           <p class="page-desc p-muted">Реальные вопросы с IT-собеседований</p>
         </div>
@@ -169,9 +170,38 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; gap: 1rem; }
-.page-heading { font-size: 1.85rem; font-weight: 700; }
-.page-desc { color: var(--c-text-3); font-size: 1rem; margin-top: .3rem; }
+.iq-page {
+  padding-top: 2.15rem;
+  padding-bottom: 3rem;
+}
+
+.page-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 0 0 .28rem;
+  font-family: var(--app-font-mono);
+  color: var(--text-secondary);
+  font-size: .76rem;
+  letter-spacing: .03em;
+}
+
+.page-heading {
+  font-size: clamp(1.7rem, 2.8vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.page-desc {
+  color: var(--text-secondary);
+  font-size: .97rem;
+  margin-top: .3rem;
+}
 
 .page-top { position: relative; }
 .page-top::after {
@@ -185,10 +215,11 @@ onMounted(async () => {
 }
 
 .questions-hero {
-  margin-bottom: .95rem;
+  margin-bottom: 1.1rem;
   position: relative;
   overflow: hidden;
   padding: 0;
+  border-radius: 10px;
   border-color: color-mix(in srgb, var(--c-border-h) 82%, transparent);
 }
 
@@ -207,7 +238,7 @@ onMounted(async () => {
   right: 1rem;
   bottom: .85rem;
   padding: .65rem .8rem;
-  border-radius: var(--r-md);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--c-bg-1) 70%, transparent);
   border: 1px solid color-mix(in srgb, var(--c-border) 75%, transparent);
   backdrop-filter: blur(6px);
@@ -227,15 +258,15 @@ onMounted(async () => {
 .filters {
   display: grid;
   grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 1fr));
-  gap: .58rem;
-  margin-bottom: 1rem;
+  gap: .55rem;
+  margin-bottom: 1.1rem;
   position: sticky;
   top: calc(var(--nav-h) + .55rem);
   z-index: 20;
   background: color-mix(in srgb, var(--c-bg-1) 68%, transparent);
   backdrop-filter: blur(12px);
   border: 1px solid color-mix(in srgb, var(--c-border-h) 78%, transparent);
-  border-radius: var(--r-md);
+  border-radius: 10px;
   padding: .55rem;
 }
 .search-wrap {
@@ -279,11 +310,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1.1rem 1.3rem;
+  padding: 1.02rem 1.08rem;
   text-decoration: none;
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  border-radius: 10px;
+  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
 }
 .q-row::before {
   content: '';
@@ -296,10 +329,14 @@ onMounted(async () => {
   opacity: 0;
   transition: opacity var(--dur);
 }
-.q-row:hover { background: var(--c-surface-h); border-color: var(--c-border-h); }
+.q-row:hover {
+  background: var(--surface-soft);
+  border-color: var(--c-border-h);
+  transform: translateY(-1px);
+}
 .q-row:hover::before { opacity: 1; }
 .q-body { flex: 1; min-width: 0; }
-.q-text { font-size: 1.05rem; color: var(--c-text); line-height: 1.5; margin-bottom: .4rem; }
+.q-text { font-size: 1rem; color: var(--c-text); line-height: 1.52; margin-bottom: .4rem; }
 .q-tags { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
 .q-prob { font-size: .78rem; color: var(--c-text-3); margin-left: .25rem; }
 .q-arrow { color: var(--c-text-4); flex-shrink: 0; opacity: 0; transition: opacity var(--dur); }

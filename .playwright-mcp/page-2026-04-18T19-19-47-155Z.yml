@@ -1,0 +1,201 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - link "InterviewHub IT interview readiness" [ref=e6] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e9]: InterviewHub
+        - generic [ref=e10]: IT interview readiness
+      - generic [ref=e11]:
+        - link "Вопросы" [ref=e12] [cursor=pointer]:
+          - /url: /interview-questions
+        - link "Тренажёр" [ref=e13] [cursor=pointer]:
+          - /url: /trainer
+        - link "AI Interview" [ref=e14] [cursor=pointer]:
+          - /url: /ai-interview
+        - link "Задания" [ref=e15] [cursor=pointer]:
+          - /url: /test-assignments
+        - link "Навыки" [ref=e16] [cursor=pointer]:
+          - /url: /hh-requirements
+        - link "Записи" [ref=e17] [cursor=pointer]:
+          - /url: /recordings
+      - generic [ref=e18]:
+        - button "Тёмная тема" [ref=e19] [cursor=pointer]:
+          - img [ref=e21]
+        - link "Войти" [ref=e24] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e33]: Что дает платформа
+          - generic [ref=e35]: Практика + аналитика
+        - heading "Подготовка к IT-собеседованиям с понятным планом и приоритетами" [level=1] [ref=e36]
+        - paragraph [ref=e37]: "InterviewHub собирает вопросы из реальных интервью, показывает что спрашивают чаще, и превращает подготовку в управляемый цикл: изучил, закрепил, проверил результат."
+        - generic [ref=e38]:
+          - article [ref=e39]:
+            - heading "Фокус на приоритетах" [level=3] [ref=e40]
+            - paragraph [ref=e41]: Сначала вопросы с высокой частотой и рыночной значимостью, а не случайный список тем.
+          - article [ref=e42]:
+            - heading "Тренировка в контексте интервью" [level=3] [ref=e43]
+            - paragraph [ref=e44]: SM-2, mock и AI-диалог помогают не просто читать ответы, а формулировать их уверенно.
+          - article [ref=e45]:
+            - heading "Понимание реального спроса" [level=3] [ref=e46]
+            - paragraph [ref=e47]: HH-аналитика и тестовые задания показывают, какие навыки дают максимальный эффект при подготовке.
+        - generic [ref=e48]:
+          - button "Начать подготовку" [ref=e49] [cursor=pointer]:
+            - generic [ref=e50]: 
+            - generic [ref=e51]: Начать подготовку
+          - button "Тренажер SM-2" [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: 
+            - generic [ref=e54]: Тренажер SM-2
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - generic [ref=e57]: "0"
+            - generic [ref=e58]: Вопросов
+          - generic [ref=e59]:
+            - generic [ref=e60]: "0"
+            - generic [ref=e61]: Технологий
+          - generic [ref=e62]:
+            - generic [ref=e63]: "0"
+            - generic [ref=e64]: Видео
+      - generic [ref=e66]:
+        - generic [ref=e68]: Динамика и пайплайн
+        - generic [ref=e69]:
+          - paragraph [ref=e70]: Топ-6 тем по количеству собранных вопросов
+          - separator
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e76]: "01"
+              - generic [ref=e77]: Загрузка и транскрибация
+            - generic [ref=e78]:
+              - generic [ref=e80]: "02"
+              - generic [ref=e81]: Извлечение и нормализация вопросов
+            - generic [ref=e82]:
+              - generic [ref=e84]: "03"
+              - generic [ref=e85]: Подготовка и проверка результата
+          - generic [ref=e86]:
+            - generic [ref=e87]:
+              - generic [ref=e88]: SM-2
+              - generic [ref=e89]: алгоритм интервальных повторений
+            - generic [ref=e90]:
+              - generic [ref=e91]: AI
+              - generic [ref=e92]: извлечение вопросов и генерация ответов
+    - generic [ref=e96]:
+      - generic [ref=e97]:
+        - heading "Что ты получаешь от платформы" [level=2] [ref=e98]
+        - paragraph [ref=e99]: Сначала ценность и результат, затем детали реализации.
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - heading "Скорость" [level=3] [ref=e102]
+          - paragraph [ref=e103]: Меньше времени на хаотичный поиск и больше времени на целенаправленную практику.
+        - generic [ref=e104]:
+          - heading "Структура" [level=3] [ref=e105]
+          - paragraph [ref=e106]: "Единый рабочий процесс: база вопросов, тренировка, проверка результата."
+        - generic [ref=e107]:
+          - heading "Актуальность" [level=3] [ref=e108]
+          - paragraph [ref=e109]: Контент обновляется из свежих интервью и вакансий, а не из старых конспектов.
+    - generic [ref=e110]:
+      - generic [ref=e111]:
+        - heading "Инструменты платформы" [level=2] [ref=e112]
+        - paragraph [ref=e113]: Ежедневная практика, контроль прогресса и приоритизация тем в одном интерфейсе.
+      - generic [ref=e114]:
+        - generic [ref=e116] [cursor=pointer]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: 
+            - generic [ref=e121]: База вопросов
+          - paragraph [ref=e123]: Фильтры по темам, сложности и вероятности вопроса.
+          - button "Открыть" [ref=e125]:
+            - generic [ref=e126]: 
+            - generic [ref=e127]: Открыть
+        - generic [ref=e129] [cursor=pointer]:
+          - generic [ref=e132]:
+            - generic [ref=e133]: 
+            - generic [ref=e134]: Тренажер SM-2
+          - paragraph [ref=e136]: Интервальные повторения и закрепление ответа.
+          - button "Открыть" [ref=e138]:
+            - generic [ref=e139]: 
+            - generic [ref=e140]: Открыть
+        - generic [ref=e142] [cursor=pointer]:
+          - generic [ref=e145]:
+            - generic [ref=e146]: 
+            - generic [ref=e147]: AI Interview
+          - paragraph [ref=e149]: Практика формулировок в диалоге с AI-интервьюером.
+          - button "Открыть" [ref=e151]:
+            - generic [ref=e152]: 
+            - generic [ref=e153]: Открыть
+        - generic [ref=e155] [cursor=pointer]:
+          - generic [ref=e158]:
+            - generic [ref=e159]: 
+            - generic [ref=e160]: Тестовые задания
+          - paragraph [ref=e162]: Коллекция задач от компаний для портфолио-практики.
+          - button "Открыть" [ref=e164]:
+            - generic [ref=e165]: 
+            - generic [ref=e166]: Открыть
+        - generic [ref=e168] [cursor=pointer]:
+          - generic [ref=e171]:
+            - generic [ref=e172]: 
+            - generic [ref=e173]: Записи
+          - paragraph [ref=e175]: Архив обработанных интервью с таймкодами и вопросами.
+          - button "Открыть" [ref=e177]:
+            - generic [ref=e178]: 
+            - generic [ref=e179]: Открыть
+        - generic [ref=e181] [cursor=pointer]:
+          - generic [ref=e184]:
+            - generic [ref=e185]: 
+            - generic [ref=e186]: Навыки вакансий
+          - paragraph [ref=e188]: Аналитика востребованных навыков по рынку.
+          - button "Открыть" [ref=e190]:
+            - generic [ref=e191]: 
+            - generic [ref=e192]: Открыть
+    - generic [ref=e195]:
+      - generic [ref=e197]: Как это работает
+      - generic [ref=e199]:
+        - generic [ref=e200]:
+          - generic [ref=e201]:
+            - generic [ref=e203]: "01"
+            - img [ref=e206]
+          - heading "Загрузка и транскрибация" [level=3] [ref=e209]
+          - paragraph [ref=e210]: Whisper обрабатывает видео и формирует структурированный текст интервью.
+          - list [ref=e211]:
+            - listitem [ref=e212]: Поддержка нескольких платформ и локальных файлов
+            - listitem [ref=e213]: Отслеживание прогресса обработки в реальном времени
+        - generic [ref=e214]:
+          - generic [ref=e215]:
+            - generic [ref=e217]: "02"
+            - img [ref=e220]
+          - heading "Извлечение и нормализация вопросов" [level=3] [ref=e223]
+          - paragraph [ref=e224]: LLM выделяет релевантные вопросы, а система дедупликации убирает повторы.
+          - list [ref=e225]:
+            - listitem [ref=e226]: Семантическая очистка схожих формулировок
+            - listitem [ref=e227]: Сортировка по частоте и вероятности появления
+        - generic [ref=e228]:
+          - generic [ref=e229]:
+            - generic [ref=e231]: "03"
+            - img [ref=e234]
+          - heading "Подготовка и проверка результата" [level=3] [ref=e236]
+          - paragraph [ref=e237]: База вопросов, тренажер и mock-сценарии превращают материал в навык ответа.
+          - list [ref=e238]:
+            - listitem [ref=e239]: Интервальные повторения для долгого запоминания
+            - listitem [ref=e240]: Проверка понимания через практические сценарии
+    - generic [ref=e245]:
+      - generic [ref=e246]:
+        - heading "Готов начать подготовку?" [level=2] [ref=e247]
+        - paragraph [ref=e248]: "Собери персональный ритм: вопросы, карточки и аналитика навыков в одном цикле."
+      - generic [ref=e249]:
+        - button "К вопросам" [ref=e250] [cursor=pointer]:
+          - generic [ref=e251]: 
+          - generic [ref=e252]: К вопросам
+        - button "Открыть записи" [ref=e253] [cursor=pointer]:
+          - generic [ref=e254]: 
+          - generic [ref=e255]: Открыть записи
+  - contentinfo [ref=e256]:
+    - generic [ref=e257]:
+      - generic [ref=e258]:
+        - generic [ref=e259]: InterviewHub © 2026
+        - generic [ref=e260]: Платформа подготовки к IT-собеседованиям
+      - generic [ref=e261]:
+        - link "Предложить видео" [ref=e262] [cursor=pointer]:
+          - /url: /suggest
+        - link "GitHub" [ref=e263] [cursor=pointer]:
+          - /url: https://github.com
