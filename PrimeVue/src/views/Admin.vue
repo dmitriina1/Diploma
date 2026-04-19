@@ -270,9 +270,9 @@
 
     <!-- Question Detail Dialog -->
     <Teleport to="body">
-      <div v-if="qDetailId" class="overlay" @click.self="qDetailId = null">
+      <div v-if="qDetailId" class="overlay" @click.self="closeQDetail">
         <div class="dialog card qd-dialog">
-          <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="qDetailId = null">×</button></div>
+          <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="closeQDetail">×</button></div>
           <div v-if="qDetail" class="dialog-body qd-body">
             <div class="qd-badges">
               <span class="badge badge-info">{{ qEdit.topic || 'Без темы' }}</span>
@@ -307,13 +307,61 @@
               </div>
             </div>
 
+            <div v-if="qSimilar.length" class="qd-sim-section">
+              <div class="qd-sim-title">Похожие вопросы</div>
+              <div class="qd-sim-list">
+                <div v-for="s in qSimilar" :key="s.id" class="qd-sim-item">
+                  <div class="qd-sim-main">
+                    <div class="qd-sim-text">{{ s.question }}</div>
+                    <div class="qd-sim-meta">
+                      <span class="badge badge-info">{{ s.topic || '—' }}</span>
+                      <span class="qd-sim-score">{{ Math.round((Number(s.similarity_score) || 0) * 100) }}% схожести</span>
+                      <span v-if="Number(s.probability || 0) > 0" class="qd-sim-prob">{{ Number(s.probability).toFixed(1) }}% вероятность</span>
+                    </div>
+                  </div>
+                  <div class="qd-sim-actions">
+                    <button class="btn btn-warn btn-sm" @click="confirmMerge(s)">Объединить</button>
+                    <button class="btn btn-ghost btn-sm btn-icon" @click="openSimilarInDialog(s.id)" title="Открыть">↗</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="qd-actions">
               <button class="btn btn-primary btn-sm" @click="saveQDetail" :disabled="qSaving">{{ qSaving ? 'Сохранение...' : qSaveSuccess ? 'Сохранено' : 'Сохранить' }}</button>
-              <button v-if="!qDetail.approved" class="btn btn-ok btn-sm" @click="approveOne(qDetail.id); qDetailId = null">Одобрить</button>
-              <button v-else class="btn btn-warn btn-sm" @click="revokeOne(qDetail.id); qDetailId = null">Отозвать</button>
+              <button v-if="!qDetail.approved" class="btn btn-ok btn-sm" @click="approveOne(qDetail.id); closeQDetail()">Одобрить</button>
+              <button v-else class="btn btn-warn btn-sm" @click="revokeOne(qDetail.id); closeQDetail()">Отозвать</button>
               <button class="btn btn-secondary btn-sm" @click="generateOne(qDetail.id)">Генерировать ответ</button>
-              <button class="btn btn-err btn-sm" @click="deleteOne(qDetail.id); qDetailId = null">Удалить</button>
+              <button class="btn btn-err btn-sm" @click="deleteOne(qDetail.id); closeQDetail()">Удалить</button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Merge Confirm Dialog -->
+    <Teleport to="body">
+      <div v-if="showMergeConfirm" class="overlay" @click.self="showMergeConfirm = false">
+        <div class="dialog card" style="max-width:560px">
+          <div class="dialog-head">
+            <h3>Объединить вопросы?</h3>
+            <button class="btn btn-ghost btn-icon btn-sm" @click="showMergeConfirm = false">×</button>
+          </div>
+          <div class="dialog-body merge-body">
+            <div class="merge-block">
+              <div class="merge-label">Текущий вопрос (будет удалён)</div>
+              <p class="merge-text source">{{ qDetail?.question }}</p>
+            </div>
+            <div class="merge-arrow">↓</div>
+            <div class="merge-block">
+              <div class="merge-label">Останется в базе</div>
+              <p class="merge-text target">{{ mergeTarget?.question }}</p>
+              <small class="merge-hint">Видео-связи будут перенесены, вероятность вопроса пересчитана</small>
+            </div>
+          </div>
+          <div class="merge-actions">
+            <button class="btn btn-ghost" @click="showMergeConfirm = false">Отмена</button>
+            <button class="btn btn-warn" @click="executeMerge" :disabled="merging">{{ merging ? 'Объединяем...' : 'Объединить' }}</button>
           </div>
         </div>
       </div>
@@ -455,6 +503,10 @@ const qStatus = ref('')
 const selectedQIds = ref([])
 const qDetailId = ref(null)
 const qDetail = computed(() => questionsStore.adminQuestions.find(q => q.id === qDetailId.value))
+const qSimilar = ref([])
+const showMergeConfirm = ref(false)
+const mergeTarget = ref(null)
+const merging = ref(false)
 const qSaving = ref(false)
 const qSaveSuccess = ref(false)
 const qEdit = ref({ question: '', answer: '', topic: '', difficulty: 'middle' })
@@ -477,6 +529,30 @@ const syncQEditFromSource = (question) => {
   }
 }
 
+const loadSimilarForQuestion = async (questionId, questionText) => {
+  qSimilar.value = []
+
+  // Admin detail returns moderation-oriented similars (including unapproved duplicates)
+  try {
+    const detail = await api.getQuestionDetail(questionId)
+    const fromDetail = detail?.data?.similar_questions
+    if (Array.isArray(fromDetail)) {
+      qSimilar.value = fromDetail.filter((q) => q.id !== questionId)
+      if (qSimilar.value.length > 0) return
+    }
+  } catch {
+    // fallback below
+  }
+
+  if (!questionText) return
+  try {
+    const s = await api.getSimilarQuestions(questionText, 5)
+    qSimilar.value = (s.data.similar_questions || s.data.similar || []).filter((q) => q.id !== questionId)
+  } catch {
+    qSimilar.value = []
+  }
+}
+
 const filteredAdminQ = computed(() => {
   let qs = questionsStore.adminQuestions
   if (qTopic.value) qs = qs.filter(q => q.topic === qTopic.value)
@@ -488,7 +564,47 @@ const filteredAdminQ = computed(() => {
 const allQSelected = computed(() => filteredAdminQ.value.length > 0 && filteredAdminQ.value.every(q => selectedQIds.value.includes(q.id)))
 const toggleAllQ = () => { if (allQSelected.value) selectedQIds.value = []; else selectedQIds.value = filteredAdminQ.value.map(q => q.id) }
 const toggleQ = (id) => { const i = selectedQIds.value.indexOf(id); if (i >= 0) selectedQIds.value.splice(i, 1); else selectedQIds.value.push(id) }
-const openQDetail = (q) => { qDetailId.value = q.id; syncQEditFromSource(q) }
+const closeQDetail = () => {
+  qDetailId.value = null
+  qSimilar.value = []
+  showMergeConfirm.value = false
+  mergeTarget.value = null
+}
+const openQDetail = async (q) => {
+  qDetailId.value = q.id
+  syncQEditFromSource(q)
+  await loadSimilarForQuestion(q.id, q.question)
+}
+const openSimilarInDialog = async (questionId) => {
+  const target = questionsStore.adminQuestions.find((q) => q.id === questionId)
+  if (!target) return
+  await openQDetail(target)
+}
+const confirmMerge = (similarQuestion) => {
+  mergeTarget.value = similarQuestion
+  showMergeConfirm.value = true
+}
+const executeMerge = async () => {
+  if (!qDetail.value || !mergeTarget.value) return
+  const sourceId = qDetail.value.id
+  const targetId = mergeTarget.value.id
+  merging.value = true
+  try {
+    await questionsStore.mergeQuestions(sourceId, targetId)
+    showMergeConfirm.value = false
+    mergeTarget.value = null
+    const target = questionsStore.adminQuestions.find((q) => q.id === targetId)
+    if (target) {
+      await openQDetail(target)
+    } else {
+      closeQDetail()
+    }
+  } catch (e) {
+    alert('Ошибка объединения: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    merging.value = false
+  }
+}
 
 const saveQDetail = async () => {
   if (!qDetail.value) return
@@ -523,7 +639,7 @@ const saveQDetail = async () => {
   qSaveSuccessTimer = setTimeout(() => {
     qSaveSuccess.value = false
   }, 1800)
-  qDetailId.value = null
+  closeQDetail()
 }
 
 const approveOne = async (id) => { await questionsStore.approveQuestions([id]) }
@@ -947,6 +1063,66 @@ onUnmounted(() => {
   padding: .55rem;
 }
 .qd-actions .btn-primary { margin-right: auto; min-width: 130px; }
+.qd-sim-section {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  background: color-mix(in srgb, var(--c-bg-2) 70%, var(--c-surface));
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: .85rem;
+}
+.qd-sim-title {
+  font-size: .82rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--c-text-3);
+  font-weight: 700;
+}
+.qd-sim-list { display: flex; flex-direction: column; gap: .55rem; }
+.qd-sim-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .75rem;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--c-surface) 86%, var(--c-bg-2));
+  padding: .6rem .7rem;
+}
+.qd-sim-main { flex: 1; min-width: 0; }
+.qd-sim-text {
+  font-size: .9rem;
+  color: var(--c-text-2);
+  line-height: 1.35;
+  margin-bottom: .35rem;
+  word-break: break-word;
+}
+.qd-sim-meta { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+.qd-sim-score { font-size: .75rem; color: var(--c-text-4); }
+.qd-sim-prob { font-size: .75rem; color: var(--c-warn-h); font-weight: 600; }
+.qd-sim-actions { display: flex; gap: .35rem; flex-shrink: 0; }
+
+.merge-body { display: flex; flex-direction: column; gap: .65rem; }
+.merge-block {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--c-bg-2) 70%, var(--c-surface));
+  padding: .75rem;
+}
+.merge-label {
+  font-size: .76rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--c-text-4);
+  font-weight: 700;
+}
+.merge-text { margin: .35rem 0 0; line-height: 1.35; font-size: .92rem; color: var(--c-text-2); }
+.merge-text.source { text-decoration: line-through; color: var(--c-text-4); }
+.merge-text.target { font-weight: 700; color: var(--c-text); }
+.merge-hint { color: var(--c-text-4); font-size: .76rem; }
+.merge-arrow { text-align: center; color: var(--c-warn-h); font-weight: 700; }
+.merge-actions { display: flex; justify-content: flex-end; gap: .5rem; }
 .mode-toggle { display: flex; gap: .4rem; }
 .field { display: flex; flex-direction: column; gap: .3rem; }
 .field label { font-size: .82rem; color: var(--c-text-3); font-weight: 500; }

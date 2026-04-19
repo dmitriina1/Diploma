@@ -168,7 +168,7 @@ async function loadQuestion() {
 
     // similar
     if (question.value?.question) {
-      try { const s = await api.getSimilarQuestions(question.value.question, 5); similar.value = (s.data.similar || []).filter(q => q.id != route.params.id) } catch {}
+      try { const s = await api.getSimilarQuestions(question.value.question, 5); similar.value = (s.data.similar_questions || s.data.similar || []).filter(q => q.id != route.params.id) } catch {}
     }
 
     // user answers

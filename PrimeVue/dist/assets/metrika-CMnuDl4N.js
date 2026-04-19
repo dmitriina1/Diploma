@@ -1,0 +1,1 @@
+import{a8 as s,a9 as o}from"./index-4135r3_g.js";const a=(e,t={})=>{if(!e||typeof window>"u")return;const n=s();n&&fetch(`${o}/analytics/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({user_session:n,event_name:e,params:t}),keepalive:!0}).catch(()=>{})},r=(e,t={})=>{a(e,t)};export{r as t};

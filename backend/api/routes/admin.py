@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from auth import require_admin
 from core.config import DATABASE_URL
+from similarity_search import get_similar_questions as search_similar_questions
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -84,6 +85,19 @@ async def get_question_detail(question_id: int, _admin: dict = Depends(require_a
         if d.get("created_at") and hasattr(d["created_at"], "isoformat"):
             d["created_at"] = d["created_at"].isoformat()
         d["probability"] = float(d["probability"]) if d.get("probability") else 0.0
+
+        similar = []
+        try:
+            similar = await search_similar_questions(
+                d.get("question", ""),
+                question_id=question_id,
+                limit=5,
+                include_unapproved=True,
+            )
+        except Exception as e:
+            print(f"⚠️ Admin similar search failed for question {question_id}: {e}")
+
+        d["similar_questions"] = similar
         return d
     finally:
         await conn.close()

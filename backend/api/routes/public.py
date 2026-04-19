@@ -84,10 +84,27 @@ async def get_all_questions(topic: Optional[str] = None, level: Optional[str] = 
 
 
 @router.get("/api/questions/similar")
-async def get_similar_questions_api(query: str, limit: int = 5):
+async def get_similar_questions_api(
+    query: str,
+    limit: int = 5,
+    min_score: Optional[float] = None,
+):
     try:
-        similar = await search_similar_questions(query, limit=limit)
+        limit = max(1, min(int(limit or 5), 20))
+        if min_score is not None and not (0.0 <= float(min_score) <= 1.0):
+            raise HTTPException(
+                status_code=400,
+                detail="min_score must be between 0.0 and 1.0",
+            )
+
+        similar = await search_similar_questions(
+            query,
+            limit=limit,
+            min_score=float(min_score) if min_score is not None else None,
+        )
         return JSONResponse(content={"similar_questions": similar})
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
