@@ -35,6 +35,59 @@ class InterviewChatbot:
 
         self._provider_priority = ["openrouter", "gemini", "groq"]
 
+    async def ensure_runtime_tables(self) -> None:
+        """Create required runtime tables for interview chat if migrations were skipped."""
+        conn = await self._db_connect()
+        try:
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS interview_chat_sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_session VARCHAR(255) NOT NULL,
+                    topic VARCHAR(255) NOT NULL,
+                    difficulty VARCHAR(20) NOT NULL,
+                    messages TEXT NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'active',
+                    summary TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_interview_chat_user ON interview_chat_sessions(user_session)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_interview_chat_status ON interview_chat_sessions(status)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_interview_chat_created ON interview_chat_sessions(created_at DESC)"
+            )
+            await conn.execute(
+                """
+                CREATE OR REPLACE FUNCTION update_interview_chat_updated_at()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    NEW.updated_at = CURRENT_TIMESTAMP;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """
+            )
+            await conn.execute(
+                "DROP TRIGGER IF EXISTS trigger_interview_chat_updated_at ON interview_chat_sessions"
+            )
+            await conn.execute(
+                """
+                CREATE TRIGGER trigger_interview_chat_updated_at
+                BEFORE UPDATE ON interview_chat_sessions
+                FOR EACH ROW
+                EXECUTE FUNCTION update_interview_chat_updated_at();
+                """
+            )
+        finally:
+            await self._db_release(conn)
+
     # --------------------------
     # Prompt and question pools
     # --------------------------

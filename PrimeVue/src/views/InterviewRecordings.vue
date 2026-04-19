@@ -69,12 +69,10 @@
             <div v-else class="q-list">
               <div v-for="(q, i) in videoQuestions" :key="q.id" class="q-item">
                 <span class="q-num">{{ i + 1 }}</span>
-                <div class="q-body">
-                  <router-link :to="'/question/' + q.id" class="q-link" @click="showDialog = false">{{ q.question }}</router-link>
-                  <div class="q-meta">
-                    <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
-                    <span v-if="q.timecode" class="tc">{{ q.timecode }}</span>
-                  </div>
+                <router-link :to="'/question/' + q.id" class="q-link" @click="showDialog = false">{{ q.question }}</router-link>
+                <div class="q-meta">
+                  <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
+                  <span v-if="q.timecode" class="tc">{{ q.timecode }}</span>
                 </div>
               </div>
             </div>
@@ -161,27 +159,60 @@ onMounted(async () => {
   background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center; padding: 1.5rem;
 }
-.dialog { width: 100%; max-width: 640px; max-height: 80vh; overflow-y: auto; padding: 1.5rem; }
+.dialog { width: 100%; max-width: 980px; max-height: 80vh; overflow-y: auto; padding: 1.25rem; }
 .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .dialog-head h3 { font-size: 1.1rem; font-weight: 600; }
 .dialog-empty { text-align: center; padding: 2rem; color: var(--c-text-4); }
 .q-list { display: flex; flex-direction: column; gap: .6rem; }
-.q-item { display: flex; align-items: flex-start; gap: .65rem; padding: .4rem 0; }
+.q-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .65rem;
+  padding: .55rem .45rem;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--c-surface) 90%, transparent);
+}
 .q-num {
   min-width: 26px; height: 26px; border-radius: 50%;
   background: var(--c-brand); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: .75rem; font-weight: 700;
 }
-.q-body { flex: 1; }
-.q-link { color: var(--c-brand); text-decoration: none; font-weight: 500; font-size: .96rem; }
+.q-link {
+  color: var(--c-brand);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: .94rem;
+  line-height: 1.4;
+}
 .q-link:hover { text-decoration: underline; }
-.q-meta { display: flex; align-items: center; gap: .4rem; margin-top: .2rem; }
+.q-meta {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: .25rem;
+}
 .tc { color: var(--c-text-4); font-size: .84rem; }
 
 @media (max-width: 640px) {
   .grid { grid-template-columns: 1fr; }
   .filters { flex-direction: column; }
   .search-wrap { min-width: auto; width: 100%; }
+
+  .dialog { padding: 1rem; }
+
+  .q-item {
+    grid-template-columns: auto 1fr;
+  }
+
+  .q-meta {
+    grid-column: 2;
+    display: flex;
+    gap: .35rem;
+    justify-content: flex-start;
+    justify-items: start;
+  }
 }
 </style>

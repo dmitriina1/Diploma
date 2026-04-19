@@ -80,12 +80,14 @@
         >
           <div class="q-body">
             <p class="q-text">{{ q.question }}</p>
-            <div class="q-tags">
-              <span class="badge badge-info">{{ q.topic }}</span>
-              <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
-              <span class="q-prob">{{ (q.probability||0).toFixed(0) }}%</span>
-            </div>
           </div>
+
+          <div class="q-meta">
+            <span class="badge badge-info">{{ q.topic }}</span>
+            <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
+            <span class="q-prob">{{ (q.probability||0).toFixed(0) }}%</span>
+          </div>
+
           <svg class="q-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
         </router-link>
       </div>
@@ -307,10 +309,11 @@ onMounted(async () => {
 /* Question list */
 .q-list { display: flex; flex-direction: column; gap: .4rem; }
 .q-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 1rem;
-  padding: 1.02rem 1.08rem;
+  gap: .85rem;
+  padding: .86rem .95rem;
   text-decoration: none;
   cursor: pointer;
   position: relative;
@@ -335,10 +338,36 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 .q-row:hover::before { opacity: 1; }
-.q-body { flex: 1; min-width: 0; }
-.q-text { font-size: 1rem; color: var(--c-text); line-height: 1.52; margin-bottom: .4rem; }
-.q-tags { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
-.q-prob { font-size: .78rem; color: var(--c-text-3); margin-left: .25rem; }
+.q-body { min-width: 0; }
+.q-text {
+  font-size: .95rem;
+  color: var(--c-text);
+  line-height: 1.42;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.q-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .34rem;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.q-prob {
+  font-size: .76rem;
+  color: var(--c-brand-h);
+  background: var(--c-brand-bg);
+  border: 1px solid color-mix(in srgb, var(--c-brand) 35%, transparent);
+  border-radius: 999px;
+  padding: .1rem .46rem;
+  font-weight: 700;
+}
 .q-arrow { color: var(--c-text-4); flex-shrink: 0; opacity: 0; transition: opacity var(--dur); }
 .q-row:hover .q-arrow { opacity: 1; }
 
@@ -355,6 +384,28 @@ onMounted(async () => {
     grid-template-columns: 1fr;
     top: calc(var(--nav-h) + .45rem);
   }
+
+  .q-row {
+    grid-template-columns: 1fr;
+    gap: .58rem;
+  }
+
+  .q-meta {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .q-text {
+    -webkit-line-clamp: 3;
+  }
+
+  .q-arrow {
+    display: none;
+  }
+
   .filter-select, .filter-sort {
     min-width: auto;
     max-width: none;

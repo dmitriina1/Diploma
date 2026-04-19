@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="container" style="padding-top:1.5rem; padding-bottom:3rem;">
+    <div class="max-w-container qd-page">
 
       <!-- Top bar -->
       <div class="top-bar">
@@ -254,6 +254,7 @@ watch(() => route.params.id, loadQuestion)
 </script>
 
 <style scoped>
+.qd-page { padding-top: 1.5rem; padding-bottom: 3rem; }
 .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
 .top-actions { display: flex; gap: .5rem; }
 
@@ -261,7 +262,7 @@ watch(() => route.params.id, loadQuestion)
 .empty-state { text-align: center; padding: 4rem; color: var(--c-text-3); }
 
 .q-header { margin-bottom: 2rem; }
-.q-header h1 { font-size: 1.9rem; font-weight: 700; line-height: 1.35; margin-bottom: .85rem; }
+.q-header h1 { font-size: clamp(1.45rem, 2.35vw, 1.95rem); font-weight: 700; line-height: 1.28; margin-bottom: .65rem; }
 .q-meta { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 .meta-prob { font-size: .78rem; color: var(--c-text-3); }
 
@@ -271,7 +272,7 @@ watch(() => route.params.id, loadQuestion)
   display: flex;
   align-items: center;
   gap: .45rem;
-  font-size: 1.15rem;
+  font-size: 1.03rem;
   font-weight: 600;
   color: var(--c-text);
   padding-bottom: .6rem;
@@ -291,10 +292,10 @@ watch(() => route.params.id, loadQuestion)
   background: var(--c-surface);
   border: 1px solid var(--c-border);
   border-radius: var(--r-lg);
-  padding: 1.5rem 1.75rem;
+  padding: 1.1rem 1.2rem;
   color: var(--c-text-2);
-  line-height: 1.75;
-  font-size: 1.05rem;
+  line-height: 1.68;
+  font-size: .96rem;
 }
 
 .inline-actions { display: flex; align-items: center; gap: .6rem; margin-top: .5rem; }
@@ -311,7 +312,7 @@ watch(() => route.params.id, loadQuestion)
 .ua-top { display: flex; justify-content: space-between; margin-bottom: .4rem; }
 .ua-author { font-size: .9rem; font-weight: 600; color: var(--c-text); }
 .ua-date { font-size: .75rem; color: var(--c-text-4); }
-.ua-text { font-size: .94rem; color: var(--c-text-2); line-height: 1.65; margin-bottom: .5rem; }
+.ua-text { font-size: .9rem; color: var(--c-text-2); line-height: 1.62; margin-bottom: .5rem; }
 .ua-bottom { display: flex; justify-content: space-between; align-items: center; }
 .vote-group { display: flex; gap: .3rem; }
 .vote-btn {
@@ -339,7 +340,7 @@ watch(() => route.params.id, loadQuestion)
   padding: .7rem 1rem;
   text-decoration: none;
 }
-.sim-text { font-size: .94rem; color: var(--c-text-2); }
+.sim-text { font-size: .9rem; color: var(--c-text-2); }
 .sim-row:hover .sim-text { color: var(--c-text); }
 
 @media (max-width: 640px) {

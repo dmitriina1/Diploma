@@ -118,7 +118,7 @@ onMounted(loadData)
 
 <style scoped>
 .ta-page {
-  padding-top: 2.15rem;
+  padding-top: 1.2rem;
   padding-bottom: 3rem;
 }
 
@@ -133,14 +133,14 @@ onMounted(loadData)
 .ta-headline {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: .75rem;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
 }
 
-.heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--text-secondary); font-size: .95rem; margin-bottom: 1.5rem; }
+.heading { display:flex; align-items:center; justify-content:flex-start; gap:.55rem; margin-bottom: .3rem; }
+.sub { text-align: left; color: var(--text-secondary); font-size: .95rem; margin-bottom: 1rem; }
 
 .ta-kpi {
   border: 1px solid color-mix(in srgb, var(--c-border-h) 82%, transparent);
@@ -178,7 +178,7 @@ onMounted(loadData)
   font-size: .84rem;
 }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 1.25rem; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; }
 .ta-card { 
   padding: 0; 
   overflow: hidden; 
@@ -210,40 +210,40 @@ onMounted(loadData)
   color: var(--c-text);
 }
 .ta-title { 
-  padding: 1rem 1.25rem 0; 
+  padding: .82rem 1rem 0; 
   font-weight: 600; 
-  font-size: 1.15rem; 
+  font-size: 1.02rem; 
   color: var(--c-text); 
   text-decoration: none;
-  line-height: 1.4;
+  line-height: 1.35;
   transition: color var(--dur);
 }
 .ta-title:hover { color: var(--c-brand); }
 .ta-desc { 
-  padding: .5rem 1.25rem; 
-  font-size: .95rem; 
+  padding: .42rem 1rem; 
+  font-size: .89rem; 
   color: var(--c-text-3); 
-  line-height: 1.6; 
+  line-height: 1.5; 
   flex: 1;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .ta-prof { 
-  padding: 0 1.25rem; 
-  font-size: .9rem; 
+  padding: 0 1rem; 
+  font-size: .84rem; 
   color: var(--c-text-2); 
-  margin-bottom: .75rem;
+  margin-bottom: .6rem;
   font-weight: 500;
 }
 .ta-skills { 
-  padding: 0 1.25rem .75rem; 
+  padding: 0 1rem .6rem; 
   display: flex; 
   flex-wrap: wrap; 
-  gap: .35rem;
-  max-height: 60px;
-  overflow: hidden;
+  gap: .28rem;
+  max-height: none;
+  overflow: visible;
 }
 .ta-skills .badge {
   text-transform: none;
@@ -253,8 +253,8 @@ onMounted(loadData)
 .ta-foot { 
   display: flex; 
   align-items: center; 
-  gap: .65rem; 
-  padding: 1rem 1.25rem; 
+  gap: .45rem; 
+  padding: .72rem 1rem; 
   border-top: 1px solid var(--c-border);
   background: var(--c-surface);
 }
@@ -266,6 +266,10 @@ onMounted(loadData)
 }
 .pg { display: flex; justify-content: center; align-items: center; gap: .75rem; margin-top: 1.5rem; color: var(--c-text-2); font-size: .88rem; }
 .empty-state { text-align: center; padding: 3rem; color: var(--c-text-4); }
+
+@media (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 @media (max-width: 640px) {
   .heading,

@@ -193,8 +193,14 @@ onMounted(async () => {
   try {
     const r = await api.getHHProfessions()
     professions.value = r.data.professions || []
-    if (professions.value.length) await selectProfession(professions.value[0].profession)
+    if (professions.value.length) {
+      await selectProfession(professions.value[0].profession)
+      return
+    }
   } catch (e) { console.error(e) }
+
+  // Fallback: still try to render aggregated skills even if professions list is empty.
+  await loadSkills()
 })
 </script>
 
@@ -297,8 +303,7 @@ onMounted(async () => {
   align-items: center;
   gap: .6rem;
   height: 28px;
-  background: color-mix(in srgb, var(--c-bg-2) 88%, transparent);
-  border: 1px solid var(--c-border);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface-soft) 78%, transparent), color-mix(in srgb, var(--c-bg-2) 72%, transparent));
   border-radius: 8px;
   padding: 2px 8px 2px 2px;
 }
@@ -309,7 +314,16 @@ onMounted(async () => {
   min-width: 4px;
   box-shadow: inset 0 -1px 0 rgba(255,255,255,.18);
 }
-.sk-pct { font-weight: 800; color: var(--c-text); font-size: .92rem; min-width: 36px; text-align: right; }
+.sk-pct {
+  font-weight: 800;
+  color: var(--c-text);
+  font-size: .86rem;
+  min-width: 40px;
+  text-align: right;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-bg) 80%, transparent);
+  padding: .08rem .34rem;
+}
 .sk-count { color: var(--c-text-4); font-size: .84rem; text-align: right; }
 
 .pg { display: flex; justify-content: center; align-items: center; gap: .75rem; margin-bottom: 1.5rem; color: var(--c-text-2); font-size: .88rem; }

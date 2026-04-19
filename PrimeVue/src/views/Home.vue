@@ -6,8 +6,7 @@
       <section class="section section-hero">
         <div class="openai-container max-w-container @container grid w-full">
           <div class="hero-wrap reveal-pop">
-            <p class="hero-kicker">InterviewHub API Platform</p>
-            <h1>Создавайте сильную подготовку к IT-собеседованиям на платформе InterviewHub</h1>
+            <h1>Готовьтесь к IT-собеседованиям структурно и без хаоса</h1>
             <p class="hero-sub">
               Платформа извлекает вопросы из видео интервью, структурирует их в единую базу,
               а затем помогает закреплять ответы через SM-2, mock и AI-практику.
@@ -23,97 +22,79 @@
       <section class="section section-logos">
         <div class="openai-container max-w-container @container grid w-full">
           <p class="logos-label">Используется для подготовки по направлениям</p>
-          <div class="logos-grid">
-            <span v-for="item in professionsLine" :key="item">{{ item }}</span>
+          <div class="ticker-shell" role="presentation" aria-hidden="true">
+            <div class="ticker-track">
+              <span v-for="(item, idx) in professionsTicker" :key="`${item}-${idx}`">{{ item }}</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="section section-models">
+      <section class="section section-proof">
         <div class="openai-container max-w-container @container grid w-full">
-          <div class="section-head">
-            <h2>Работает на практических модулях платформы</h2>
-          </div>
-
-          <div class="cards-shell" role="list">
-            <article
-              v-for="card in modelCards"
-              :key="card.title"
-              class="model-card"
-              role="listitem"
-              tabindex="0"
-              @click="openFeature(card.route)"
-              @keydown.enter.prevent="openFeature(card.route)"
-            >
-              <img :src="card.image" :alt="card.title" class="model-image" />
-              <div class="model-overlay">
-                <h3>{{ card.title }}</h3>
-                <ul>
-                  <li v-for="point in card.points" :key="point">{{ point }}</li>
-                </ul>
-                <button class="model-link" type="button" @click.stop="openFeature(card.route)">Подробнее</button>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-grid">
-        <div class="openai-container grid-wrap max-w-container @container grid w-full">
-          <div class="grid-copy">
-            <h2>Универсальная платформа для подготовки</h2>
-            <p>
-              Выстраивайте цикл обучения: сначала сбор и фильтрация вопросов,
-              затем практика ответов, после этого проверка навыков через mock и аналитику рынка.
-            </p>
-          </div>
-
-          <div class="media-grid col-span-12 grid w-full grid-cols-1 items-stretch gap-lg @md:gap-xl">
-            <article class="media-card">
-              <img src="../assets/media/hybrid/questions-banner.svg" alt="Каталог вопросов" />
-              <h3>Собирайте</h3>
-              <p>Автосбор вопросов из интервью с дедупликацией и тегами.</p>
-            </article>
-            <article class="media-card">
-              <img src="../assets/media/hybrid/trainer-grid.svg" alt="Тренажер" />
-              <h3>Тренируйте</h3>
-              <p>SM-2 интервальные повторения и практика формулировки ответов.</p>
-            </article>
-            <article class="media-card">
-              <img src="../assets/media/hybrid/skills-orbit.svg" alt="Навыки" />
-              <h3>Оптимизируйте</h3>
-              <p>Приоритизируйте подготовку по статистике навыков HH.ru.</p>
-            </article>
+          <div class="t396__filter">
+            <div class="section-head centered">
+              <h2>Почему InterviewHub ускоряет подготовку</h2>
+              <p>Не просто список вопросов, а система, которая доводит до уверенного ответа на собеседовании.</p>
+            </div>
+            <div class="proof-grid">
+              <article
+                v-for="(item, idx) in platformProof"
+                :key="item.title"
+                class="proof-card"
+                :class="{ 'proof-card-main': idx === 0 }"
+              >
+                <h3>{{ item.title }}</h3>
+                <p>{{ item.description }}</p>
+              </article>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="section section-video">
         <div class="openai-container max-w-container @container grid w-full">
-          <div class="section-head">
-            <h2>Видеоконтент, который превращается в структуру</h2>
-            <p>Загрузка видео, транскрибация и извлечение вопросов в одном пайплайне</p>
-          </div>
-
-          <div class="video-grid col-span-12 grid w-full grid-cols-1 items-stretch gap-lg @md:gap-xl">
-            <article class="video-card big">
-              <img src="../assets/media/hybrid/hero-interview.svg" alt="Видео интервью" />
-              <div>
-                <h3>Pipeline обработки видео</h3>
-                <p>Поддержка YouTube, VK, Rutube и локальных файлов, прогресс в real-time.</p>
+          <div class="video-shell t396__filter">
+            <div class="video-split">
+              <div class="video-visual">
+                <img src="../assets/media/hybrid/questions-banner.svg" alt="Пайплайн извлечения вопросов из видео" />
               </div>
-            </article>
+              <article class="video-story">
+                <h2>Видеоконтент, который превращается в базу знаний</h2>
+                <p>Пайплайн сохраняет только полезные вопросы и превращает разрозненные интервью в структурируемую практику.</p>
+                <ul class="video-points">
+                  <li v-for="step in videoPipeline" :key="step.title">
+                    <strong>{{ step.title }}</strong>
+                    <span>{{ step.description }}</span>
+                  </li>
+                </ul>
+                <div class="hero-actions">
+                  <Button label="Открыть записи" @click="router.push('/recordings')" />
+                  <Button label="Перейти к вопросам" outlined @click="router.push('/interview-questions')" />
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
 
-            <article class="video-card">
-              <h3>Whisper + LLM</h3>
-              <p>Транскрибация речи и извлечение релевантных вопросов с нормализацией.</p>
-              <Button label="Открыть записи" outlined @click="router.push('/recordings')" />
-            </article>
-
-            <article class="video-card">
-              <h3>Семантический поиск</h3>
-              <p>FAISS и эмбеддинги помогают находить похожие вопросы по смыслу.</p>
-              <Button label="Перейти к вопросам" outlined @click="router.push('/interview-questions')" />
+      <section class="section section-chat-shot">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="chat-shell">
+            <div class="chat-shot">
+              <img src="../assets/media/hybrid/hero-interview.svg" alt="Прохождение интервью в InterviewHub" />
+            </div>
+            <article class="chat-copy">
+              <p class="mini-kicker">Практика с обратной связью</p>
+              <h2>Скрин прохождения собеседования в платформе</h2>
+              <p>
+                Пользователь проходит mock/AI-интервью, получает разбор и тут же уходит в повторение слабых мест по SM-2.
+                Такой цикл сокращает время между «прочитал вопрос» и «уверенно ответил».
+              </p>
+              <div class="hero-actions">
+                <Button label="Попробовать AI Interview" @click="router.push('/ai-interview')" />
+                <Button label="Открыть mock-интервью" outlined @click="router.push('/mock-interview')" />
+              </div>
             </article>
           </div>
         </div>
@@ -121,7 +102,7 @@
 
       <section class="section section-usecases">
         <div class="openai-container max-w-container @container grid w-full">
-          <div class="section-head">
+          <div class="section-head centered">
             <h2>Сценарии использования платформы</h2>
           </div>
           <div class="usecases-grid">
@@ -134,14 +115,44 @@
         </div>
       </section>
 
+      <section class="section section-enterprise">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="section-head centered">
+            <h2>Функции платформы для масштабной подготовки</h2>
+            <p>Подходит как для индивидуальной подготовки, так и для внутренних учебных треков команды.</p>
+          </div>
+          <div class="enterprise-grid">
+            <article v-for="item in enterpriseHighlights" :key="item.title" class="enterprise-card">
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.description }}</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-faq">
+        <div class="openai-container max-w-container @container grid w-full">
+          <div class="section-head centered">
+            <h2>Часто задаваемые вопросы</h2>
+          </div>
+          <div class="faq-grid">
+            <details v-for="item in faqItems" :key="item.q" class="faq-item">
+              <summary>{{ item.q }}</summary>
+              <p>{{ item.a }}</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
       <section class="section section-cta">
         <div class="openai-container cta-inner max-w-container @container grid w-full">
-          <h2>Начать подготовку</h2>
-          <p>Соберите собственный план: вопросы, тренажер, mock, навыки и тестовые задания.</p>
+          <h2>Попробовать InterviewHub сейчас</h2>
+          <p>Стартуйте с вопросов, закрепляйте ответы в тренажёре и проверяйте себя в mock/AI-сессиях.</p>
           <div class="hero-actions">
-            <Button label="К вопросам" @click="router.push('/interview-questions')" />
-            <Button label="Навыки вакансий" outlined @click="router.push('/hh-requirements')" />
+            <Button label="Начать с вопросов" @click="router.push('/interview-questions')" />
+            <Button label="Перейти к mock" outlined @click="router.push('/mock-interview')" />
           </div>
+          <p class="cta-note">Загрузка видео остаётся админ-функцией. Для пользователей доступна полная учебная траектория.</p>
         </div>
       </section>
     </main>
@@ -158,10 +169,6 @@ import NavBar from '../components/NavBar.vue'
 import AppFooter from '../components/AppFooter.vue'
 import { useQuestionsStore } from '../store'
 
-import modelA from '../assets/media/hybrid/questions-banner.svg'
-import modelB from '../assets/media/hybrid/trainer-grid.svg'
-import modelC from '../assets/media/hybrid/skills-orbit.svg'
-
 const store = useQuestionsStore()
 const router = useRouter()
 
@@ -169,30 +176,46 @@ onMounted(() => {
   store.fetchQuestions()
 })
 
+const fallbackDirections = [
+  'Backend', 'Frontend', 'Fullstack', 'DevOps', 'QA', 'Data Scientist', 'Data Analyst',
+  'ML Engineer', 'Android', 'iOS', 'System Design', 'SRE', 'Security', 'Product', 'Team Lead', 'Cloud'
+]
+
 const professionsLine = computed(() => {
   const source = store.professions?.map((item) => item.title).filter(Boolean) || []
-  if (source.length) return source.slice(0, 14)
-  return ['Backend', 'Frontend', 'DevOps', 'Data Scientist', 'QA', 'Android', 'iOS', 'System Design']
+  const merged = [...new Set([...fallbackDirections, ...source])]
+  return merged
 })
 
-const modelCards = [
+const professionsTicker = computed(() => [...professionsLine.value, ...professionsLine.value])
+
+const platformProof = [
   {
-    title: 'Каталог вопросов',
-    route: '/interview-questions',
-    image: modelA,
-    points: ['Фильтры по теме и уровню', 'Вероятность и частота', 'Похожие вопросы'],
+    title: 'Единая база без ручного хаоса',
+    description: 'Вопросы из интервью автоматически структурируются по теме, сложности и вероятности. Вы тратите время на подготовку, а не на сортировку заметок.',
   },
   {
-    title: 'SM-2 тренажер',
-    route: '/trainer',
-    image: modelB,
-    points: ['Интервальные повторения', 'Карточки вопрос/ответ', 'Прогресс по сессии'],
+    title: 'Практика, а не пассивное чтение',
+    description: 'SM-2, mock и AI-сессии строят регулярный цикл тренировок, где каждый ответ проверяется и закрепляется в нужный момент.',
   },
   {
-    title: 'Навыки вакансий',
-    route: '/hh-requirements',
-    image: modelC,
-    points: ['Статистика HH.ru', 'Must-have навыки', 'Фокус на рынке'],
+    title: 'Фокус на рынке и приоритетах',
+    description: 'Навыки из вакансий помогают выбирать, что учить в первую очередь, чтобы быстрее закрывать реальные требования работодателей.',
+  },
+]
+
+const videoPipeline = [
+  {
+    title: '1. Загрузка и транскрибация',
+    description: 'Видео проходит через пайплайн, где речь преобразуется в текст с таймкодами.',
+  },
+  {
+    title: '2. Извлечение вопросов',
+    description: 'LLM выделяет именно вопросы интервью, отбрасывая шум и нецелевой контент.',
+  },
+  {
+    title: '3. Нормализация и дедупликация',
+    description: 'Схожие вопросы объединяются, чтобы база оставалась чистой и полезной для практики.',
   },
 ]
 
@@ -203,6 +226,40 @@ const features = [
   { route: '/mock-interview', icon: 'pi pi-stopwatch', title: 'Mock интервью', description: 'Проверка навыка ответа в формате реального собеседования.' },
   { route: '/test-assignments', icon: 'pi pi-briefcase', title: 'Тестовые задания', description: 'Практические задания от технологических компаний.' },
   { route: '/recordings', icon: 'pi pi-video', title: 'Записи интервью', description: 'Видео-источники, таймкоды и извлеченные вопросы.' },
+]
+
+const enterpriseHighlights = [
+  {
+    title: 'Контроль качества контента',
+    description: 'Модерация, похожие вопросы и объединение дублей поддерживают стабильное качество базы.',
+  },
+  {
+    title: 'Сквозная аналитика прогресса',
+    description: 'От первого вопроса до mock-сессии: видно, где пользователь теряет темп и что усиливать дальше.',
+  },
+  {
+    title: 'Готовность к масштабированию',
+    description: 'Платформа рассчитана на рост контента и пользователей без деградации пользовательского опыта.',
+  },
+]
+
+const faqItems = [
+  {
+    q: 'С чего начать подготовку в InterviewHub?',
+    a: 'Начните с базы вопросов по вашей роли, отметьте слабые темы и сразу закрепите их через тренажер.',
+  },
+  {
+    q: 'Зачем нужен режим mock и AI Interview?',
+    a: 'Он переводит знания в навык устного ответа: вы тренируете структуру, скорость и уверенность формулировок.',
+  },
+  {
+    q: 'Кому доступна загрузка видео?',
+    a: 'Загрузка видео доступна администраторам. Пользователь работает с готовой базой и инструментами практики.',
+  },
+  {
+    q: 'Как часто обновляются навыки из вакансий?',
+    a: 'Данные синхронизируются регулярно, чтобы вы видели актуальные приоритеты рынка в своей профессии.',
+  },
 ]
 
 function openFeature(route) {
@@ -235,27 +292,22 @@ function openFeature(route) {
 .hero-wrap {
   display: grid;
   gap: 1.05rem;
-}
-
-.hero-kicker {
-  font-family: var(--app-font-mono);
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  justify-items: center;
+  text-align: center;
 }
 
 .hero-wrap h1 {
   margin: 0;
-  max-width: 16ch;
+  max-width: 18ch;
   font-family: var(--app-font-heading);
-  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  font-size: clamp(2rem, 4.25vw, 3.45rem);
   line-height: 1.01;
   letter-spacing: -0.034em;
 }
 
 .hero-sub {
   margin: 0;
-  max-width: 64ch;
+  max-width: 70ch;
   color: var(--text-secondary);
   font-size: 1.03rem;
   line-height: 1.66;
@@ -265,6 +317,7 @@ function openFeature(route) {
   display: flex;
   gap: 0.7rem;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .section-logos {
@@ -278,22 +331,52 @@ function openFeature(route) {
   color: var(--text-secondary);
 }
 
-.logos-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.logos-grid span {
-  padding: 0.32rem 0.62rem;
+.ticker-shell {
+  position: relative;
+  overflow: hidden;
   border-radius: 999px;
   border: 1px solid var(--surface-border);
-  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--surface-bg) 88%, transparent);
+  mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+}
+
+.ticker-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  gap: .45rem;
+  padding: .5rem .6rem;
+  animation: tickerMove 28s linear infinite;
+}
+
+.ticker-track span {
+  padding: 0.28rem 0.58rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--surface-border) 92%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
+  font-size: 0.79rem;
   color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@keyframes tickerMove {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 .section-head {
   margin-bottom: 1.15rem;
+}
+
+.section-head.centered {
+  text-align: center;
+  justify-items: center;
+}
+
+.section-head.centered h2,
+.section-head.centered p {
+  max-width: 62ch;
+  margin-inline: auto;
 }
 
 .section-head h2 {
@@ -309,139 +392,48 @@ function openFeature(route) {
   color: var(--text-secondary);
 }
 
-.cards-shell {
-  display: flex;
-  gap: .9rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  scroll-snap-type: x mandatory;
-}
-
-.model-card {
-  transition: transform var(--dur-250) var(--ease-curve-a), box-shadow var(--dur-250) var(--ease-curve-a), border-color var(--dur-250) ease;
-  color: #101010;
+.t396__filter {
   position: relative;
-  display: flex;
-  min-width: 286px;
-  flex: 1;
-  cursor: pointer;
-  scroll-snap-align: start;
-  align-items: flex-end;
   overflow: hidden;
-  border-radius: 8px;
-  background: #8ad1fd;
-  aspect-ratio: 4 / 5;
-  border: 1px solid rgba(12, 24, 42, 0.12);
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--surface-border) 88%, transparent);
+  padding: 1.25rem;
+  background:
+    radial-gradient(92% 120% at 12% 0%, color-mix(in srgb, var(--c-brand) 18%, transparent) 0%, transparent 58%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--c-accent) 14%, transparent) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-bg) 92%, transparent);
 }
 
-.model-card:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--c-brand) 48%, white);
-  outline-offset: 2px;
-}
-
-.model-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 18px 36px -28px rgba(10, 22, 38, .44);
-}
-
-.model-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform var(--dur-400) var(--ease-curve-b);
-}
-
-.model-card:hover .model-image {
-  transform: scale(1.045);
-}
-
-.model-overlay {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  padding: .92rem;
-  background: linear-gradient(to top, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.82) 62%, rgba(255, 255, 255, 0) 100%);
-}
-
-.model-overlay h3 {
-  margin: 0 0 0.35rem;
-  font-size: 1.02rem;
-}
-
-.model-overlay ul {
-  margin: 0;
-  padding-left: 1rem;
+.proof-grid {
   display: grid;
-  gap: 0.15rem;
-  font-size: 0.8rem;
-  line-height: 1.45;
+  grid-template-columns: minmax(0, 1.22fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: .85rem;
 }
 
-.model-link {
-  margin-top: 0.6rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: #1f8a70;
-}
-
-.grid-wrap {
-  display: grid;
-  gap: 1.15rem;
-}
-
-.grid-copy p {
-  margin: 0.35rem 0 0;
-  max-width: 72ch;
-  color: var(--text-secondary);
-}
-
-.media-grid,
-.video-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-}
-
-.media-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.media-card,
+.proof-card,
 .video-card {
   border: 1px solid var(--surface-border);
-  border-radius: 10px;
-  padding: .88rem;
-  background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
+  border-radius: 12px;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
   transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
 }
 
-.media-card:hover,
+.proof-card:hover,
 .video-card:hover {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--c-border-h) 85%, transparent);
   background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
 }
 
-.media-card img,
-.video-card img {
-  width: 100%;
-  border-radius: 9px;
-  margin-bottom: 0.55rem;
-  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
-}
-
-.media-card h3,
+.proof-card h3,
 .video-card h3 {
-  margin: 0 0 0.28rem;
+  margin: 0 0 0.35rem;
   font-size: 1rem;
 }
 
-.media-card p,
+.proof-card p,
 .video-card p {
   margin: 0;
   color: var(--text-secondary);
@@ -449,19 +441,150 @@ function openFeature(route) {
   line-height: 1.55;
 }
 
-.video-grid {
-  grid-template-columns: 1.2fr .8fr .8fr;
+.proof-card-main {
+  grid-row: 1 / span 2;
+  padding: 1.15rem;
 }
 
-.video-card.big {
-  display: grid;
-  gap: 0.55rem;
+.proof-card-main h3 {
+  font-size: 1.16rem;
 }
 
-.video-card {
+.proof-card-main p {
+  font-size: .95rem;
+}
+
+.video-shell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--surface-border) 92%, transparent);
+  padding: 1.2rem;
+  background: color-mix(in srgb, var(--surface-bg) 90%, transparent);
+}
+
+.video-split {
+  position: relative;
+  z-index: 1;
   display: grid;
-  align-content: start;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.video-visual {
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
+}
+
+.video-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.video-story {
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-bg) 93%, transparent);
+  padding: 1rem;
+  display: grid;
+  gap: .65rem;
+}
+
+.video-story h2 {
+  margin: 0;
+  font-size: clamp(1.38rem, 2.15vw, 1.9rem);
+  line-height: 1.12;
+}
+
+.video-story p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.62;
+}
+
+.video-points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: .45rem;
+}
+
+.video-points li {
+  display: grid;
+  gap: .15rem;
+  padding: .45rem .55rem;
+  border-radius: 10px;
+  border: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+}
+
+.video-points strong {
+  font-size: .9rem;
+}
+
+.video-points span {
+  font-size: .88rem;
+  color: var(--text-secondary);
+}
+
+.section-chat-shot {
+  padding-top: 1rem;
+}
+
+.chat-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+}
+
+.chat-copy {
+  display: grid;
   gap: 0.6rem;
+}
+
+.mini-kicker {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .78rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.chat-copy h2 {
+  margin: 0;
+  font-size: clamp(1.46rem, 2.35vw, 2rem);
+  line-height: 1.1;
+}
+
+.chat-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.64;
+}
+
+.video-story .hero-actions,
+.chat-copy .hero-actions {
+  justify-content: flex-start;
+}
+
+.chat-shot {
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
+}
+
+.chat-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .usecases-grid {
@@ -501,6 +624,55 @@ function openFeature(route) {
   line-height: 1.55;
 }
 
+.enterprise-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.enterprise-card {
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: .95rem;
+  background: color-mix(in srgb, var(--surface-bg) 93%, transparent);
+}
+
+.enterprise-card h3 {
+  margin: 0 0 .35rem;
+  font-size: 1rem;
+}
+
+.enterprise-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.58;
+  font-size: .9rem;
+}
+
+.faq-grid {
+  display: grid;
+  gap: .65rem;
+}
+
+.faq-item {
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: .65rem .75rem;
+  background: color-mix(in srgb, var(--surface-bg) 93%, transparent);
+}
+
+.faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: .95rem;
+}
+
+.faq-item p {
+  margin: .55rem 0 0;
+  color: var(--text-secondary);
+  line-height: 1.58;
+}
+
 .section-cta {
   padding-bottom: 2.9rem;
 }
@@ -510,6 +682,7 @@ function openFeature(route) {
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-bg) 94%, transparent);
   padding: 1.2rem;
+  text-align: center;
 }
 
 .cta-inner h2 {
@@ -521,11 +694,29 @@ function openFeature(route) {
   color: var(--text-secondary);
 }
 
+.cta-note {
+  margin-top: .5rem;
+  font-size: .84rem;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 1080px) {
-  .media-grid,
-  .video-grid,
+  .proof-grid,
+  .enterprise-grid,
   .usecases-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .proof-card-main {
+    grid-row: auto;
+  }
+
+  .video-split {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-shell {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -543,10 +734,20 @@ function openFeature(route) {
     font-size: clamp(1.95rem, 9vw, 2.75rem);
   }
 
-  .media-grid,
-  .video-grid,
+  .proof-grid,
+  .enterprise-grid,
   .usecases-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .ticker-track {
+    animation-duration: 20s;
+  }
+
+  .video-shell,
+  .t396__filter {
+    padding: .8rem;
   }
 }
 </style>

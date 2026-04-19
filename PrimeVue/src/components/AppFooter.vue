@@ -4,11 +4,32 @@
       <div class="footer-brand">
         <span class="footer-copy">InterviewHub © {{ year }}</span>
         <span class="footer-note">Платформа подготовки к IT-собеседованиям</span>
+        <span class="footer-legal">Для пользователей: обучение и практика. Загрузка видео доступна только администраторам.</span>
       </div>
-      <div class="footer-links">
-        <router-link to="/suggest">Предложить видео</router-link>
-        <router-link to="/interview-questions">Каталог вопросов</router-link>
-        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+
+      <div class="footer-nav">
+        <div class="footer-col">
+          <div class="footer-col-title">Подготовка</div>
+          <router-link to="/interview-questions">Вопросы</router-link>
+          <router-link to="/trainer">Тренажёр</router-link>
+          <router-link to="/ai-interview">AI Interview</router-link>
+          <router-link to="/mock-interview">Mock Interview</router-link>
+        </div>
+
+        <div class="footer-col">
+          <div class="footer-col-title">Контент</div>
+          <router-link to="/recordings">Записи</router-link>
+          <router-link to="/test-assignments">Задания</router-link>
+          <router-link to="/hh-requirements">Навыки HH</router-link>
+          <router-link to="/suggest">Предложить видео</router-link>
+        </div>
+
+        <div class="footer-col">
+          <div class="footer-col-title">Платформа</div>
+          <router-link to="/">Главная</router-link>
+          <router-link to="/profile">Профиль</router-link>
+          <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+        </div>
       </div>
     </div>
   </footer>
@@ -23,20 +44,20 @@ const year = new Date().getFullYear()
   margin-top: auto;
   border-top: 1px solid var(--surface-border);
   background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
-  padding: 1.4rem 0;
+  padding: 1.5rem 0;
 }
 .footer-inner {
   max-width: var(--max-w);
   margin: 0 auto;
   padding: 0 1.5rem;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(230px, .9fr) minmax(0, 1.6fr);
   justify-content: space-between;
-  gap: .9rem;
+  gap: 1.2rem;
 }
 .footer-brand {
   display: grid;
-  gap: .2rem;
+  gap: .25rem;
 }
 .footer-copy {
   color: var(--text-secondary);
@@ -48,38 +69,64 @@ const year = new Date().getFullYear()
   font-size: .78rem;
 }
 
-.footer-links {
-  display: flex;
-  gap: .5rem;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.footer-legal {
+  color: var(--c-text-4);
+  font-size: .74rem;
+  line-height: 1.45;
+  max-width: 34ch;
 }
 
-.footer-links a {
+.footer-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .9rem;
+}
+
+.footer-col {
+  display: grid;
+  align-content: start;
+  gap: .32rem;
+}
+
+.footer-col-title {
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--c-text-4);
+  margin-bottom: .2rem;
+}
+
+.footer-nav a {
   color: var(--text-secondary);
   font-size: .84rem;
-  padding: .35rem .62rem;
-  border-radius: 999px;
-  border: 1px solid var(--surface-border);
-  background: color-mix(in srgb, var(--surface-bg) 86%, transparent);
-  transition: color .2s ease, background .2s ease;
+  transition: color .2s ease;
+  width: fit-content;
 }
 
-.footer-links a:hover {
+.footer-nav a:hover {
   color: var(--text-primary);
-  background: var(--surface-soft);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 860px) {
   .footer-inner {
-    flex-direction: column;
-    gap: .5rem;
-    text-align: center;
+    grid-template-columns: 1fr;
+  }
+
+  .footer-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .footer-inner {
+    gap: .7rem;
+    text-align: left;
     padding: 0 1rem;
   }
 
-  .footer-links {
-    justify-content: center;
+  .footer-nav {
+    grid-template-columns: 1fr;
+    gap: .5rem;
   }
 }
 </style>

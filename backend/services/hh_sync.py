@@ -179,15 +179,25 @@ class HHSkillsSyncService:
                 ORDER BY profession
                 """
             )
-            professions = [
+            existing_professions = [
                 str(r["profession"]).strip() for r in rows if r["profession"]
             ]
         finally:
             await self._db_release(conn)
 
-        if professions:
-            return professions
-        return DEFAULT_PROFESSIONS
+        merged = []
+        seen = set()
+        for profession in [*existing_professions, *DEFAULT_PROFESSIONS]:
+            normalized = profession.strip()
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(normalized)
+
+        return merged or DEFAULT_PROFESSIONS
 
     async def _sync_professions(self, professions: list[str]) -> dict[str, int]:
         semaphore = asyncio.Semaphore(self.http_concurrency)

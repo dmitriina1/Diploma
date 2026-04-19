@@ -254,6 +254,7 @@ async def lifespan(app: FastAPI):
         gemini_api_key=GEMINI_API_KEY,
         groq_api_key=GROQ_API_KEY,
     )
+    await interview_chatbot.ensure_runtime_tables()
     print("🤖 Interview Chatbot initialized")
 
     print("ℹ️ Similarity search uses lazy initialization on first request")
@@ -3746,6 +3747,16 @@ async def get_hh_skills(
     try:
         offset = (page - 1) * per_page
 
+        tech_mentions_exists = await conn.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'hh_tech_mentions'
+            )
+            """
+        )
+
         # Parse sources filter
         source_list = []
         if sources:
@@ -3755,8 +3766,10 @@ async def get_hh_skills(
                 if s.strip() in ["skills", "description", "title"]
             ]
 
+        fallback_to_hh_skills = False
+
         # Use new table if sources filter is provided, otherwise fallback to old table
-        if source_list:
+        if source_list and tech_mentions_exists:
             # Query hh_tech_mentions with source filter
             where_clauses = []
             params = []
@@ -3812,7 +3825,15 @@ async def get_hh_skills(
                 per_page,
                 offset,
             )
+
+            if total == 0 and profession:
+                fallback_to_hh_skills = True
         else:
+            if source_list and not tech_mentions_exists:
+                print("⚠️ hh_tech_mentions table not found, fallback to hh_skills")
+            fallback_to_hh_skills = True
+
+        if fallback_to_hh_skills:
             # Fallback to old hh_skills table for backward compatibility
             if profession:
                 total = await conn.fetchval(
@@ -3888,11 +3909,73 @@ async def get_hh_professions():
     """Список профессий с данными HH"""
     conn = await asyncpg.connect(DATABASE_URL)
     try:
-        professions = await conn.fetch("""
-            SELECT profession, COUNT(*) as skills_count, MAX(total_vacancies) as total_vacancies
-            FROM hh_skills GROUP BY profession ORDER BY profession
-        """)
-        return {"professions": [dict(p) for p in professions]}
+        professions = []
+
+        tech_mentions_exists = await conn.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'hh_tech_mentions'
+            )
+            """
+        )
+
+        if tech_mentions_exists:
+            professions = await conn.fetch(
+                """
+                SELECT profession,
+                       COUNT(DISTINCT technology) AS skills_count,
+                       MAX(total_vacancies) AS total_vacancies
+                FROM hh_tech_mentions
+                WHERE profession IS NOT NULL AND profession <> ''
+                GROUP BY profession
+                ORDER BY profession
+                """
+            )
+
+        legacy_professions = await conn.fetch(
+            """
+            SELECT profession,
+                   COUNT(*) AS skills_count,
+                   MAX(total_vacancies) AS total_vacancies
+            FROM hh_skills
+            WHERE profession IS NOT NULL AND profession <> ''
+            GROUP BY profession
+            ORDER BY profession
+            """
+        )
+
+        merged = {}
+
+        for row in professions:
+            item = dict(row)
+            key = item["profession"]
+            merged[key] = {
+                "profession": key,
+                "skills_count": int(item.get("skills_count") or 0),
+                "total_vacancies": int(item.get("total_vacancies") or 0),
+            }
+
+        for row in legacy_professions:
+            item = dict(row)
+            key = item["profession"]
+            if key not in merged:
+                merged[key] = {
+                    "profession": key,
+                    "skills_count": int(item.get("skills_count") or 0),
+                    "total_vacancies": int(item.get("total_vacancies") or 0),
+                }
+            else:
+                merged[key]["skills_count"] = max(
+                    merged[key]["skills_count"], int(item.get("skills_count") or 0)
+                )
+                merged[key]["total_vacancies"] = max(
+                    merged[key]["total_vacancies"], int(item.get("total_vacancies") or 0)
+                )
+
+        result = sorted(merged.values(), key=lambda x: x["profession"])
+        return {"professions": result}
     finally:
         await conn.close()
 

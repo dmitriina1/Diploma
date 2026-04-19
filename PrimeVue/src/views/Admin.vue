@@ -67,7 +67,7 @@
           <table class="tbl">
             <thead><tr>
               <th style="width:36px"><input type="checkbox" :checked="allQSelected" @change="toggleAllQ" /></th>
-              <th>Вопрос</th><th style="width:110px">Тема</th><th style="width:90px">Сложность</th><th style="width:70px">%</th><th style="width:90px">Статус</th><th style="width:120px"></th>
+              <th>Вопрос</th><th style="width:110px">Тема</th><th style="width:90px">Сложность</th><th style="width:70px">%</th><th style="width:90px">Статус</th><th style="width:90px">Ответ</th><th style="width:120px"></th>
             </tr></thead>
             <tbody>
               <tr v-for="q in filteredAdminQ" :key="q.id" @click="openQDetail(q)">
@@ -77,6 +77,10 @@
                 <td><span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span></td>
                 <td>{{ q.probability ? q.probability + '%' : '—' }}</td>
                 <td><span class="badge" :class="q.approved ? 'badge-ok' : 'badge-warn'">{{ q.approved ? 'Да' : 'Нет' }}</span></td>
+                <td>
+                  <span v-if="q.approved" class="badge" :class="hasAnswer(q) ? 'badge-ok' : 'badge-err'">{{ hasAnswer(q) ? 'Есть' : 'Нет' }}</span>
+                  <span v-else class="muted-cell">—</span>
+                </td>
                 <td @click.stop>
                   <button v-if="!q.approved" class="btn btn-ok btn-sm btn-icon" title="Одобрить" @click="approveOne(q.id)">OK</button>
                   <button v-else class="btn btn-warn btn-sm btn-icon" title="Отозвать" @click="revokeOne(q.id)">↺</button>
@@ -272,7 +276,7 @@
     <Teleport to="body">
       <div v-if="qDetailId" class="overlay" @click.self="closeQDetail">
         <div class="dialog card qd-dialog">
-          <div class="dialog-head"><h3>Вопрос #{{ qDetailId }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="closeQDetail">×</button></div>
+          <div class="dialog-head"><h3>{{ qDetailTitle }}</h3><button class="btn btn-ghost btn-icon btn-sm" @click="closeQDetail">×</button></div>
           <div v-if="qDetail" class="dialog-body qd-body">
             <div class="qd-badges">
               <span class="badge badge-info">{{ qEdit.topic || 'Без темы' }}</span>
@@ -502,14 +506,19 @@ const qTopic = ref('')
 const qStatus = ref('')
 const selectedQIds = ref([])
 const qDetailId = ref(null)
+const qEdit = ref({ question: '', answer: '', topic: '', difficulty: 'middle' })
 const qDetail = computed(() => questionsStore.adminQuestions.find(q => q.id === qDetailId.value))
+const qDetailTitle = computed(() => {
+  const raw = String(qEdit.value.question || qDetail.value?.question || '').trim()
+  if (!raw) return qDetailId.value ? `Вопрос #${qDetailId.value}` : 'Вопрос'
+  return raw.length > 96 ? `${raw.slice(0, 93)}...` : raw
+})
 const qSimilar = ref([])
 const showMergeConfirm = ref(false)
 const mergeTarget = ref(null)
 const merging = ref(false)
 const qSaving = ref(false)
 const qSaveSuccess = ref(false)
-const qEdit = ref({ question: '', answer: '', topic: '', difficulty: 'middle' })
 const topics = computed(() => questionsStore.topics)
 let qSaveSuccessTimer = null
 
@@ -517,6 +526,8 @@ const normalizeDifficulty = (difficulty) => {
   const normalized = String(difficulty || '').toLowerCase()
   return ['junior', 'middle', 'senior'].includes(normalized) ? normalized : 'middle'
 }
+
+const hasAnswer = (q) => Boolean(String(q?.answer || '').trim())
 
 const syncQEditFromSource = (question) => {
   if (!question) return
@@ -956,6 +967,7 @@ onUnmounted(() => {
 .tbl.tbl-sm td, .tbl.tbl-sm th { padding: .45rem .4rem; }
 .q-cell { max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comment-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.muted-cell { color: var(--c-text-4); font-size: .85rem; }
 .link { color: var(--c-brand); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 
@@ -1009,7 +1021,7 @@ onUnmounted(() => {
 .qd-dialog {
   display: flex;
   flex-direction: column;
-  max-width: 760px;
+  max-width: 960px;
   max-height: min(84vh, 920px);
   overflow: hidden;
   padding: 1.1rem 1.15rem 1.2rem;

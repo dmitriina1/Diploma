@@ -577,13 +577,15 @@ select.input {
 }
 
 .p-button:not(.p-button-text):not(.p-button-outlined) {
-  background: #121212;
-  border-color: #121212;
+  background: linear-gradient(130deg, var(--c-brand), var(--c-brand-h));
+  border-color: color-mix(in srgb, var(--c-brand-h) 72%, transparent);
+  color: #ffffff;
 }
 
 .p-button:not(.p-button-text):not(.p-button-outlined):hover {
-  background: #2c2c2c;
-  border-color: #2c2c2c;
+  background: linear-gradient(130deg, color-mix(in srgb, var(--c-brand) 88%, #ffffff), color-mix(in srgb, var(--c-brand-h) 92%, #ffffff));
+  border-color: color-mix(in srgb, var(--c-brand-h) 82%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-brand) 16%, transparent);
 }
 
 .p-button.p-button-outlined {
