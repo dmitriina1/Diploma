@@ -1,0 +1,50 @@
+flowchart TD
+    Start(["URL видео от пользователя"])
+
+    Start --> Detect["detect_platform(url)\nрегулярные выражения"]
+
+    Detect --> Platform{"Определённая\nплатформа?"}
+
+    Platform -->|"youtube.com\nyoutu.be\nshorts"| YT_Start["Режим YouTube"]
+    Platform -->|"vk.com/video\nvkvideo.ru"| VK_Start["Режим VK Video"]
+    Platform -->|"rutube.ru"| Other["Режим yt-dlp Universal"]
+    Platform -->|"ok.ru"| Other
+    Platform -->|"dailymotion\nvimeo\nи другие"| Other
+
+    YT_Start --> YT1["Стратегия 1\nformat: bestaudio/best\nМаксимальное качество аудио"]
+    YT1 --> YT1_OK{"Успех?"}
+    YT1_OK -->|"Да"| PostProc
+    YT1_OK -->|"DownloadError"| YT2["Стратегия 2\nformat: best[acodec!=none][height<=720]\nЛучшее с аудиодорожкой"]
+    YT2 --> YT2_OK{"Успех?"}
+    YT2_OK -->|"Да"| PostProc
+    YT2_OK -->|"DownloadError"| YT3["Стратегия 3\nformat: worstaudio/worst\nМинимальное качество"]
+    YT3 --> YT3_OK{"Успех?"}
+    YT3_OK -->|"Да"| PostProc
+    YT3_OK -->|"DownloadError"| Fail(["Ошибка: формат недоступен\nили видео приватное"])
+
+    VK_Start --> VK_Dur{"Длительность\n> 60 минут?"}
+    VK_Dur -->|"Да"| VKFail(["Ошибка: VK видео\nслишком длинное"])
+    VK_Dur -->|"Нет"| VK_Opts["VK опции:\nretries=10\nfragment_retries=10\nconcurrent_fragments=1"]
+    VK_Opts --> PostProc
+
+    Other --> PostProc
+
+    PostProc["yt-dlp postprocessors\nExtractAudio → mp3\nbitrate: 192kbps\ngeo_bypass=true\ncookies (если YTDLP_COOKIE_FILE)\nsocket_timeout=30s"]
+
+    PostProc --> SubCheck["Загрузка субтитров\nwritesubtitles=True\nlangs=['ru']\nformat: VTT"]
+
+    SubCheck --> SubOK{"Субтитры\nполучены?"}
+    SubOK -->|"Да"| ParseVTT["_parse_vtt_subtitles(vtt_path)\nОчистка временных меток\nПолучение чистого текста"]
+    SubOK -->|"Нет"| NoSubs["subtitles = None\nБудет только Whisper транскрипт"]
+
+    ParseVTT --> Merge["merge_subtitles_with_whisper()\nОбъединить VTT + Whisper\nдля лучшей точности"]
+    NoSubs --> Result
+
+    Merge --> Result
+    Result(["Результат:\naudio_path — путь к MP3\nvideo_title — название\nsubtitles — текст или None\nduration — длительность сек\nplatform — youtube/vk/rutube/ok\nvideo_id — уникальный ID"])
+
+    style Start fill:#4CAF50,color:#fff
+    style Result fill:#2196F3,color:#fff
+    style Fail fill:#F44336,color:#fff
+    style VKFail fill:#F44336,color:#fff
+    style PostProc fill:#9C27B0,color:#fff

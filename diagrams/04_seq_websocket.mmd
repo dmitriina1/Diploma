@@ -1,0 +1,51 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент (браузер)
+    participant API as FastAPI Backend
+    participant WSM as ConnectionManager
+    participant TR as TaskRuntime
+    participant Redis as Redis
+
+    Client->>API: WS /ws/{client_id}
+    API->>WSM: connect(websocket, client_id)
+    WSM->>WSM: active_connections[client_id] = websocket
+    API-->>Client: WebSocket соединение установлено
+
+    Client->>API: POST /api/process-video/{client_id} {url, topic, level}
+    API->>Redis: SET task:{task_id} {status: pending, progress: 0, client_id}
+    API->>TR: enqueue({task_id, client_id, url, topic, level})
+    API-->>Client: HTTP 200 {task_id, status: started}
+
+    Note over TR,Redis: Воркер обрабатывает задачу асинхронно
+
+    TR->>Redis: SET task:{task_id} {progress: 5, step: downloading}
+    TR->>WSM: send_progress(client_id, {progress: 5, step: downloading})
+    WSM->>Client: JSON {type: progress, progress: 5, step: downloading}
+
+    TR->>Redis: SET task:{task_id} {progress: 20, step: downloaded}
+    TR->>WSM: send_progress(client_id, {progress: 20, step: downloaded})
+    WSM->>Client: JSON {progress: 20, step: downloaded}
+
+    TR->>Redis: SET task:{task_id} {progress: 60, step: transcribed}
+    TR->>WSM: send_progress(client_id, {progress: 60, step: transcribed})
+    WSM->>Client: JSON {progress: 60, step: transcribed}
+
+    TR->>Redis: SET task:{task_id} {progress: 85, step: extracted}
+    TR->>WSM: send_progress(client_id, {progress: 85, step: extracted})
+    WSM->>Client: JSON {progress: 85, step: extracted}
+
+    TR->>Redis: SET task:{task_id} {progress: 100, status: completed}
+    TR->>WSM: send_progress(client_id, {type: completed, questions_count: N})
+    WSM->>Client: JSON {type: completed, progress: 100, questions_count: N}
+
+    Note over Client,WSM: Клиент отключается после получения результата
+
+    Client->>API: WS close
+    API->>WSM: disconnect(client_id)
+    WSM->>WSM: del active_connections[client_id]
+
+    Note over Client,Redis: Альтернатива — HTTP опрос (если WS недоступен)
+    Client->>API: GET /api/task/{task_id}
+    API->>Redis: GET task:{task_id}
+    Redis-->>API: {status, progress, current_step, result}
+    API-->>Client: TaskStatus

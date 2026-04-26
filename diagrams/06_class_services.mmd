@@ -1,0 +1,97 @@
+classDiagram
+    direction TB
+
+    class VideoDownloader {
+        +SUPPORTED_PLATFORMS : dict
+        +detect_platform(url) str
+        +extract_video_id(url, platform) str
+        +download_video_audio(url, video_id) dict
+        -_parse_vtt_subtitles(vtt_path) str
+        -_build_download_error(error) str
+    }
+
+    class WhisperOrchestrator {
+        -workers : List
+        -max_workers : int
+        +initialize() None
+        +get_available_worker() WhisperWorker
+        +transcribe_audio(audio_path, task_id, language) dict
+    }
+
+    class WhisperWorker {
+        -base_url : str
+        -client : AsyncClient
+        +busy : bool
+        +current_task_id : str
+        +last_used : datetime
+        +is_ready : bool
+        +health_check() bool
+        +transcribe(audio_path, language) dict
+    }
+
+    class TaskRuntime {
+        -queue : asyncio.Queue
+        -worker_task : Task
+        +ensure_runtime_tables() None
+        +persist_task_snapshot(task, client_id) None
+        +load_task_snapshot(task_id) dict
+        +enqueue(job) None
+        +start_worker(video_handler, local_handler) None
+        +recover_pending_tasks() None
+        +stop_worker() None
+    }
+
+    class ConnectionManager {
+        -active_connections : dict
+        +connect(websocket, client_id) None
+        +disconnect(client_id) None
+        +send_progress(client_id, data) None
+    }
+
+    class QuestionSimilaritySearch {
+        -model : SentenceTransformer
+        -index : IndexFlatIP
+        -redis_client : Redis
+        -question_ids : List
+        +initialize() None
+        +find_similar(text, question_id, limit, min_score) List
+        +invalidate_cache() None
+        -_build_index() None
+        -_compute_hybrid_score(q1, q2) float
+    }
+
+    class InterviewChatbot {
+        -llm_provider : str
+        +ensure_runtime_tables() None
+        +create_session(topic, difficulty) dict
+        +process_message(session_id, message) dict
+        +end_session(session_id) dict
+        -_build_system_prompt(topic, difficulty) str
+        -_get_relevant_questions(topic, difficulty) List
+        -_call_openrouter(messages, temperature) str
+        -_call_groq(messages, temperature) str
+        -_call_gemini(messages, temperature) str
+        -_fallback_question(topic, index) str
+    }
+
+    class HHSkillsSyncService {
+        -interval_hours : int
+        -running : bool
+        +run_once() None
+        +start() None
+        +stop() None
+        -_fetch_profession_skills(client, profession) dict
+        -_upsert_rows_v2(rows) None
+    }
+
+    class TechExtractor {
+        +TECH_KEYWORDS : dict
+        +extract_technologies(text) List
+    }
+
+    WhisperOrchestrator "1" *-- "1..*" WhisperWorker : управляет
+    TaskRuntime ..> VideoDownloader : вызывает
+    TaskRuntime ..> WhisperOrchestrator : вызывает
+    TaskRuntime ..> ConnectionManager : уведомляет
+    InterviewChatbot ..> QuestionSimilaritySearch : использует
+    HHSkillsSyncService ..> TechExtractor : использует

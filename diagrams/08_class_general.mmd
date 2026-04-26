@@ -1,0 +1,144 @@
+classDiagram
+    direction TB
+
+    class FastAPIApp {
+        +lifespan() AsyncContextManager
+        +app : FastAPI
+    }
+
+    class Config {
+        +DATABASE_URL : str
+        +REDIS_URL : str
+        +WHISPER_BASE_URL : str
+        +LLM_PROVIDER : str
+        +JWT_SECRET_KEY : str
+        +MAX_WHISPER_WORKERS : int
+        +HH_SYNC_ENABLED : bool
+    }
+
+    class DBPool {
+        +pool : asyncpg.Pool
+        +init_pool() None
+        +pooled_connect() Connection
+        +db_release(conn) None
+    }
+
+    class AuthModule {
+        +hash_password(pwd) str
+        +verify_password(pwd, hash) bool
+        +create_access_token(data) str
+        +decode_token(token) dict
+        +get_current_user(token) UserInfo
+        +require_admin(user) UserInfo
+    }
+
+    class TaskRuntime {
+        -queue : asyncio.Queue
+        +enqueue(job) None
+        +start_worker(vh, lh) None
+        +persist_task_snapshot(task, cid) None
+        +recover_pending_tasks() None
+        +stop_worker() None
+    }
+
+    class VideoDownloader {
+        +detect_platform(url) str
+        +download_video_audio(url, id) dict
+    }
+
+    class WhisperOrchestrator {
+        -workers : List
+        +get_available_worker() WhisperWorker
+        +transcribe_audio(path, id, lang) dict
+    }
+
+    class WhisperWorker {
+        +busy : bool
+        +health_check() bool
+        +transcribe(path, lang) dict
+    }
+
+    class ConnectionManager {
+        -connections : dict
+        +connect(ws, client_id) None
+        +disconnect(client_id) None
+        +send_progress(client_id, data) None
+    }
+
+    class QuestionSimilaritySearch {
+        -model : SentenceTransformer
+        -index : IndexFlatIP
+        -redis : Redis
+        +initialize() None
+        +find_similar(text, id, limit) List
+        +invalidate_cache() None
+    }
+
+    class InterviewChatbot {
+        -llm_provider : str
+        +create_session(topic, diff) dict
+        +process_message(id, msg) dict
+        +end_session(id) dict
+    }
+
+    class HHSkillsSyncService {
+        -interval_hours : int
+        +run_once() None
+        +start() None
+        +stop() None
+    }
+
+    class TechExtractor {
+        +TECH_KEYWORDS : dict
+        +extract_technologies(text) List
+    }
+
+    class DepsModule {
+        +configure_resources(kwargs) None
+        +get_resource(name) Any
+        +configure_handlers(kwargs) None
+        +get_handler(name) Callable
+    }
+
+    class AuthRouter
+    class PublicRouter
+    class AdminRouter
+    class ProcessingRouter
+    class StatusRouter
+
+    FastAPIApp --> Config : читает
+    FastAPIApp --> DBPool : инициализирует
+    FastAPIApp --> AuthModule : загружает
+    FastAPIApp --> TaskRuntime : создаёт
+    FastAPIApp --> WhisperOrchestrator : создаёт
+    FastAPIApp --> ConnectionManager : создаёт
+    FastAPIApp --> InterviewChatbot : создаёт
+    FastAPIApp --> HHSkillsSyncService : запускает
+    FastAPIApp --> QuestionSimilaritySearch : инициализирует
+    FastAPIApp --> DepsModule : конфигурирует
+
+    FastAPIApp --> AuthRouter : регистрирует
+    FastAPIApp --> PublicRouter : регистрирует
+    FastAPIApp --> AdminRouter : регистрирует
+    FastAPIApp --> ProcessingRouter : регистрирует
+    FastAPIApp --> StatusRouter : регистрирует
+
+    TaskRuntime --> VideoDownloader : вызывает
+    TaskRuntime --> WhisperOrchestrator : вызывает
+    TaskRuntime --> ConnectionManager : уведомляет
+    TaskRuntime --> DBPool : запросы
+
+    WhisperOrchestrator "1" *-- "1..*" WhisperWorker : пул
+
+    PublicRouter ..> QuestionSimilaritySearch : поиск
+    AdminRouter ..> QuestionSimilaritySearch : поиск дублей
+    InterviewChatbot ..> QuestionSimilaritySearch : контекст
+
+    HHSkillsSyncService ..> TechExtractor : извлечение
+    HHSkillsSyncService ..> DBPool : запись
+
+    AuthModule ..> DBPool : запросы
+    QuestionSimilaritySearch ..> DBPool : запросы
+
+    DepsModule ..> TaskRuntime : ссылка
+    DepsModule ..> ConnectionManager : ссылка

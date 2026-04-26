@@ -1,0 +1,136 @@
+classDiagram
+    direction TB
+
+    class FastAPIApp {
+        +app : FastAPI
+        +lifespan(app) AsyncContextManager
+        +websocket_endpoint(client_id)
+        +health_check() dict
+    }
+
+    class AuthRouter {
+        +register(body UserRegister) TokenResponse
+        +login(body UserLogin) TokenResponse
+        +get_me(user CurrentUser) UserInfo
+        +get_profile(user CurrentUser) ProfileResponse
+        +update_profile(body ProfileUpdate) UserInfo
+    }
+
+    class PublicRouter {
+        +get_questions(topic, level, page, limit) List
+        +get_question_detail(question_id) QuestionDetail
+        +find_similar_questions(query, limit, min_score) List
+        +get_tags() List
+        +get_stats() StatsResponse
+        +get_recordings() List
+        +submit_suggestion(body) SuggestionResponse
+        +get_professions() List
+        +track_page_view(body) None
+        +track_event(body) None
+    }
+
+    class AdminRouter {
+        +list_questions(approved, topic, page) List
+        +get_question(question_id) QuestionDetail
+        +create_question(body) Question
+        +update_question(question_id, body) Question
+        +delete_question(question_id) None
+        +approve_questions(ids) None
+        +revoke_questions(ids) None
+        +generate_answer(question_id) Question
+        +merge_questions(ids) Question
+        +list_videos() List
+        +update_video(video_id, body) Video
+        +delete_video(video_id) None
+        +list_feedback(is_resolved) List
+        +update_feedback(feedback_id, body) Feedback
+        +get_admin_stats() AdminStats
+        +get_analytics(days) Analytics
+    }
+
+    class ProcessingRouter {
+        +process_video(body VideoRequest) TaskResponse
+        +process_video_with_client(client_id, body) TaskResponse
+        +export_questions(task_id) FileResponse
+        +export_transcript(task_id) FileResponse
+        +full_export(task_id) FileResponse
+    }
+
+    class StatusRouter {
+        +get_task_status(task_id) TaskStatus
+        +get_last_result(client_id) TaskResult
+        +get_client_tasks(client_id) List
+        +get_all_tasks() List
+    }
+
+    class DepsModule {
+        -resources : dict
+        -handlers : dict
+        +configure_resources(kwargs) None
+        +get_resource(name) Any
+        +configure_handlers(kwargs) None
+        +get_handler(name) Callable
+    }
+
+    class UserRegister {
+        +username : str
+        +password : str
+        +display_name : str
+    }
+
+    class UserLogin {
+        +username : str
+        +password : str
+    }
+
+    class UserInfo {
+        +id : int
+        +username : str
+        +display_name : str
+        +role : str
+        +avatar_url : str
+        +github_url : str
+    }
+
+    class TokenResponse {
+        +access_token : str
+        +token_type : str
+        +user : UserInfo
+    }
+
+    class VideoRequest {
+        +url : str
+        +topic : str
+        +level : str
+    }
+
+    class TaskResponse {
+        +task_id : str
+        +status : str
+    }
+
+    class TaskStatus {
+        +id : str
+        +status : str
+        +progress : int
+        +current_step : str
+        +result : dict
+        +error_message : str
+    }
+
+    FastAPIApp --> AuthRouter : включает
+    FastAPIApp --> PublicRouter : включает
+    FastAPIApp --> AdminRouter : включает
+    FastAPIApp --> ProcessingRouter : включает
+    FastAPIApp --> StatusRouter : включает
+    FastAPIApp --> DepsModule : конфигурирует
+
+    AuthRouter ..> UserRegister : принимает
+    AuthRouter ..> UserLogin : принимает
+    AuthRouter ..> TokenResponse : возвращает
+    AuthRouter ..> UserInfo : возвращает
+    ProcessingRouter ..> VideoRequest : принимает
+    ProcessingRouter ..> TaskResponse : возвращает
+    StatusRouter ..> TaskStatus : возвращает
+    ProcessingRouter ..> DepsModule : использует
+    StatusRouter ..> DepsModule : использует

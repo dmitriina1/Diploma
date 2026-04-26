@@ -1,0 +1,82 @@
+graph LR
+    subgraph Entry["Точка входа"]
+        MN["main_new.py\nFastAPI app\nlifespan + pipeline"]
+    end
+
+    subgraph Core["core/"]
+        CFG["config.py\nenv vars"]
+        DB["db.py\nasyncpg pool"]
+    end
+
+    subgraph AuthMod["Аутентификация"]
+        AU["auth.py\nJWT + bcrypt"]
+    end
+
+    subgraph Svc["services/"]
+        TR["task_runtime.py\nTask Queue"]
+        WO["whisper_orchestrator.py\nWhisper Pool"]
+        WSM["ws_manager.py\nWebSocket"]
+        IC["interview_chatbot.py\nLLM Sessions"]
+        HH["hh_sync.py\nHH.ru Sync"]
+        TE["tech_extractor.py\nKeyword Parser"]
+    end
+
+    subgraph API["api/"]
+        DEPS["deps.py\nDependency Injection"]
+        subgraph Routes["routes/"]
+            AR["auth.py\n/api/auth/*"]
+            PR["public.py\n/api/questions/*"]
+            ADR["admin.py\n/api/admin/*"]
+            PRC["processing.py\n/api/process-video"]
+            SR["status.py\n/api/task/* + WS"]
+        end
+    end
+
+    subgraph Standalone["Независимые модули"]
+        SS["similarity_search.py\nFAISS + Transformers"]
+        VD["video_downloader.py\nyt-dlp"]
+    end
+
+    MN --> CFG
+    MN --> DB
+    MN --> AU
+    MN --> TR
+    MN --> WO
+    MN --> WSM
+    MN --> IC
+    MN --> HH
+    MN --> SS
+    MN --> VD
+    MN --> DEPS
+    MN --> AR
+    MN --> PR
+    MN --> ADR
+    MN --> PRC
+    MN --> SR
+
+    AR --> AU
+    AR --> CFG
+    PR --> SS
+    PR --> CFG
+    ADR --> SS
+    ADR --> CFG
+    PRC --> DEPS
+    PRC --> CFG
+    SR --> DEPS
+
+    HH --> TE
+    SS --> DB
+    AU --> DB
+    IC --> DB
+    TR --> DB
+
+    DEPS --> TR
+    DEPS --> WSM
+
+    style MN fill:#FF9800,color:#fff,stroke:#E65100
+    style Core fill:#E3F2FD,stroke:#1565C0
+    style Svc fill:#E8F5E9,stroke:#2E7D32
+    style API fill:#FCE4EC,stroke:#880E4F
+    style Standalone fill:#F3E5F5,stroke:#6A1B9A
+    style AuthMod fill:#FFF9C4,stroke:#F57F17
+    style Entry fill:#FF9800,stroke:#E65100

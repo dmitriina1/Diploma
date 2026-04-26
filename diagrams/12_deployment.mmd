@@ -1,0 +1,60 @@
+graph TB
+    subgraph Host["Хост-машина (Windows / Linux Server)"]
+
+        subgraph DC["docker-compose.yml — diploma_network"]
+
+            subgraph FrontendGroup["Frontend Контейнеры"]
+                FN["frontend-new\nVue 3 + Vite\nhost:3000 → container:3000"]
+                FV["frontend-vue\nVue + PrimeVue legacy\nhost:3001 → container:3001"]
+                FN2["frontend-new-v2\nAlternate UI\nhost:3010 → container:3010"]
+                PV["PrimeVue\nUI library build\nhost:3020 → container:3020"]
+            end
+
+            subgraph BackendGroup["Backend Контейнер"]
+                BE["backend\nFastAPI + uvicorn\nhost:8000 → container:8000\nimage: python:3.11"]
+            end
+
+            subgraph WhisperGroup["Whisper Контейнер"]
+                WH["whisper-worker\nfaster-whisper\nhost:8001 → container:8000\nimage: GPU/CPU build"]
+            end
+
+            subgraph DBGroup["Data Контейнеры"]
+                PG["postgres\nPostgreSQL 15\nhost:5432 → container:5432\nvolume: postgres_data"]
+                RD["redis\nRedis 7\nhost:6379 → container:6379\nvolume: redis_data"]
+            end
+
+            subgraph AnalyticsGroup["Analytics Контейнер"]
+                MB["metabase\nBI Analytics\nhost:3035 → container:3000\nvolume: metabase_data"]
+            end
+        end
+
+        subgraph Volumes["Named Volumes"]
+            PGV[("postgres_data")]
+            RDV[("redis_data")]
+            MBV[("metabase_data")]
+            TMP[("temp audio files\nbind mount ./temp")]
+        end
+
+        ENV[".env\nCONFIG: DB_URL, REDIS_URL,\nAPI_KEYS, JWT_SECRET"]
+    end
+
+    FN & FV & FN2 & PV -->|"REST / WebSocket\n:8000"| BE
+    BE -->|"asyncpg pool\n:5432"| PG
+    BE -->|"aioredis\n:6379"| RD
+    BE -->|"HTTP POST /transcribe-path\n:8000"| WH
+    MB -->|"JDBC / SQL\n:5432"| PG
+
+    PG --- PGV
+    RD --- RDV
+    MB --- MBV
+    BE --- TMP
+    BE -.->|"читает"| ENV
+
+    style Host fill:#f5f5f5,stroke:#757575
+    style DC fill:#E8EAF6,stroke:#3949AB
+    style FrontendGroup fill:#E3F2FD,stroke:#1565C0
+    style BackendGroup fill:#E8F5E9,stroke:#2E7D32
+    style WhisperGroup fill:#FFF9C4,stroke:#F57F17
+    style DBGroup fill:#FCE4EC,stroke:#880E4F
+    style AnalyticsGroup fill:#F3E5F5,stroke:#6A1B9A
+    style Volumes fill:#FFF3E0,stroke:#E65100

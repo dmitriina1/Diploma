@@ -1,0 +1,48 @@
+stateDiagram-v2
+    direction LR
+
+    [*] --> pending : задача создана\nPOST /api/process-video
+
+    pending --> queued : добавлена в asyncio.Queue
+
+    queued --> downloading : воркер забрал задачу\nprogress = 5%
+
+    downloading --> downloaded : аудио скачано mp3\nprogress = 20%
+
+    downloaded --> transcribing : передано Whisper Service\nprogress = 20→60%
+
+    transcribing --> transcribed : транскрипт получен\nпрогресс = 60%
+
+    transcribed --> extracting : LLM извлекает вопросы\nprogress = 60→85%
+
+    extracting --> extracted : вопросы получены\nфильтрация + дедупликация\nprogress = 85%
+
+    extracted --> saving : сохранение в PostgreSQL\nprogress = 85→100%
+
+    saving --> completed : всё сохранено\nWebSocket уведомление\nprogress = 100%
+
+    completed --> [*]
+
+    downloading --> error : yt-dlp ошибка\nвсе 3 стратегии не сработали
+    transcribing --> error : Whisper таймаут 2 часа\nили сервис недоступен
+    extracting --> error : LLM ошибка\nвсе провайдеры недоступны
+    saving --> error : ошибка PostgreSQL
+
+    error --> [*]
+
+    note right of downloading
+        YouTube: 3 fallback стратегии форматов
+        VK: max 60 мин, chunked download
+        Rutube / OK.ru: yt-dlp universal
+    end note
+
+    note right of transcribing
+        faster-whisper large-v3
+        язык: ru
+        таймаут: 2 часа
+    end note
+
+    note right of extracting
+        Цепочка провайдеров:
+        OpenRouter → Gemini → Groq
+    end note

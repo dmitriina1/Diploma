@@ -1,0 +1,47 @@
+flowchart TD
+    Start(["Входной запрос:\nquery_text, question_id, limit, min_score"])
+
+    Start --> Embed["1. Создать embedding запроса\nSentenceTransformer\nall-MiniLM-L6-v2 (384 dims)"]
+
+    Embed --> CacheCheck{"Индекс FAISS\nв Redis кэше?"}
+    CacheCheck -->|"Да"| LoadCache["Загрузить индекс из Redis\n(pickle десериализация)"]
+    CacheCheck -->|"Нет"| BuildIndex["Загрузить все вопросы из DB\nПостроить FAISS IndexFlatIP\nСохранить в Redis кэш"]
+    LoadCache --> FAISS
+    BuildIndex --> FAISS
+
+    FAISS["2. FAISS поиск\nIndexFlatIP cosine similarity\ntop-100 кандидатов"]
+
+    FAISS --> Loop["3. Для каждого кандидата\nвычислить AHS score"]
+
+    Loop --> Semantic["Семантический балл\nfaiss_score → нормализация → [0..1]\nвес: 0.60"]
+    Loop --> Lexical["Лексический балл\nSequenceMatcher.ratio()\nвес: 0.20"]
+    Loop --> TokenOvl["Токен-перекрытие\nJaccard: |A∩B| / |A∪B|\nвес: 0.12"]
+    Loop --> Meta["Мета-балл\ntopic совпадение + difficulty\nвес: 0.08"]
+
+    Semantic & Lexical & TokenOvl & Meta --> Combine["4. Взвешенное объединение AHS\nhybrid = 0.60×semantic\n+ 0.20×lexical\n+ 0.12×token\n+ 0.08×meta"]
+
+    Combine --> LenAdj["5. Корректировка длины\nhybrid × (0.85 + 0.15 × length_consistency)"]
+
+    LenAdj --> DupCheck{"Жёсткий дубликат?\nlexical ≥ 0.93\nAND semantic ≥ 0.65"}
+    DupCheck -->|"Да"| MarkDup["Пометить hard_duplicate=true\nоставить в результатах"]
+    DupCheck -->|"Нет"| ThreshCheck
+
+    MarkDup --> ThreshCheck{"hybrid_score\n≥ min_threshold?\nbase: 0.60-0.64\nадаптивный"}
+    ThreshCheck -->|"Нет"| Discard["Отбросить кандидата"]
+    ThreshCheck -->|"Да"| Accept["Добавить в результаты"]
+
+    Discard --> NextCandidate{" "}
+    Accept --> NextCandidate
+    NextCandidate -->|"следующий"| Loop
+
+    NextCandidate -->|"все обработаны"| Pruning["6. Обрезка хвоста\nудалить если gap > 0.15\nот максимального score"]
+
+    Pruning --> Sort["7. Сортировка\nпо hybrid_score DESC"]
+    Sort --> Limit["8. Срезать top-N\nпо limit"]
+    Limit --> End(["Результат:\nList с полями:\nquestion_id, score, hard_duplicate,\nquestion_text, topic, difficulty"])
+
+    style Start fill:#4CAF50,color:#fff
+    style End fill:#2196F3,color:#fff
+    style MarkDup fill:#F44336,color:#fff
+    style Combine fill:#9C27B0,color:#fff
+    style Discard fill:#9E9E9E,color:#fff

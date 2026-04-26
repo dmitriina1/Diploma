@@ -1,0 +1,89 @@
+graph TB
+    subgraph Browser["🌐 Браузер пользователя"]
+        Vue["Vue.js SPA\nPrimeVue UI Components\nports 3000 / 3001 / 3010 / 3020"]
+    end
+
+    subgraph Docker["🐳 Docker Compose Network"]
+
+        subgraph Backend["Backend Container :8000"]
+            FastAPI["FastAPI Application\nmain_new.py"]
+
+            subgraph APILayer["API Layer"]
+                AuthR["/api/auth/*\nJWT авторизация"]
+                PubR["/api/questions/*\nПубличные вопросы"]
+                AdmR["/api/admin/*\nАдмин панель"]
+                ProcR["/api/process-video\nЗапуск обработки"]
+                StatR["/api/task/* + WS\nСтатус и прогресс"]
+            end
+
+            subgraph Services["Services Layer"]
+                TaskQ["TaskRuntime\nasyncio.Queue + воркер"]
+                WSMgr["ConnectionManager\nWebSocket broadcast"]
+                Simil["QuestionSimilaritySearch\nFAISS + SentenceTransformer"]
+                ChatBot["InterviewChatbot\nLLM сессии"]
+                HHSvc["HHSkillsSyncService\n24h расписание"]
+                VDL["VideoDownloader\nyt-dlp мульти-платформа"]
+            end
+
+            subgraph CoreLayer["Core Layer"]
+                Cfg["Config\nenv vars"]
+                DBP["DBPool\nasyncpg pool"]
+            end
+        end
+
+        subgraph WhisperSvc["Whisper Service Container :8001"]
+            FW["faster-whisper\nWhisper large-v3\nREST API"]
+        end
+
+        subgraph DataLayer["Data Layer"]
+            PG[("PostgreSQL :5432\n20+ таблиц")]
+            RD[("Redis :6379\nкэш + задачи")]
+        end
+
+        subgraph Analytics["Analytics Container :3035"]
+            MB["Metabase\nBI дашборды"]
+        end
+    end
+
+    subgraph External["☁️ Внешние API"]
+        YT["YouTube\nyt-dlp"]
+        VK["VK Video\nyt-dlp"]
+        RT["Rutube / OK.ru\nyt-dlp"]
+        HH["HH.ru API\nвакансии"]
+        OR["OpenRouter\ngpt-4o-mini"]
+        GEM["Google Gemini\nAPI"]
+        GRQ["Groq\nllama-3.1-70b"]
+    end
+
+    Vue -->|"HTTP REST + WebSocket"| FastAPI
+    FastAPI --> APILayer
+    APILayer --> Services
+    Services --> CoreLayer
+
+    TaskQ --> VDL
+    TaskQ --> WSMgr
+    VDL -->|"HTTP POST /transcribe-path"| FW
+    TaskQ -->|"LLM запрос"| OR
+    TaskQ -->|"LLM fallback"| GEM
+    TaskQ -->|"LLM fallback"| GRQ
+    ChatBot --> OR
+
+    FastAPI --> PG
+    FastAPI --> RD
+    Simil --> PG
+    Simil --> RD
+    DBP --> PG
+
+    HHSvc --> HH
+    VDL --> YT
+    VDL --> VK
+    VDL --> RT
+
+    MB --> PG
+
+    style Browser fill:#E3F2FD,stroke:#1565C0
+    style Docker fill:#F3E5F5,stroke:#6A1B9A
+    style External fill:#FFF3E0,stroke:#E65100
+    style Backend fill:#E8F5E9,stroke:#2E7D32
+    style WhisperSvc fill:#FFF9C4,stroke:#F57F17
+    style DataLayer fill:#FCE4EC,stroke:#880E4F

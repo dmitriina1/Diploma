@@ -1,0 +1,70 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент
+    participant API as FastAPI Backend
+    participant TR as TaskRuntime
+    participant Redis as Redis
+    participant WS as WebSocket Manager
+    participant VD as VideoDownloader
+    participant WO as WhisperOrchestrator
+    participant WW as WhisperWorker
+    participant LLM as LLM API
+    participant DB as PostgreSQL
+
+    Client->>API: POST /api/process-video {url, topic, level}
+    API->>Redis: SET task:{id} {status: pending, progress: 0}
+    API->>DB: INSERT processing_tasks (id, url, status=pending)
+    API->>TR: enqueue({task_id, url, topic, level, kind=video})
+    API-->>Client: {task_id, status: "started"}
+
+    Note over TR,WS: Воркер забирает задачу из asyncio.Queue
+
+    TR->>Redis: SET progress=5, step=downloading
+    TR->>WS: send_progress(client_id, {progress: 5})
+    WS-->>Client: WS {status: downloading, progress: 5}
+
+    TR->>VD: download_video_audio(url, task_id)
+    VD->>VD: detect_platform(url)
+    Note over VD: YouTube: 3 стратегии форматов
+    VD->>VD: yt-dlp стратегия 1 — bestaudio/best
+    alt Формат недоступен
+        VD->>VD: yt-dlp стратегия 2 — best[acodec!=none]
+        VD->>VD: yt-dlp стратегия 3 — worstaudio/worst
+    end
+    VD-->>TR: {audio_path, title, subtitles, duration, platform}
+
+    TR->>Redis: SET progress=20, step=downloaded
+    TR->>WS: send_progress(client_id, {progress: 20})
+
+    TR->>WO: transcribe_audio(audio_path, task_id, lang=ru)
+    WO->>WO: get_available_worker()
+    WO->>WW: POST /transcribe-path?audio_path=...&language=ru
+    Note over WW: faster-whisper large-v3, таймаут 2 часа
+    WW-->>WO: {text, segments[{start, end, text}]}
+    WO-->>TR: транскрипт + сегменты с тайм-кодами
+
+    TR->>Redis: SET progress=60, step=transcribed
+    TR->>WS: send_progress(client_id, {progress: 60})
+
+    TR->>LLM: POST extract_questions_from_transcript(transcript)
+    Note over LLM: Цепочка: OpenRouter → Gemini → Groq
+    LLM-->>TR: [{question, topic, difficulty, timecode}]
+    TR->>TR: filter_low_quality_questions()
+    TR->>TR: deduplicate_questions()
+
+    TR->>Redis: SET progress=85, step=extracted
+    TR->>WS: send_progress(client_id, {progress: 85})
+
+    TR->>DB: INSERT processed_videos (video_id, url, title, platform)
+    loop Для каждого вопроса
+        TR->>DB: INSERT/LINK questions (upsert)
+        TR->>DB: INSERT question_video (question_id, video_id)
+        TR->>DB: INSERT question_timecodes (question_id, video_id, timecode)
+    end
+    TR->>TR: invalidate_similarity_cache()
+    TR->>DB: UPDATE processing_tasks SET status=completed
+    TR->>Redis: SET progress=100, status=completed
+    TR->>WS: send_progress(client_id, {status: completed, count: N})
+    WS-->>Client: WS {type: completed, questions_count: N}
+
+    TR->>TR: cleanup_temp_files(audio_path)

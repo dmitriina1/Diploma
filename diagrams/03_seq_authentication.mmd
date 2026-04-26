@@ -1,0 +1,60 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент
+    participant API as FastAPI Backend
+    participant Auth as auth.py
+    participant DB as PostgreSQL
+
+    Note over Client,DB: ── Регистрация ──────────────────────────────────
+    Client->>API: POST /api/auth/register {username, password, display_name}
+    API->>Auth: hash_password(password)
+    Auth-->>API: bcrypt hash
+    API->>DB: INSERT users (username, password_hash, role=user, is_active=true)
+    DB-->>API: user_id
+    API->>Auth: create_access_token({sub: username, id: user_id, role: user})
+    Auth-->>API: JWT (HS256, exp=24h)
+    API-->>Client: {access_token, token_type: bearer, user: UserInfo}
+
+    Note over Client,DB: ── Вход ─────────────────────────────────────────
+    Client->>API: POST /api/auth/login {username, password}
+    API->>DB: SELECT * FROM users WHERE username=?
+    DB-->>API: user record (id, username, password_hash, role, is_active)
+    alt is_active = false
+        API-->>Client: 403 Аккаунт деактивирован
+    else is_active = true
+        API->>Auth: verify_password(password, password_hash)
+        alt Пароль верный
+            Auth-->>API: true
+            API->>Auth: create_access_token(...)
+            Auth-->>API: JWT token
+            API->>DB: UPDATE users SET last_login=NOW() WHERE id=?
+            API-->>Client: {access_token, token_type: bearer, user: UserInfo}
+        else Пароль неверный
+            Auth-->>API: false
+            API-->>Client: 401 Неверные учётные данные
+        end
+    end
+
+    Note over Client,DB: ── Защищённый запрос ────────────────────────────
+    Client->>API: GET /api/auth/me [Authorization: Bearer token]
+    API->>Auth: decode_token(token)
+    alt Токен валиден
+        Auth-->>API: {sub: username, id: user_id, role: role}
+        API->>DB: SELECT * FROM users WHERE id=?
+        DB-->>API: user record
+        API-->>Client: UserInfo {id, username, display_name, role, avatar_url}
+    else Токен истёк или невалиден
+        Auth-->>API: raise HTTPException 401
+        API-->>Client: 401 Token expired or invalid
+    end
+
+    Note over Client,DB: ── Проверка роли администратора ──────────────────
+    Client->>API: GET /api/admin/stats [Authorization: Bearer token]
+    API->>Auth: require_admin(token)
+    alt role = admin
+        Auth-->>API: UserInfo
+        API-->>Client: AdminStats
+    else role = user
+        Auth-->>API: raise HTTPException 403
+        API-->>Client: 403 Недостаточно прав
+    end

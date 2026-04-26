@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    actor Client as Клиент
+    participant API as FastAPI Backend
+    participant Bot as InterviewChatbot
+    participant DB as PostgreSQL
+    participant LLM as LLM API
+
+    Note over Client,LLM: ── Начало сессии ─────────────────────────────────
+    Client->>API: POST /api/interview/start {topic, difficulty}
+    API->>Bot: create_session(topic, difficulty)
+    Bot->>Bot: _build_system_prompt(topic, difficulty)
+    Bot->>DB: SELECT questions WHERE topic LIKE ? LIMIT 5
+    DB-->>Bot: relevant_questions[]
+    Bot->>DB: INSERT interview_chat_sessions (topic, difficulty, messages=[], status=active)
+    DB-->>Bot: session_id
+    Bot->>LLM: messages=[{role: system, ...}, {role: user, content: start}]
+    Note over LLM: OpenRouter gpt-4o-mini (temp=0.7)<br/>→ Groq llama-3.1-70b<br/>→ Gemini fallback
+    LLM-->>Bot: первый вопрос интервью
+    Bot->>DB: UPDATE interview_chat_sessions SET messages=[...]
+    API-->>Client: {session_id, question, topic, difficulty}
+
+    Note over Client,LLM: ── Цикл вопрос-ответ ────────────────────────────
+    loop Диалог (N вопросов)
+        Client->>API: POST /api/interview/message {session_id, user_message}
+        API->>Bot: process_message(session_id, user_message)
+        Bot->>DB: SELECT interview_chat_sessions WHERE id=?
+        DB-->>Bot: session {messages JSON, topic, difficulty}
+        Bot->>Bot: Добавить user_message в messages
+        Bot->>LLM: messages (вся история + ответ пользователя)
+        LLM-->>Bot: {feedback, follow_up_question}
+        Bot->>Bot: Добавить assistant response в messages
+        Bot->>DB: UPDATE interview_chat_sessions SET messages=[...], updated_at=NOW()
+        API-->>Client: {response, next_question}
+    end
+
+    Note over Client,LLM: ── Завершение сессии ─────────────────────────────
+    Client->>API: POST /api/interview/end {session_id}
+    API->>Bot: end_session(session_id)
+    Bot->>DB: SELECT interview_chat_sessions WHERE id=?
+    DB-->>Bot: full session history
+    Bot->>LLM: Суммаризируй сессию (вопросы, ответы, оценка)
+    LLM-->>Bot: summary text
+    Bot->>DB: UPDATE SET status=completed, summary=...
+    API-->>Client: {summary, total_messages, topic, difficulty}
+
+    Note over Client,LLM: ── Fallback при недоступности LLM ──────────────
+    opt LLM API недоступен
+        Bot->>Bot: _fallback_question(topic, index)
+        Bot-->>API: вопрос из hardcoded пула (Python/JS/Java/Go/React)
+        API-->>Client: {question, is_fallback: true}
+    end

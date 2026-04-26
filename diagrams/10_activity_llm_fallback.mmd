@@ -1,0 +1,35 @@
+flowchart TD
+    Start(["Запрос к LLM\nextract_questions / generate_answer / chatbot"])
+
+    Start --> CheckProvider{"LLM_PROVIDER?"}
+
+    CheckProvider -->|"auto"| TryOR["Попытка OpenRouter\nmodel: openai/gpt-4o-mini\nmax_tokens=2000, temp=0.3"]
+    CheckProvider -->|"openrouter"| TryOR
+    CheckProvider -->|"gemini"| TryGemini["Попытка Gemini API\nmodel: gemini-pro"]
+    CheckProvider -->|"groq"| TryGroq["Попытка Groq\nmodel: llama-3.1-70b-versatile\nmax_tokens=2000, temp=0.3"]
+
+    TryOR --> OR_OK{"Ответ получен?"}
+    OR_OK -->|"Да"| ParseJSON["Парсинг JSON ответа"]
+    OR_OK -->|"Нет: нет ключа\nrate limit / ошибка 5xx"| TryGemini
+
+    TryGemini --> G_OK{"Ответ получен?"}
+    G_OK -->|"Да"| ParseJSON
+    G_OK -->|"Нет: нет ключа\nrate limit / ошибка 5xx"| TryGroq
+
+    TryGroq --> GR_OK{"Ответ получен?"}
+    GR_OK -->|"Да"| ParseJSON
+    GR_OK -->|"Нет: все провайдеры\nнедоступны"| Fallback
+
+    ParseJSON --> Valid{"JSON валиден\nи содержит вопросы?"}
+    Valid -->|"Да"| Return(["Вернуть список вопросов"])
+    Valid -->|"Нет: пустой список\nили неверный формат"| Fallback
+
+    Fallback{"Тип запроса?"}
+    Fallback -->|"extract_questions"| FallbackEmpty(["Вернуть пустой список\nзадача завершится без вопросов"])
+    Fallback -->|"interview chatbot"| FallbackPool["Выбрать из hardcoded пула\nPython / JS / Java / Go / React\n_fallback_question(topic, index)"]
+    FallbackPool --> ReturnFallback(["Вернуть fallback вопрос\nis_fallback=true"])
+
+    style Start fill:#4CAF50,color:#fff
+    style Return fill:#2196F3,color:#fff
+    style ReturnFallback fill:#FF9800,color:#fff
+    style FallbackEmpty fill:#9E9E9E,color:#fff

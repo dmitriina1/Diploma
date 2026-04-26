@@ -1,0 +1,259 @@
+erDiagram
+
+    users {
+        int id PK
+        varchar username UK
+        varchar password_hash
+        varchar display_name
+        varchar role
+        boolean is_active
+        text avatar_url
+        varchar github_url
+        timestamp created_at
+        timestamp last_login
+    }
+
+    questions {
+        int id PK
+        text question
+        text answer
+        varchar topic
+        varchar difficulty
+        float probability
+        varchar timecode
+        boolean approved
+        varchar source_url
+        varchar video_title
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    processed_videos {
+        int id PK
+        varchar youtube_url UK
+        varchar video_id
+        varchar platform
+        varchar title
+        text transcript
+        int questions_count
+        varchar thumbnail
+        int duration
+        timestamp processed_at
+    }
+
+    question_video {
+        int id PK
+        int question_id FK
+        int video_id FK
+    }
+
+    question_timecodes {
+        int id PK
+        int question_id FK
+        int video_id FK
+        varchar timecode_start
+        int timecode_seconds
+    }
+
+    processing_tasks {
+        uuid id PK
+        varchar youtube_url
+        varchar status
+        int progress
+        varchar current_step
+        jsonb result
+        text error_message
+        varchar client_id
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    bookmarks {
+        int id PK
+        int question_id FK
+        varchar user_session
+        text note
+        timestamp created_at
+    }
+
+    sr_cards {
+        int id PK
+        varchar user_session
+        int question_id FK
+        float easiness_factor
+        float interval_days
+        int repetitions
+        timestamp next_review
+        int last_quality
+        int total_reviews
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    user_answers {
+        int id PK
+        int question_id FK
+        varchar user_session
+        varchar user_name
+        text answer_text
+        int votes
+        boolean is_selected
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    answer_votes {
+        int id PK
+        int answer_id FK
+        varchar user_session
+        varchar vote_type
+        timestamp created_at
+    }
+
+    question_tags {
+        int id PK
+        int question_id FK
+        varchar tag
+    }
+
+    question_views {
+        int id PK
+        int question_id FK
+        varchar user_session
+        text path
+        text referrer
+        timestamp viewed_at
+    }
+
+    feedback {
+        int id PK
+        int question_id FK
+        varchar feedback_type
+        int rating
+        text comment
+        varchar user_session
+        boolean is_resolved
+        text admin_response
+        timestamp created_at
+    }
+
+    user_notes {
+        int id PK
+        int question_id FK
+        varchar user_session
+        text note
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    video_suggestions {
+        int id PK
+        varchar url
+        varchar platform
+        varchar title
+        varchar topic
+        varchar status
+        varchar user_name
+        text comment
+        timestamp created_at
+    }
+
+    mock_interviews {
+        int id PK
+        varchar user_session
+        varchar topic
+        varchar difficulty
+        int total_questions
+        int correct_answers
+        float score
+        jsonb answers
+        timestamp completed_at
+        timestamp created_at
+    }
+
+    interview_chat_sessions {
+        int id PK
+        varchar user_session
+        varchar topic
+        varchar difficulty
+        text messages
+        varchar status
+        text summary
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    professions {
+        int id PK
+        varchar slug UK
+        varchar title
+        varchar icon
+        varchar color
+        int sort_order
+        timestamp created_at
+    }
+
+    profession_topics {
+        int id PK
+        int profession_id FK
+        varchar topic
+    }
+
+    hh_tech_mentions {
+        int id PK
+        varchar profession
+        varchar technology
+        varchar source
+        int vacancy_count
+        int total_vacancies
+        decimal percentage
+        timestamp updated_at
+    }
+
+    hh_sync_runs {
+        int id PK
+        timestamp started_at
+        timestamp finished_at
+        varchar status
+        text details
+    }
+
+    uploaded_videos {
+        int id PK
+        varchar filename
+        varchar original_name
+        bigint file_size
+        varchar topic
+        varchar status
+        varchar task_id
+        timestamp created_at
+    }
+
+    test_assignments {
+        int id PK
+        varchar title
+        text description
+        varchar company
+        varchar profession
+        varchar difficulty
+        text skills
+        varchar link
+        timestamp created_at
+    }
+
+    questions ||--o{ question_video : "связана с"
+    questions ||--o{ question_timecodes : "тайм-код"
+    questions ||--o{ bookmarks : "в закладках"
+    questions ||--o{ sr_cards : "карточка SM-2"
+    questions ||--o{ user_answers : "ответы UGC"
+    questions ||--o{ question_tags : "теги"
+    questions ||--o{ question_views : "просмотры"
+    questions ||--o{ feedback : "отзывы"
+    questions ||--o{ user_notes : "заметки"
+
+    processed_videos ||--o{ question_video : "содержит"
+    processed_videos ||--o{ question_timecodes : "тайм-коды"
+
+    user_answers ||--o{ answer_votes : "голоса"
+
+    professions ||--o{ profession_topics : "темы"
