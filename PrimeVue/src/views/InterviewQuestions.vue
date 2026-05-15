@@ -1,416 +1,87 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="max-w-container iq-page">
-
-      <!-- Header -->
-      <div class="page-top">
-        <div>
-          <p class="eyebrow">Question Library</p>
-          <h1 class="page-heading h-page">{{ pageHeading }}</h1>
-          <p class="page-desc p-muted">Реальные вопросы с IT-собеседований</p>
-        </div>
-        <button v-if="professionSlug" class="btn btn-ghost btn-sm" @click="clearProfession">✕ Сбросить профессию</button>
-      </div>
-
-      <div class="questions-hero card reveal-pop" style="--delay:80ms">
-        <img :src="questionsBanner" alt="Визуал каталога вопросов" class="questions-hero-img" />
-        <div class="questions-hero-copy">
-          <h3>Каталог из реальных интервью</h3>
-          <p>Фильтруйте по технологиям, уровню и сортируйте по вероятности вопроса.</p>
-        </div>
-      </div>
-
-      <!-- Filters -->
-      <div class="filters">
-        <div class="search-wrap">
-          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input v-model="search" placeholder="Поиск вопроса..." class="input search-input" />
-        </div>
-        <select v-model="selectedTopic" class="input filter-select">
-          <option value="">Все технологии</option>
-          <option v-for="t in topics" :key="t" :value="t">{{ t }}</option>
-        </select>
-        <select v-model="selectedDifficulty" class="input filter-select">
-          <option value="">Любая сложность</option>
-          <option value="junior">Junior</option>
-          <option value="middle">Middle</option>
-          <option value="senior">Senior</option>
-        </select>
-        <select v-model="sortBy" class="input filter-select filter-sort">
-          <option value="probability">По вероятности</option>
-          <option value="date">По дате</option>
-          <option value="alpha">По алфавиту</option>
-        </select>
-      </div>
-
-      <!-- Count -->
-      <div class="list-meta">
-        <span class="count">{{ filteredQuestions.length }} вопросов</span>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="q-list">
-        <div v-for="i in 8" :key="i" class="q-row card">
-          <div class="q-body" style="width:100%">
-            <div class="skeleton-line lg" style="margin-bottom:.55rem"></div>
-            <div class="skeleton-line" style="width:65%"></div>
+    <main class="screen narrow catalog">
+      <section class="page-title">
+        <div class="title-left">
+          <div class="icon-box"><i class="pi pi-comments"></i></div>
+          <div>
+            <h1>Каталог вопросов</h1>
+            <p>Фильтруйте по технологиям, уровню и сложности, чтобы найти подходящие вопросы для подготовки.</p>
           </div>
         </div>
+      </section>
+
+      <div class="toolbar">
+        <input class="field search" placeholder="Поиск вопросов..." />
+        <select class="field"><option>Все технологии</option></select>
+        <select class="field"><option>Любая сложность</option></select>
+        <select class="field"><option>По встречаемости</option></select>
       </div>
 
-      <div v-else-if="loadError" class="state-panel">
-        <h3>Ошибка загрузки</h3>
-        <p>{{ loadError }}</p>
-        <button class="btn btn-secondary btn-sm" style="margin-top:.7rem" @click="loadQuestions">Повторить</button>
+      <div class="meta-row">
+        <span>12 458 вопросов найдено</span>
+        <span>Обновлено сегодня <i class="dot"></i></span>
       </div>
 
-      <!-- Empty -->
-      <div v-else-if="filteredQuestions.length === 0" class="empty-state">
-        <p>Вопросы не найдены</p>
-        <span>Попробуйте изменить фильтры</span>
-      </div>
-
-      <!-- List -->
-      <div v-else class="q-list stagger">
-        <router-link
-          v-for="q in paginatedQuestions" :key="q.id"
-          :to="`/question/${q.id}`"
-          class="q-row card interactive-card"
-        >
-          <div class="q-body">
-            <p class="q-text">{{ q.question }}</p>
-          </div>
-
-          <div class="q-meta">
-            <span class="badge badge-info">{{ q.topic }}</span>
-            <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
-            <span class="q-prob">{{ (q.probability||0).toFixed(0) }}%</span>
-          </div>
-
-          <svg class="q-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      <section class="question-list">
+        <router-link v-for="q in questions" :key="q.id" :to="`/question/${q.id}`" class="question-row glass">
+          <span class="q-icon"><i :class="`pi ${q.icon}`"></i></span>
+          <span class="q-main">
+            <strong>{{ q.title }}</strong>
+            <span><b class="tag">{{ q.topic }}</b><b :class="`tag ${q.level}`">{{ q.level }}</b></span>
+          </span>
+          <span class="q-score">
+            <em>{{ q.frequency }}</em>
+            <strong>{{ q.probability }}%</strong>
+          </span>
+          <i class="pi pi-angle-right chevron"></i>
         </router-link>
-      </div>
-
-      <!-- Pagination -->
-      <div v-if="totalPages > 1" class="pagination">
-        <button class="btn btn-secondary btn-sm" :disabled="page <= 1" @click="page--">←</button>
-        <span class="pag-info">{{ page }} / {{ totalPages }}</span>
-        <button class="btn btn-secondary btn-sm" :disabled="page >= totalPages" @click="page++">→</button>
-      </div>
-    </div>
-    <AppFooter />
+      </section>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
-import api from '../api/client'
-import questionsBanner from '../assets/media/hybrid/questions-banner.svg'
-
-const route = useRoute()
-const loading = ref(true)
-const questions = ref([])
-const topics = ref([])
-const selectedTopic = ref('')
-const selectedDifficulty = ref('')
-const search = ref('')
-const sortBy = ref('probability')
-const page = ref(1)
-const pageSize = ref(20)
-const professionSlug = ref(null)
-const professionTitle = ref('')
-const loadError = ref('')
-
-const pageHeading = computed(() => professionTitle.value ? `Вопросы: ${professionTitle.value}` : 'Вопросы с собеседований')
-
-const clearProfession = () => { professionSlug.value = null; professionTitle.value = ''; loadQuestions() }
-
-const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
-
-const filteredQuestions = computed(() => {
-  let r = questions.value.filter(q => {
-    if (selectedTopic.value && q.topic !== selectedTopic.value) return false
-    if (selectedDifficulty.value && q.difficulty !== selectedDifficulty.value) return false
-    if (search.value && !q.question.toLowerCase().includes(search.value.toLowerCase())) return false
-    return true
-  })
-  if (sortBy.value === 'probability') r.sort((a, b) => (b.probability||0) - (a.probability||0))
-  else if (sortBy.value === 'date') r.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  else if (sortBy.value === 'alpha') r.sort((a, b) => a.question.localeCompare(b.question, 'ru'))
-  return r
-})
-
-const totalPages = computed(() => Math.ceil(filteredQuestions.value.length / pageSize.value))
-const paginatedQuestions = computed(() => filteredQuestions.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-
-watch([selectedTopic, selectedDifficulty, search, sortBy], () => { page.value = 1 })
-watch(() => route.query.topic, (t) => { if (t) selectedTopic.value = t })
-watch(() => route.query.profession, (p) => { if (p) { professionSlug.value = p; professionTitle.value = route.query.profTitle || p; loadQuestions() } })
-
-const loadQuestions = async () => {
-  loading.value = true
-  loadError.value = ''
-  try {
-    const r = professionSlug.value
-      ? await api.getProfessionQuestions(professionSlug.value, { limit: 1000 })
-      : await api.getQuestions({ status: 'approved', limit: 1000 })
-    questions.value = r.data.questions || r.data || []
-    topics.value = [...new Set(questions.value.map(q => q.topic).filter(Boolean))].sort()
-  } catch (e) { console.error(e); loadError.value = 'Не удалось получить вопросы. Проверь соединение с сервером.' }
-  loading.value = false
-}
-
-onMounted(async () => {
-  if (route.query.topic) selectedTopic.value = route.query.topic
-  if (route.query.profession) { professionSlug.value = route.query.profession; professionTitle.value = route.query.profTitle || route.query.profession }
-  await loadQuestions()
-})
+import { questions } from '../data/mock'
 </script>
 
 <style scoped>
-.iq-page {
-  padding-top: 2.15rem;
-  padding-bottom: 3rem;
-}
+.catalog { padding-top: 48px; }
+.title-left { display: flex; gap: 20px; align-items: center; }
+.title-left .icon-box { width: 72px; height: 72px; }
+.toolbar { grid-template-columns: 2fr .96fr .9fr .78fr; margin-bottom: 24px; }
+.search { padding-left: 62px; background-image: none; position: relative; }
 
-.page-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 1.5rem;
-  gap: 1rem;
-}
-
-.eyebrow {
-  margin: 0 0 .28rem;
-  font-family: var(--app-font-mono);
-  color: var(--text-secondary);
-  font-size: .76rem;
-  letter-spacing: .03em;
-}
-
-.page-heading {
-  font-size: clamp(1.7rem, 2.8vw, 2.2rem);
-  font-weight: 700;
-  letter-spacing: -.02em;
-}
-
-.page-desc {
-  color: var(--text-secondary);
-  font-size: .97rem;
-  margin-top: .3rem;
-}
-
-.page-top { position: relative; }
-.page-top::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -10px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c-brand) 60%, transparent), transparent);
-}
-
-.questions-hero {
-  margin-bottom: 1.1rem;
-  position: relative;
-  overflow: hidden;
-  padding: 0;
-  border-radius: 10px;
-  border-color: color-mix(in srgb, var(--c-border-h) 82%, transparent);
-}
-
-.questions-hero-img {
-  width: 100%;
-  height: clamp(120px, 15vw, 188px);
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  opacity: .92;
-}
-
-.questions-hero-copy {
-  position: absolute;
-  left: 1rem;
-  right: 1rem;
-  bottom: .85rem;
-  padding: .65rem .8rem;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--c-bg-1) 70%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c-border) 75%, transparent);
-  backdrop-filter: blur(6px);
-}
-
-.questions-hero-copy h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.questions-hero-copy p {
-  margin: .18rem 0 0;
-  color: var(--c-text-3);
-  font-size: .84rem;
-}
-
-.filters {
+.question-list { display: grid; gap: 8px; }
+.question-row {
+  min-height: 104px;
   display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 1fr));
-  gap: .55rem;
-  margin-bottom: 1.1rem;
-  position: sticky;
-  top: calc(var(--nav-h) + .55rem);
-  z-index: 20;
-  background: color-mix(in srgb, var(--c-bg-1) 68%, transparent);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--c-border-h) 78%, transparent);
-  border-radius: 10px;
-  padding: .55rem;
+  grid-template-columns: 76px 1fr 210px 34px;
+  align-items: center;
+  padding: 0 32px 0 24px;
+  background: linear-gradient(90deg, rgba(10, 42, 67, .78), rgba(8, 31, 54, .84));
 }
-.search-wrap {
-  position: relative;
-  min-width: 0;
-}
-.search-icon {
-  position: absolute;
-  left: .7rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--c-text-4);
-  pointer-events: none;
-}
-.search-input {
-  padding-left: 2.2rem;
-  min-width: 0;
-}
-.filter-select { 
-  min-width: 0;
-  max-width: none;
-  width: 100%;
-  font-size: .92rem;
-}
-.filter-sort { 
-  min-width: 0;
-  max-width: none;
-}
-
-.list-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
-.count { font-size: .88rem; color: var(--c-text-3); }
-
-.center-block { display: flex; justify-content: center; padding: 3rem; }
-.empty-state { text-align: center; padding: 4rem; color: var(--c-text-3); }
-.empty-state p { font-size: 1.05rem; margin-bottom: .25rem; }
-.empty-state span { font-size: .85rem; color: var(--c-text-4); }
-
-/* Question list */
-.q-list { display: flex; flex-direction: column; gap: .4rem; }
-.q-row {
+.q-icon {
+  width: 62px;
+  height: 62px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: .85rem;
-  padding: .86rem .95rem;
-  text-decoration: none;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  border-radius: 10px;
-  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
+  place-items: center;
+  border: 1px solid rgba(18, 230, 209, .18);
+  border-radius: var(--radius);
+  color: var(--cyan);
+  font-size: 28px;
+  background: rgba(0, 229, 209, .035);
 }
-.q-row::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 2px;
-  background: linear-gradient(180deg, var(--c-brand), var(--c-accent));
-  opacity: 0;
-  transition: opacity var(--dur);
-}
-.q-row:hover {
-  background: var(--surface-soft);
-  border-color: var(--c-border-h);
-  transform: translateY(-1px);
-}
-.q-row:hover::before { opacity: 1; }
-.q-body { min-width: 0; }
-.q-text {
-  font-size: .95rem;
-  color: var(--c-text);
-  line-height: 1.42;
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+.q-main strong { display: block; font-size: 20px; margin-bottom: 12px; }
+.q-main span { display: flex; gap: 10px; }
+.q-score em { display: block; color: var(--cyan); font-style: normal; font-size: 16px; margin-bottom: 4px; }
+.q-score strong { font-size: 30px; }
+.chevron { color: var(--muted); font-size: 28px; }
 
-.q-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: .34rem;
-  min-width: max-content;
-  white-space: nowrap;
-}
-
-.q-prob {
-  font-size: .76rem;
-  color: var(--c-brand-h);
-  background: var(--c-brand-bg);
-  border: 1px solid color-mix(in srgb, var(--c-brand) 35%, transparent);
-  border-radius: 999px;
-  padding: .1rem .46rem;
-  font-weight: 700;
-}
-.q-arrow { color: var(--c-text-4); flex-shrink: 0; opacity: 0; transition: opacity var(--dur); }
-.q-row:hover .q-arrow { opacity: 1; }
-
-.pagination { display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1.5rem; }
-.pag-info { font-size: .85rem; color: var(--c-text-3); font-weight: 500; }
-
-@media (max-width: 640px) {
-  .questions-hero-copy {
-    position: static;
-    margin: .55rem;
-  }
-
-  .filters {
-    grid-template-columns: 1fr;
-    top: calc(var(--nav-h) + .45rem);
-  }
-
-  .q-row {
-    grid-template-columns: 1fr;
-    gap: .58rem;
-  }
-
-  .q-meta {
-    width: 100%;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    min-width: 0;
-  }
-
-  .q-text {
-    -webkit-line-clamp: 3;
-  }
-
-  .q-arrow {
-    display: none;
-  }
-
-  .filter-select, .filter-sort {
-    min-width: auto;
-    max-width: none;
-    width: 100%;
-  }
-  .page-top { flex-direction: column; }
+@media (max-width: 900px) {
+  .question-row { grid-template-columns: 62px 1fr; gap: 14px; padding: 18px; }
+  .q-score, .chevron { display: none; }
 }
 </style>

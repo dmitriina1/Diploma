@@ -39,14 +39,6 @@ const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title || 'InterviewHub'
-  const token = localStorage.getItem('auth_token')
-  const user = JSON.parse(localStorage.getItem('auth_user') || 'null')
-  const isAuth = !!token && !!user
-  const isAdmin = user?.role === 'admin'
-
-  if (to.meta.guest && isAuth) return next('/')
-  if (to.meta.requiresAuth && !isAuth) return next({ name: 'Login', query: { redirect: to.fullPath } })
-  if (to.meta.requiresAdmin && !isAdmin) return next({ name: 'Login', query: { redirect: to.fullPath } })
   next()
 })
 

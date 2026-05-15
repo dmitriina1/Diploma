@@ -1,218 +1,125 @@
 <template>
-  <div class="page">
+  <div class="page recordings-page">
     <NavBar />
-    <div class="container-lg" style="padding-top:2rem;padding-bottom:3rem">
-      <h1 class="heading h-page"><BrandIcon name="recordings" :size="34" /> Записи собеседований</h1>
-      <p class="sub">Реальные записи IT-собеседований с извлечёнными вопросами</p>
-
-      <!-- Filters -->
-      <div class="filters">
-        <select v-model="selectedPlatform" class="input">
-          <option value="">Все платформы</option>
-          <option v-for="p in platforms" :key="p" :value="p">{{ p }}</option>
-        </select>
-        <div class="search-wrap">
-          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input v-model="search" class="input search-input" placeholder="Поиск по названию..." />
+    <main class="screen recordings">
+      <section class="page-title">
+        <div>
+          <h1>Загруженные собеседования</h1>
+          <p>Ваши записи интервью и результаты анализа</p>
         </div>
-      </div>
+        <button class="btn primary"><i class="pi pi-cloud-upload"></i>Загрузить запись</button>
+      </section>
 
-      <div v-if="loading" class="grid">
-        <div v-for="i in 6" :key="i" class="skeleton-card">
-          <div class="skeleton-line lg" style="margin-bottom:.55rem"></div>
-          <div class="skeleton-line" style="width:50%;margin-bottom:.85rem"></div>
-          <div class="skeleton-line" style="width:75%"></div>
-        </div>
-      </div>
+      <div class="records-grid">
+        <aside>
+          <input class="field" placeholder="Поиск по собеседованиям..." />
+          <div class="side-head">Название собеседования</div>
+          <button v-for="rec in recordings" :key="rec.id" class="rec-item" @click="modalOpen = true">
+            <span><i class="pi pi-play"></i></span>
+            <b>{{ rec.title }}</b>
+            <small>{{ rec.role }}</small>
+          </button>
+        </aside>
 
-      <StatePanel
-        v-else-if="loadError"
-        icon="warning"
-        type="error"
-        title="Не удалось загрузить записи"
-        :description="loadError"
-      >
-        <button class="btn btn-secondary btn-sm" @click="reload">Повторить</button>
-      </StatePanel>
-
-      <StatePanel
-        v-else-if="filtered.length === 0"
-        icon="empty"
-        title="Записи не найдены"
-        description="Измени фильтры или попробуй другой поисковый запрос"
-      />
-
-      <div v-else class="grid">
-        <div v-for="v in filtered" :key="v.id" class="rec-card card card-hover">
-          <div class="rec-top">
-            <span class="badge badge-info">{{ v.platform }}</span>
-            <span class="rec-date">{{ fmtDate(v.processed_at || v.created_at) }}</span>
+        <section class="glass rec-table">
+          <div class="table-row table-head">
+            <span></span><span>Длительность</span><span>Дата <i class="pi pi-sort-alt"></i></span><span></span>
           </div>
-          <h3>{{ v.title || 'Без названия' }}</h3>
-          <p class="rec-meta">{{ videoQuestionCount(v) }} вопросов</p>
-          <div class="rec-actions">
-            <a v-if="v.youtube_url || v.url" :href="v.youtube_url || v.url" target="_blank" class="btn btn-ghost btn-sm">Смотреть</a>
-            <button class="btn btn-secondary btn-sm" @click="viewQuestions(v)">Вопросы</button>
+          <div v-for="rec in recordings" :key="rec.id" class="table-row">
+            <span></span><span>{{ rec.duration }}</span><span>{{ rec.date }}</span><button>...</button>
+          </div>
+          <footer><button class="page-arrow"><i class="pi pi-angle-left"></i></button><b>1</b><span>2</span><span>3</span><span>...</span><span>8</span><button class="page-arrow"><i class="pi pi-angle-right"></i></button></footer>
+        </section>
+      </div>
+    </main>
+
+    <div v-if="modalOpen" class="modal-layer" @click.self="modalOpen = false">
+      <section class="modal neon-border">
+        <button class="close" @click="modalOpen = false"><i class="pi pi-times"></i></button>
+        <h2>Собеседование на Backend Developer</h2>
+        <p>Запись от 23 мая 2025 <span>•</span> 54:32 <span>•</span> 12 вопросов</p>
+        <div class="modal-list">
+          <div v-for="q in extractedQuestions" :key="q.id">
+            <b>{{ q.id }}</b>
+            <span>{{ q.title }}</span>
+            <em :class="`tag ${q.level}`">{{ q.level }}</em>
+            <i class="pi pi-angle-down"></i>
           </div>
         </div>
-      </div>
-
-      <!-- Questions Dialog -->
-      <Teleport to="body">
-        <div v-if="showDialog" class="overlay" @click.self="showDialog = false">
-          <div class="dialog card">
-            <div class="dialog-head">
-              <h3>{{ selectedVideo?.title || 'Вопросы' }}</h3>
-              <button class="btn btn-ghost btn-icon btn-sm" @click="showDialog = false">×</button>
-            </div>
-            <div v-if="videoQuestions.length === 0" class="dialog-empty">Нет извлечённых вопросов</div>
-            <div v-else class="q-list">
-              <div v-for="(q, i) in videoQuestions" :key="q.id" class="q-item">
-                <span class="q-num">{{ i + 1 }}</span>
-                <router-link :to="'/question/' + q.id" class="q-link" @click="showDialog = false">{{ q.question }}</router-link>
-                <div class="q-meta">
-                  <span class="badge" :class="diffBadge(q.difficulty)">{{ q.difficulty }}</span>
-                  <span v-if="q.timecode" class="tc">{{ q.timecode }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Teleport>
+        <footer><span><i class="pi pi-sparkles"></i>Вопросы выделены и сгенерированы AI. Возможны неточности.</span><button class="btn small"><i class="pi pi-copy"></i>Скопировать список</button></footer>
+      </section>
     </div>
-    <AppFooter />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
-import BrandIcon from '../components/BrandIcon.vue'
-import StatePanel from '../components/StatePanel.vue'
-import api from '../api/client'
+import { recordings, extractedQuestions } from '../data/mock'
 
-const loading = ref(true)
-const videos = ref([])
-const search = ref('')
-const selectedPlatform = ref('')
-const platforms = ['YouTube', 'RuTube', 'VK']
-const showDialog = ref(false)
-const selectedVideo = ref(null)
-const videoQuestions = ref([])
-const loadError = ref('')
-
-const filtered = computed(() => videos.value.filter(v => {
-  const ms = !search.value || (v.title || '').toLowerCase().includes(search.value.toLowerCase())
-  const mp = !selectedPlatform.value || v.platform === selectedPlatform.value
-  return ms && mp
-}))
-
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('ru-RU', { year: 'numeric', month: 'short', day: 'numeric' }) : ''
-const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
-const videoQuestionCount = (v) => {
-  const raw = v?.question_count ?? v?.questions_count ?? v?.linked_questions ?? 0
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : 0
-}
-
-const viewQuestions = async (v) => {
-  selectedVideo.value = v; videoQuestions.value = []; showDialog.value = true
-  try { const r = await api.getVideoQuestions(v.id); videoQuestions.value = r.data?.questions || [] } catch (e) { console.error(e) }
-}
-
-const reload = async () => {
-  loading.value = true
-  loadError.value = ''
-  try { const r = await api.getProcessedVideos(); videos.value = r.data?.videos || [] }
-  catch (e) { console.error(e); loadError.value = 'Сервис записей временно недоступен.' }
-  loading.value = false
-}
-
-onMounted(async () => {
-  await reload()
-})
+const modalOpen = ref(true)
 </script>
 
 <style scoped>
-.heading { display:flex; align-items:center; justify-content:center; gap:.55rem; margin-bottom: .35rem; }
-.sub { text-align: center; color: var(--c-text-3); font-size: .94rem; margin-bottom: 1.5rem; }
-.filters { display: flex; gap: .75rem; justify-content: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.filters .input { min-width: 180px; }
-.search-wrap { position: relative; min-width: 240px; }
-.search-icon { position: absolute; left: .65rem; top: 50%; transform: translateY(-50%); color: var(--c-text-4); pointer-events: none; }
-.search-input { padding-left: 2.1rem; width: 100%; }
-.center-block { display: flex; justify-content: center; padding: 3rem; }
-.empty-state { text-align: center; padding: 3rem; color: var(--c-text-4); }
-
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-.rec-card { padding: 1.25rem; display: flex; flex-direction: column; }
-.rec-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; }
-.rec-date { color: var(--c-text-4); font-size: .84rem; }
-.rec-card h3 { font-size: 1.06rem; font-weight: 600; margin-bottom: .35rem; line-height: 1.35; }
-.rec-meta { color: var(--c-text-3); font-size: .88rem; margin-bottom: .75rem; flex: 1; }
-.rec-actions { display: flex; gap: .4rem; }
-
-/* Dialog */
-.overlay {
-  position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center; padding: 1.5rem;
-}
-.dialog { width: 100%; max-width: 980px; max-height: 80vh; overflow-y: auto; padding: 1.25rem; }
-.dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.dialog-head h3 { font-size: 1.1rem; font-weight: 600; }
-.dialog-empty { text-align: center; padding: 2rem; color: var(--c-text-4); }
-.q-list { display: flex; flex-direction: column; gap: .6rem; }
-.q-item {
+.recordings { padding-top: 34px; }
+.records-grid { display: grid; grid-template-columns: 470px 1fr; gap: 42px; }
+aside .field { height: 56px; margin-bottom: 20px; }
+.side-head { color: var(--soft); text-transform: uppercase; font-size: 14px; font-weight: 800; margin: 0 0 18px 90px; }
+.rec-item {
+  width: 100%;
+  min-height: 82px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: .65rem;
-  padding: .55rem .45rem;
-  border: 1px solid var(--c-border);
+  grid-template-columns: 58px 1fr;
+  column-gap: 18px;
+  align-items: center;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(83, 121, 148, .12);
+  background: transparent;
+  color: var(--text);
+  padding: 0 0 0 18px;
+}
+.rec-item span { grid-row: span 2; width: 48px; height: 48px; display: grid; place-items: center; border: 1px solid rgba(18, 230, 209, .22); border-radius: var(--radius); color: var(--cyan); }
+.rec-item b { font-size: 18px; }
+.rec-item small { color: var(--muted); font-size: 16px; }
+.rec-table { margin-top: 70px; }
+.rec-table .table-row { grid-template-columns: 1fr 170px 170px 80px; min-height: 80px; padding: 0 26px; color: var(--muted); }
+.rec-table button { background: none; border: 0; color: var(--muted); font-size: 24px; }
+.rec-table footer { height: 90px; display: flex; justify-content: center; align-items: center; gap: 26px; color: var(--muted); }
+.rec-table footer b { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; background: rgba(18, 230, 209, .28); color: var(--cyan); }
+.page-arrow { width: 42px; height: 42px; border: 1px solid rgba(83, 121, 148, .16) !important; border-radius: 10px; }
+
+.modal-layer { position: fixed; inset: 92px 0 0; display: grid; place-items: start center; padding-top: 18px; background: rgba(2, 13, 27, .28); z-index: 30; }
+.modal {
+  width: 835px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(5, 24, 44, .98), rgba(4, 23, 42, .98));
+  padding: 28px 34px 18px;
+  position: relative;
+}
+.close { position: absolute; right: 28px; top: 28px; background: none; border: 0; color: var(--muted); font-size: 24px; }
+.modal h2 { margin: 0 0 8px; font-size: 28px; }
+.modal p { margin: 0 0 24px; color: var(--muted); font-size: 18px; }
+.modal p span { margin: 0 10px; }
+.modal-list { display: grid; gap: 8px; }
+.modal-list div {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 42px 1fr 92px 28px;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid rgba(83, 121, 148, .16);
+  background: rgba(11, 42, 65, .72);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--c-surface) 90%, transparent);
+  padding: 0 14px;
 }
-.q-num {
-  min-width: 26px; height: 26px; border-radius: 50%;
-  background: var(--c-brand); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .75rem; font-weight: 700;
-}
-.q-link {
-  color: var(--c-brand);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: .94rem;
-  line-height: 1.4;
-}
-.q-link:hover { text-decoration: underline; }
-.q-meta {
-  display: grid;
-  justify-items: end;
-  align-content: start;
-  gap: .25rem;
-}
-.tc { color: var(--c-text-4); font-size: .84rem; }
+.modal-list b { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; background: rgba(18, 230, 209, .11); color: #b9f9f4; }
+.modal-list span { font-size: 17px; }
+.modal-list i { color: var(--muted); }
+.modal footer { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin-top: 22px; }
 
-@media (max-width: 640px) {
-  .grid { grid-template-columns: 1fr; }
-  .filters { flex-direction: column; }
-  .search-wrap { min-width: auto; width: 100%; }
-
-  .dialog { padding: 1rem; }
-
-  .q-item {
-    grid-template-columns: auto 1fr;
-  }
-
-  .q-meta {
-    grid-column: 2;
-    display: flex;
-    gap: .35rem;
-    justify-content: flex-start;
-    justify-items: start;
-  }
+@media (max-width: 1100px) {
+  .records-grid { grid-template-columns: 1fr; }
+  .modal { width: calc(100vw - 32px); }
 }
 </style>
