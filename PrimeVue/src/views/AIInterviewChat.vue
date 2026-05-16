@@ -104,16 +104,13 @@
           </div>
         </div>
       </div>
-
     </div>
-    <AppFooter />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
 import api from '../api/client'
 
 const mode = ref('setup') // 'setup', 'chat', 'summary'

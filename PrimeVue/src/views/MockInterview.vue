@@ -85,14 +85,12 @@
         description="Пройди первую симуляцию, чтобы видеть прогресс и результаты"
       />
     </div>
-    <AppFooter />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'

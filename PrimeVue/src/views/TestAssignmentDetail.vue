@@ -36,7 +36,6 @@
         <div class="date">Добавлено: {{ fmtDate(a.created_at) }}</div>
       </template>
     </div>
-    <AppFooter />
   </div>
 </template>
 
@@ -44,7 +43,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
 import api from '../api/client'
 
 const route = useRoute()

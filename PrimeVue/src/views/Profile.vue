@@ -93,7 +93,6 @@
         </div>
       </template>
     </div>
-    <AppFooter />
   </div>
 </template>
 
@@ -101,7 +100,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '../store/auth'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import StatePanel from '../components/StatePanel.vue'
 import api from '../api/client'

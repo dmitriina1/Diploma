@@ -75,14 +75,12 @@
         </div>
       </section>
     </div>
-    <AppFooter />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import AppFooter from '../components/AppFooter.vue'
 import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
 

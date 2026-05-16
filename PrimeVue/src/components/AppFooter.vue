@@ -42,8 +42,9 @@ const year = new Date().getFullYear()
 <style scoped>
 .footer {
   margin-top: auto;
-  border-top: 1px solid var(--surface-border);
-  background: color-mix(in srgb, var(--surface-bg) 92%, transparent);
+  border-top: 1px solid var(--line);
+  background: rgba(2, 13, 27, .78);
+  backdrop-filter: blur(18px);
   padding: 1.5rem 0;
 }
 .footer-inner {
@@ -60,7 +61,7 @@ const year = new Date().getFullYear()
   gap: .25rem;
 }
 .footer-copy {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: .84rem;
   font-weight: 600;
 }
@@ -97,14 +98,14 @@ const year = new Date().getFullYear()
 }
 
 .footer-nav a {
-  color: var(--text-secondary);
+  color: var(--muted);
   font-size: .84rem;
   transition: color .2s ease;
   width: fit-content;
 }
 
 .footer-nav a:hover {
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 @media (max-width: 860px) {
