@@ -10,23 +10,39 @@
     </nav>
 
     <div class="nav-actions">
-      <button class="icon-btn" title="Переключить тему"><i class="pi pi-sun"></i></button>
-      <button v-if="isAdminChrome" class="icon-btn with-dot" title="Уведомления"><i class="pi pi-bell"></i><span>3</span></button>
-      <router-link to="/login" class="login-btn">Войти</router-link>
-      <router-link v-if="!isAdminChrome" to="/interview-questions" class="start-btn">Начать бесплатно</router-link>
-      <button v-if="isAdminChrome" class="admin-pill"><i class="pi pi-shield"></i><span>Администратор</span><b>Админ</b><i class="pi pi-angle-down"></i></button>
+      <button class="icon-btn" title="Переключить тему" @click="theme.toggle()"><i :class="theme.isDark ? 'pi pi-sun' : 'pi pi-moon'"></i></button>
+      <button v-if="auth.isAdmin" class="icon-btn with-dot" title="Уведомления"><i class="pi pi-bell"></i><span>3</span></button>
+      <template v-if="showUserChrome">
+        <router-link to="/profile" class="user-chip" :title="auth.displayName">
+          <i class="pi pi-user"></i>
+          <span>{{ auth.displayName }}</span>
+        </router-link>
+        <button class="logout-btn" title="Выйти" @click="logout"><i class="pi pi-sign-out"></i></button>
+      </template>
+      <router-link v-if="!showUserChrome" to="/login" class="login-btn">Войти</router-link>
+      <router-link v-if="!showUserChrome" to="/interview-questions" class="start-btn">Начать бесплатно</router-link>
+      <router-link v-if="auth.isAdmin" to="/admin" class="admin-pill"><i class="pi pi-shield"></i><b>Админ</b><i class="pi pi-angle-right"></i></router-link>
     </div>
   </header>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { navItems } from '../data/mock'
+import { useThemeStore } from '../stores/theme'
+import { useAuthStore } from '../store/auth'
 
-const route = useRoute()
-const isAdminChrome = computed(() => ['/admin', '/recordings'].includes(route.path))
-const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/admin' || isAdminChrome.value))
+const router = useRouter()
+const theme = useThemeStore()
+const auth = useAuthStore()
+const showUserChrome = computed(() => auth.isAuthenticated)
+const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/admin' || auth.isAdmin))
+
+function logout() {
+  auth.logout()
+  router.push('/')
+}
 </script>
 
 <style scoped>
@@ -104,7 +120,7 @@ const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/a
   min-width: 340px;
 }
 
-.icon-btn, .login-btn, .start-btn, .admin-pill {
+.icon-btn, .login-btn, .start-btn, .admin-pill, .user-chip, .logout-btn {
   border: 1px solid rgba(83, 137, 174, .2);
   background: rgba(7, 26, 45, .78);
   color: #fff;
@@ -138,11 +154,29 @@ const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/a
 }
 
 .login-btn { padding: 0 32px; font-weight: 700; }
+.user-chip {
+  max-width: 190px;
+  gap: 10px;
+  padding: 0 18px;
+  font-weight: 800;
+}
+.user-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-chip i { color: var(--cyan); }
+.logout-btn {
+  width: 54px;
+  font-size: 20px;
+  color: rgba(255,255,255,.82);
+}
 .start-btn { min-width: 220px; padding: 0 34px; background: linear-gradient(135deg, #12d8c7, #0cac95); border-color: transparent; font-weight: 800; white-space: nowrap; }
 
 .admin-pill {
-  gap: 12px;
-  padding: 0 18px;
+  gap: 10px;
+  padding: 0 16px;
   font-weight: 700;
 }
 
@@ -159,7 +193,8 @@ const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/a
   .brand { min-width: 190px; }
   .nav-links { gap: 24px; }
   .nav-actions { min-width: 0; }
-  .admin-pill span, .start-btn { display: none; }
+  .start-btn { display: none; }
+  .user-chip { max-width: 150px; padding: 0 14px; }
 }
 
 @media (max-width: 900px) {
@@ -167,6 +202,6 @@ const visibleNavItems = computed(() => navItems.filter((item) => item.to !== '/a
   .brand { min-width: 0; font-size: 26px; }
   .nav-links { order: 3; width: 100%; justify-content: flex-start; overflow-x: auto; gap: 22px; height: 44px; }
   .nav-actions { margin-left: auto; }
-  .login-btn, .admin-pill { display: none; }
+  .login-btn, .admin-pill, .user-chip, .logout-btn { display: none; }
 }
 </style>

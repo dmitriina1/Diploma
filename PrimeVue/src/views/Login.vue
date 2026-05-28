@@ -1,52 +1,74 @@
 <template>
   <div class="login-page">
-    <div class="login-box">
-      <router-link to="/" class="back-link">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-        На главную
-      </router-link>
+    <router-link to="/" class="brand">
+      <span class="brand-mark"></span>
+      <span>Upskill</span>
+    </router-link>
 
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--c-brand)" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
-        <h1>Interview Prep</h1>
-      </div>
-      <p class="subtitle">{{ isRegister ? 'Создайте аккаунт' : 'Войдите в аккаунт' }}</p>
-
-      <div class="tabs">
-        <button :class="{ active: !isRegister }" @click="switchMode(false)">Вход</button>
-        <button :class="{ active: isRegister }" @click="switchMode(true)">Регистрация</button>
-      </div>
-
-      <form @submit.prevent="handleSubmit" class="form">
-        <div class="field">
-          <label for="u">Логин</label>
-          <input id="u" v-model="username" class="input" placeholder="Введите логин" autocomplete="username" />
+    <main class="login-shell">
+      <section class="login-story">
+        <p class="kicker">Personal workspace</p>
+        <h1>{{ isRegister ? 'Создайте профиль подготовки' : 'Войдите в Upskill' }}</h1>
+        <p>
+          Сохраняйте заметки, закладки, ответы сообщества, прогресс SM-2 и историю mock-интервью в одном рабочем пространстве.
+        </p>
+        <div class="story-grid">
+          <article v-for="item in benefits" :key="item.title" class="glass">
+            <i :class="item.icon"></i>
+            <b>{{ item.title }}</b>
+            <span>{{ item.text }}</span>
+          </article>
         </div>
-        <div v-if="isRegister" class="field">
-          <label for="dn">Имя (необязательно)</label>
-          <input id="dn" v-model="displayName" class="input" placeholder="Как вас называть?" autocomplete="name" />
-        </div>
-        <div class="field">
-          <label for="p">Пароль</label>
-          <input id="p" v-model="password" type="password" class="input" placeholder="Введите пароль" autocomplete="current-password" />
-        </div>
-        <div v-if="error" class="err">{{ error }}</div>
-        <button type="submit" class="btn btn-primary btn-lg submit" :disabled="loading">
-          {{ loading ? 'Загрузка...' : isRegister ? 'Зарегистрироваться' : 'Войти' }}
-        </button>
-      </form>
+      </section>
 
-      <p class="switch-text">
-        <template v-if="!isRegister">Нет аккаунта? <a href="#" @click.prevent="switchMode(true)">Зарегистрируйтесь</a></template>
-        <template v-else>Уже есть аккаунт? <a href="#" @click.prevent="switchMode(false)">Войдите</a></template>
-      </p>
-    </div>
+      <section class="login-card glass neon-border">
+        <router-link to="/" class="back-link"><i class="pi pi-arrow-left"></i>На главную</router-link>
+        <div class="card-head">
+          <span class="login-icon"><i class="pi pi-shield"></i></span>
+          <div>
+            <h2>{{ isRegister ? 'Регистрация' : 'Вход' }}</h2>
+            <p>{{ isRegister ? 'Новый аккаунт для учебного трека' : 'Продолжите подготовку с того места, где остановились' }}</p>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button type="button" :class="{ active: !isRegister }" @click="switchMode(false)">Вход</button>
+          <button type="button" :class="{ active: isRegister }" @click="switchMode(true)">Регистрация</button>
+        </div>
+
+        <form class="form" @submit.prevent="handleSubmit">
+          <label>
+            <span>Логин</span>
+            <input v-model="username" placeholder="Введите логин" autocomplete="username" />
+          </label>
+          <label v-if="isRegister">
+            <span>Имя</span>
+            <input v-model="displayName" placeholder="Как вас называть?" autocomplete="name" />
+          </label>
+          <label>
+            <span>Пароль</span>
+            <input v-model="password" type="password" placeholder="Введите пароль" :autocomplete="isRegister ? 'new-password' : 'current-password'" />
+          </label>
+
+          <div v-if="error" class="err"><i class="pi pi-exclamation-triangle"></i>{{ error }}</div>
+          <button type="submit" class="btn primary submit" :disabled="loading">
+            <i :class="loading ? 'pi pi-spin pi-spinner' : 'pi pi-arrow-right'"></i>
+            {{ loading ? 'Проверяем...' : isRegister ? 'Создать аккаунт' : 'Войти' }}
+          </button>
+        </form>
+
+        <p class="switch-text">
+          <template v-if="!isRegister">Нет аккаунта? <a href="#" @click.prevent="switchMode(true)">Зарегистрируйтесь</a></template>
+          <template v-else>Уже есть аккаунт? <a href="#" @click.prevent="switchMode(false)">Войдите</a></template>
+        </p>
+      </section>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../store/auth'
 
 const router = useRouter()
@@ -59,14 +81,25 @@ const password = ref('')
 const displayName = ref('')
 const loading = computed(() => auth.loading)
 const error = computed(() => auth.error)
+const benefits = [
+  { title: 'Закладки', text: 'Сохраняйте важные вопросы и возвращайтесь к ним перед интервью.', icon: 'pi pi-bookmark' },
+  { title: 'SM-2 прогресс', text: 'Повторы и оценки остаются привязаны к вашему профилю.', icon: 'pi pi-refresh' },
+  { title: 'Личные заметки', text: 'Формулируйте ответы под свой опыт и стиль речи.', icon: 'pi pi-pencil' }
+]
 
-function switchMode(r) { isRegister.value = r; auth.clearError() }
+function switchMode(register) {
+  isRegister.value = register
+  auth.clearError()
+}
 
 async function handleSubmit() {
-  if (!username.value || !password.value) { auth.error = 'Заполните логин и пароль'; return }
-  let ok = false
-  if (isRegister.value) ok = await auth.register(username.value, password.value, displayName.value || null)
-  else ok = await auth.login(username.value, password.value)
+  if (!username.value || !password.value) {
+    auth.error = 'Заполните логин и пароль'
+    return
+  }
+  const ok = isRegister.value
+    ? await auth.register(username.value, password.value, displayName.value || null)
+    : await auth.login(username.value, password.value)
   if (ok) router.push(route.query.redirect || '/')
 }
 </script>
@@ -74,109 +107,234 @@ async function handleSubmit() {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  display: flex;
+  padding: 26px 38px 42px;
+  background:
+    radial-gradient(circle at 72% 18%, rgba(18, 230, 209, .13), transparent 28%),
+    radial-gradient(circle at 12% 72%, rgba(77, 163, 255, .1), transparent 34%),
+    var(--bg);
+}
+
+.brand {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  background: var(--c-bg);
-  padding: 2rem;
+  gap: 14px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.04em;
 }
-.login-box {
-  width: 100%;
-  max-width: 420px;
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-xl);
-  padding: 2.75rem;
+
+.brand-mark {
+  width: 28px;
+  height: 40px;
+  display: inline-block;
+  background: linear-gradient(145deg, #13f0e2, #0ca8ff);
+  clip-path: polygon(18% 13%, 53% 0, 53% 24%, 37% 31%, 37% 69%, 68% 57%, 68% 30%, 91% 22%, 91% 72%, 38% 100%, 9% 81%, 9% 24%);
+  filter: drop-shadow(0 0 18px rgba(18, 230, 209, .35));
 }
+
+.login-shell {
+  width: min(1500px, 100%);
+  min-height: calc(100vh - 110px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 520px;
+  gap: 56px;
+  align-items: center;
+}
+
+.login-story .kicker {
+  color: var(--cyan);
+  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.login-story h1 {
+  max-width: 760px;
+  margin: 14px 0 20px;
+  font-size: 66px;
+  line-height: 1.05;
+  letter-spacing: -.055em;
+}
+
+.login-story > p:not(.kicker) {
+  max-width: 660px;
+  margin: 0 0 34px;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1.55;
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  max-width: 900px;
+}
+
+.story-grid article {
+  padding: 20px;
+  min-height: 165px;
+}
+
+.story-grid i {
+  color: var(--cyan);
+  font-size: 27px;
+}
+
+.story-grid b {
+  display: block;
+  margin: 20px 0 8px;
+  font-size: 18px;
+}
+
+.story-grid span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.login-card {
+  padding: 30px;
+  border-radius: 16px;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
-  gap: .4rem;
-  color: var(--c-text-3);
-  text-decoration: none;
-  font-size: .88rem;
-  margin-bottom: 1.5rem;
-  transition: color var(--dur);
+  gap: 9px;
+  color: var(--muted);
+  font-weight: 700;
+  margin-bottom: 28px;
 }
-.back-link:hover { color: var(--c-brand); }
-.logo {
+
+.card-head {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.login-icon {
+  width: 62px;
+  height: 62px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  border: 1px solid rgba(18, 230, 209, .28);
+  background: rgba(18, 230, 209, .07);
+  border-radius: 14px;
+  font-size: 28px;
+}
+
+.card-head h2 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.card-head p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid rgba(83, 137, 174, .18);
+  border-radius: 10px;
+  background: rgba(3, 17, 31, .58);
+  margin-bottom: 22px;
+}
+
+.tabs button {
+  height: 44px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.tabs button.active {
+  color: #062e31;
+  background: linear-gradient(135deg, #13e0cf, #12bba5);
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+
+label span {
+  display: block;
+  margin-bottom: 8px;
+  color: #d7e1ee;
+  font-weight: 700;
+}
+
+input {
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(83, 137, 174, .22);
+  background: rgba(3, 17, 31, .72);
+  color: var(--text);
+  outline: none;
+}
+
+input:focus {
+  border-color: rgba(18, 230, 209, .62);
+  box-shadow: 0 0 0 4px rgba(18, 230, 209, .08);
+}
+
+.err {
   display: flex;
   align-items: center;
-  gap: .6rem;
-  margin-bottom: .35rem;
+  gap: 10px;
+  padding: 12px 14px;
+  color: #ffd6dc;
+  border: 1px solid rgba(255, 93, 108, .35);
+  background: rgba(255, 93, 108, .1);
+  border-radius: 10px;
 }
-.logo h1 {
-  font-size: 1.55rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, var(--c-brand), var(--c-brand-h));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+
+.submit {
+  width: 100%;
+  margin-top: 8px;
 }
-.subtitle {
-  color: var(--c-text-3);
-  font-size: .94rem;
-  margin-bottom: 1.5rem;
-}
-.tabs {
-  display: flex;
-  border-radius: var(--r-md);
-  border: 1px solid var(--c-border);
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-.tabs button {
-  flex: 1;
-  padding: .7rem 1rem;
-  border: none;
-  background: transparent;
-  color: var(--c-text-3);
-  font-size: .95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--dur);
-}
-.tabs button.active {
-  background: var(--c-brand);
-  color: #fff;
-}
-.tabs button:hover:not(.active) {
-  background: var(--c-bg-2);
-  color: var(--c-text);
-}
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.1rem;
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: .3rem;
-}
-.field label {
-  font-size: .85rem;
-  color: var(--c-text-2);
-  font-weight: 500;
-}
-.err {
-  padding: .6rem .8rem;
-  background: var(--c-err-bg);
-  color: var(--c-err);
-  border-radius: var(--r-sm);
-  font-size: .85rem;
-  font-weight: 500;
-}
-.submit { width: 100%; margin-top: .5rem; }
+
 .switch-text {
+  margin: 22px 0 0;
+  color: var(--muted);
   text-align: center;
-  margin-top: 1.5rem;
-  color: var(--c-text-3);
-  font-size: .88rem;
 }
+
 .switch-text a {
-  color: var(--c-brand);
-  font-weight: 600;
-  text-decoration: none;
+  color: var(--cyan);
+  font-weight: 800;
 }
-.switch-text a:hover { text-decoration: underline; }
+
+@media (max-width: 1100px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-story h1 {
+    font-size: 46px;
+  }
+}
+
+@media (max-width: 720px) {
+  .login-page {
+    padding: 18px;
+  }
+
+  .story-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

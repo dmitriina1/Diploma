@@ -43,18 +43,21 @@ const year = new Date().getFullYear()
 .footer {
   margin-top: auto;
   border-top: 1px solid var(--line);
-  background: rgba(2, 13, 27, .78);
-  backdrop-filter: blur(18px);
-  padding: 1.5rem 0;
+  background: transparent;
+  padding: 34px 0 28px;
 }
 .footer-inner {
-  max-width: var(--max-w);
+  width: min(1720px, calc(100% - 72px));
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 24px 28px;
   display: grid;
   grid-template-columns: minmax(230px, .9fr) minmax(0, 1.6fr);
   justify-content: space-between;
   gap: 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(8, 35, 60, .58), rgba(4, 22, 40, .52));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
 }
 .footer-brand {
   display: grid;
@@ -62,19 +65,19 @@ const year = new Date().getFullYear()
 }
 .footer-copy {
   color: var(--muted);
-  font-size: .84rem;
+  font-size: 17px;
   font-weight: 600;
 }
 .footer-note {
   color: var(--c-text-4);
-  font-size: .78rem;
+  font-size: 16px;
 }
 
 .footer-legal {
   color: var(--c-text-4);
-  font-size: .74rem;
+  font-size: 15px;
   line-height: 1.45;
-  max-width: 34ch;
+  max-width: 38ch;
 }
 
 .footer-nav {
@@ -90,7 +93,7 @@ const year = new Date().getFullYear()
 }
 
 .footer-col-title {
-  font-size: .74rem;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: .06em;
   color: var(--c-text-4);
@@ -99,7 +102,7 @@ const year = new Date().getFullYear()
 
 .footer-nav a {
   color: var(--muted);
-  font-size: .84rem;
+  font-size: 16px;
   transition: color .2s ease;
   width: fit-content;
 }
@@ -109,6 +112,10 @@ const year = new Date().getFullYear()
 }
 
 @media (max-width: 860px) {
+  .footer-inner {
+    width: min(100% - 32px, 980px);
+  }
+
   .footer-inner {
     grid-template-columns: 1fr;
   }
@@ -122,7 +129,7 @@ const year = new Date().getFullYear()
   .footer-inner {
     gap: .7rem;
     text-align: left;
-    padding: 0 1rem;
+    padding: 20px;
   }
 
   .footer-nav {

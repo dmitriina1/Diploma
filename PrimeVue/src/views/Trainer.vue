@@ -1,18 +1,27 @@
 <template>
   <div class="page">
     <NavBar />
-    <div class="max-w-container tr-page">
+    <main class="screen trainer">
 
       <!-- Mode Select -->
       <div v-if="mode === 'select'" class="mode-select">
-        <p class="eyebrow">Trainer</p>
-        <h1 class="page-heading h-page">Тренажер SM-2</h1>
-        <p class="page-desc p-muted">Интервальные повторения по алгоритму SuperMemo 2</p>
+        <section class="trainer-hero glass">
+          <div>
+            <p class="eyebrow">Тренажёр</p>
+            <h1>Практика вопросов</h1>
+            <p>Спокойная сессия подготовки: вопрос, ответ, затем простая оценка «знаю» или «на повтор».</p>
+          </div>
+          <div class="hero-metrics">
+            <article><b>{{ totalQuestions }}</b><span>вопросов</span></article>
+            <article><b>{{ repeatCount }}</b><span>на повтор</span></article>
+            <article><b>{{ availableInterviews }}</b><span>записей</span></article>
+          </div>
+        </section>
 
-        <div v-if="loadError" class="state-panel" style="margin:0 auto 1.2rem; max-width:680px;">
+        <div v-if="loadError" class="state-panel glass">
           <h3>Часть данных недоступна</h3>
           <p>{{ loadError }}</p>
-          <button class="btn btn-secondary btn-sm" style="margin-top:.7rem" @click="loadStats">Повторить</button>
+          <button class="btn small" @click="loadStats">Повторить</button>
         </div>
 
         <div v-if="sm2Stats.total > 0" class="sm2-row">
@@ -22,42 +31,42 @@
         </div>
 
         <div class="mode-grid stagger">
-          <div class="mode-card card card-hover interactive-card" @click="startFlashcards">
-            <div class="mc-icon"><BrandIcon name="flashcards" :size="78" /></div>
+          <div class="mode-card glass" @click="startFlashcards">
+            <div class="mc-icon"><i class="pi pi-clone"></i></div>
             <h3>Проработка вопросов</h3>
             <p>Карточки с SM-2. Отмечайте «Знаю» или «На повтор».</p>
             <div class="mc-footer">
-              <span class="badge badge-info">{{ totalQuestions }} вопросов</span>
-              <span v-if="repeatCount > 0" class="badge badge-warn">{{ repeatCount }} на повтор</span>
+              <span class="tag">{{ totalQuestions }} вопросов</span>
+              <span v-if="repeatCount > 0" class="tag middle">{{ repeatCount }} на повтор</span>
             </div>
           </div>
-          <div class="mode-card card card-hover interactive-card" @click="startInterview">
-            <div class="mc-icon"><BrandIcon name="interview" :size="78" /></div>
+          <div class="mode-card glass" @click="startInterview">
+            <div class="mc-icon"><i class="pi pi-comments"></i></div>
             <h3>Реальное собеседование</h3>
             <p>Вопросы из настоящих собеседований в хронологическом порядке.</p>
             <div class="mc-footer">
-              <span class="badge badge-info">{{ availableInterviews }} записей</span>
+              <span class="tag">{{ availableInterviews }} записей</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Flashcard Setup -->
-      <div v-if="mode === 'flashcard-setup'" class="setup container-sm">
-        <button class="btn btn-ghost btn-sm" @click="mode = 'select'" style="margin-bottom:1rem">← Назад</button>
-        <h2 class="page-heading" style="font-size:1.25rem">Настройка карточек</h2>
+      <div v-if="mode === 'flashcard-setup'" class="setup glass">
+        <button class="back-btn" @click="mode = 'select'"><i class="pi pi-arrow-left"></i>Назад</button>
+        <h2>Настройка карточек</h2>
 
         <div class="form-stack">
           <div class="field">
             <label>Технология</label>
-            <select v-model="selectedTopic" class="input">
+            <select v-model="selectedTopic" class="field-control">
               <option value="">Все</option>
               <option v-for="t in topics" :key="t" :value="t">{{ t }}</option>
             </select>
           </div>
           <div class="field">
             <label>Сложность</label>
-            <select v-model="selectedDifficulty" class="input">
+            <select v-model="selectedDifficulty" class="field-control">
               <option value="">Любая</option>
               <option value="junior">Junior</option>
               <option value="middle">Middle</option>
@@ -72,7 +81,7 @@
             <input type="checkbox" v-model="prioritizeRepeat" />
             <span>Сначала «на повтор»</span>
           </label>
-          <button class="btn btn-primary btn-lg" @click="loadFlashcards" :disabled="loadingCards" style="width:100%">
+          <button class="btn primary" @click="loadFlashcards" :disabled="loadingCards" style="width:100%">
             {{ loadingCards ? 'Загрузка...' : 'Начать' }}
           </button>
         </div>
@@ -81,47 +90,63 @@
       <!-- Flashcard Mode -->
       <div v-if="mode === 'flashcard'" class="fc-mode">
         <div class="fc-top">
-          <button class="btn btn-ghost btn-icon" @click="mode = 'select'">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          <button class="icon-button" @click="mode = 'select'">
+            <i class="pi pi-arrow-left"></i>
           </button>
           <div class="fc-progress-area">
             <span class="fc-counter">{{ currentCardIndex + 1 }} / {{ flashcards.length }}</span>
             <div class="progress"><div class="progress-fill" :style="{ width: flashcardProgress + '%' }"></div></div>
           </div>
           <div class="fc-stats">
-            <span class="badge badge-ok">✓ {{ knownCount }}</span>
-            <span class="badge badge-warn">↻ {{ repeatQueue.length }}</span>
+            <span class="tag ok">Знаю {{ knownCount }}</span>
+            <span class="tag middle">Повтор {{ repeatQueue.length }}</span>
           </div>
         </div>
 
-        <div v-if="currentCard && !sessionComplete" class="fc-scene" @click="flipCard">
-          <div class="fc-card" :class="{ flipped: cardFlipped }">
-            <div class="fc-face fc-front">
-              <div class="fc-tags">
-                <span class="badge" :class="diffBadge(currentCard.difficulty)">{{ currentCard.difficulty }}</span>
-                <span class="badge badge-info">{{ currentCard.topic }}</span>
+        <Transition name="question-shift" mode="out-in">
+          <div v-if="currentCard && !sessionComplete" :key="currentCard.id || currentCard.question" class="practice-card glass">
+            <div class="fc-tags">
+              <span class="tag" :class="diffTag(currentCard.difficulty)">{{ currentCard.difficulty }}</span>
+              <span class="tag">{{ currentCard.topic }}</span>
+            </div>
+            <h2 class="fc-question">{{ currentCard.question }}</h2>
+
+            <section class="trainer-videos">
+              <h3><i class="pi pi-video"></i>Видео с этим вопросом</h3>
+              <div v-for="video in currentCardVideos" :key="video.title + video.time" class="trainer-video-row">
+                <span><i class="pi pi-play"></i>{{ video.title }}</span>
+                <b :class="video.source === 'YouTube' ? 'youtube' : 'rutube'">{{ video.source === 'YouTube' ? '▶' : 'R' }}</b>
+                <span>{{ video.source }}</span>
+                <time>{{ video.time }}</time>
               </div>
-              <h2 class="fc-question">{{ currentCard.question }}</h2>
-              <span class="fc-hint">Нажмите, чтобы перевернуть · <kbd>Space</kbd></span>
-            </div>
-            <div class="fc-face fc-back">
-              <div class="fc-answer" v-html="formatAnswer(currentCard.answer || 'Ответ не сгенерирован')"></div>
-            </div>
-          </div>
-        </div>
+            </section>
 
-        <div v-if="cardFlipped && !sessionComplete" class="fc-actions">
-          <button class="fc-btn repeat" @click="markRepeat">
-            <span>↻ На повтор</span><kbd>←</kbd>
-          </button>
-          <button class="fc-btn known" @click="markKnown">
-            <span>✓ Знаю</span><kbd>→</kbd>
-          </button>
-        </div>
+            <button v-if="!cardFlipped" class="btn primary answer-toggle" @click="showAnswer">
+              <i class="pi pi-eye"></i>Показать ответ
+            </button>
+            <Transition name="answer-reveal">
+              <div v-if="cardFlipped" class="answer-panel">
+                <div class="answer-head">
+                  <span>Ответ</span>
+                  <button @click="cardFlipped = false"><i class="pi pi-angle-up"></i>Свернуть</button>
+                </div>
+                <div class="fc-answer" v-html="formatAnswer(currentCard.answer || 'Ответ не сгенерирован')"></div>
+                <div class="fc-actions">
+                  <button class="fc-btn repeat" @click="markRepeat">
+                    <span>На повтор</span><kbd>←</kbd>
+                  </button>
+                  <button class="fc-btn known" @click="markKnown">
+                    <span>Знаю</span><kbd>→</kbd>
+                  </button>
+                </div>
+              </div>
+            </Transition>
+          </div>
+        </Transition>
 
         <!-- Session Complete -->
-        <div v-if="sessionComplete" class="fc-results card">
-          <div class="fr-icon"><BrandIcon name="flashcards" :size="56" /></div>
+        <div v-if="sessionComplete" class="fc-results glass">
+          <div class="fr-icon"><i class="pi pi-check-circle"></i></div>
           <h2>Сессия завершена!</h2>
           <div class="fr-stats">
             <div class="fr-s"><span class="fr-val ok">{{ knownCount }}</span><span class="fr-lbl">Знаю</span></div>
@@ -129,17 +154,17 @@
             <div class="fr-s"><span class="fr-val">{{ flashcards.length }}</span><span class="fr-lbl">Всего</span></div>
           </div>
           <div class="fr-actions">
-            <button class="btn btn-warn" @click="retryDifficult" :disabled="repeatQueue.length === 0">Повторить сложные</button>
-            <button class="btn btn-secondary" @click="mode = 'flashcard-setup'">Новая сессия</button>
-            <button class="btn btn-ghost" @click="mode = 'select'">На главную</button>
+            <button class="btn" @click="retryDifficult" :disabled="repeatQueue.length === 0">Повторить сложные</button>
+            <button class="btn primary" @click="mode = 'flashcard-setup'">Новая сессия</button>
+            <button class="btn" @click="mode = 'select'">На главную</button>
           </div>
         </div>
       </div>
 
       <!-- Interview Setup -->
-      <div v-if="mode === 'interview-setup'" class="setup container-sm">
-        <button class="btn btn-ghost btn-sm" @click="mode = 'select'" style="margin-bottom:1rem">← Назад</button>
-        <h2 class="page-heading" style="font-size:1.25rem">Выберите запись</h2>
+      <div v-if="mode === 'interview-setup'" class="setup glass">
+        <button class="back-btn" @click="mode = 'select'"><i class="pi pi-arrow-left"></i>Назад</button>
+        <h2>Выберите запись</h2>
 
         <div v-if="loadingInterviews" class="iv-list">
           <div v-for="i in 4" :key="i" class="skeleton-card" style="padding:1rem;">
@@ -148,11 +173,11 @@
           </div>
         </div>
         <div v-else class="iv-list">
-          <div v-for="iv in interviewVideos" :key="iv.id" class="iv-item card card-hover" @click="startInterviewSession(iv)">
+          <div v-for="iv in interviewVideos" :key="iv.id" class="iv-item glass" @click="startInterviewSession(iv)">
             <div class="iv-info">
               <h3>{{ iv.title || 'Без названия' }}</h3>
               <div class="iv-meta">
-                <span class="badge badge-muted">{{ iv.platform }}</span>
+                <span class="tag">{{ iv.platform || 'video' }}</span>
                 <span class="iv-count">{{ videoQuestionCount(iv) }} вопросов</span>
               </div>
             </div>
@@ -163,40 +188,53 @@
       </div>
 
       <!-- Interview Mode -->
-      <div v-if="mode === 'interview'" class="interview container-sm">
+      <div v-if="mode === 'interview'" class="interview">
         <div class="iv-header">
-          <button class="btn btn-ghost btn-icon" @click="mode = 'select'">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          <button class="icon-button" @click="mode = 'select'">
+            <i class="pi pi-arrow-left"></i>
           </button>
           <h3>{{ currentInterviewTitle }}</h3>
           <span class="iv-counter">{{ interviewIndex + 1 }} / {{ interviewQuestions.length }}</span>
         </div>
 
-        <div v-if="currentInterviewQuestion" class="iv-card card">
-          <span class="badge" :class="diffBadge(currentInterviewQuestion.difficulty)" style="margin-bottom:.75rem">{{ currentInterviewQuestion.difficulty }}</span>
-          <h2>{{ currentInterviewQuestion.question }}</h2>
-          <div v-if="showInterviewAnswer" class="iv-answer" v-html="formatAnswer(currentInterviewQuestion.answer || 'Ответ не добавлен')"></div>
-          <div class="iv-actions">
-            <button v-if="!showInterviewAnswer" class="btn btn-primary" @click="showInterviewAnswer = true">Показать ответ</button>
-            <button v-else class="btn btn-secondary" @click="nextInterviewQuestion" :disabled="interviewIndex >= interviewQuestions.length - 1">Следующий →</button>
+        <Transition name="question-shift" mode="out-in">
+          <div v-if="currentInterviewQuestion" :key="currentInterviewQuestion.id || currentInterviewQuestion.question" class="iv-card glass">
+            <span class="tag" :class="diffTag(currentInterviewQuestion.difficulty)">{{ currentInterviewQuestion.difficulty }}</span>
+            <h2>{{ currentInterviewQuestion.question }}</h2>
+            <section class="trainer-videos compact">
+              <h3><i class="pi pi-video"></i>Видео с этим вопросом</h3>
+              <div v-for="video in currentInterviewVideos" :key="video.title + video.time" class="trainer-video-row">
+                <span><i class="pi pi-play"></i>{{ video.title }}</span>
+                <b :class="video.source === 'YouTube' ? 'youtube' : 'rutube'">{{ video.source === 'YouTube' ? '▶' : 'R' }}</b>
+                <span>{{ video.source }}</span>
+                <time>{{ video.time }}</time>
+              </div>
+            </section>
+            <Transition name="answer-reveal">
+              <div v-if="showInterviewAnswer" class="iv-answer" v-html="formatAnswer(currentInterviewQuestion.answer || 'Ответ не добавлен')"></div>
+            </Transition>
+            <div class="iv-actions">
+              <button v-if="!showInterviewAnswer" class="btn primary" @click="showInterviewAnswer = true">Показать ответ</button>
+              <button v-else class="btn" @click="nextInterviewQuestion" :disabled="interviewIndex >= interviewQuestions.length - 1">Следующий <i class="pi pi-arrow-right"></i></button>
+            </div>
           </div>
-        </div>
+        </Transition>
 
         <div v-if="interviewIndex >= interviewQuestions.length - 1 && showInterviewAnswer" class="iv-done">
           <p>Все вопросы пройдены!</p>
-          <button class="btn btn-secondary" @click="mode = 'select'">Вернуться</button>
+          <button class="btn" @click="mode = 'select'">Вернуться</button>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import NavBar from '../components/NavBar.vue'
-import BrandIcon from '../components/BrandIcon.vue'
 import api from '../api/client'
 import { trackMetrikaGoal } from '../utils/metrika'
+import { questions as fallbackQuestions, recordings as fallbackRecordings, extractedQuestions } from '../data/mock'
 
 const mode = ref('select')
 const totalQuestions = ref(0)
@@ -219,20 +257,37 @@ const repeatQueue = ref([])
 const sessionComplete = ref(false)
 
 const currentCard = computed(() => flashcards.value[currentCardIndex.value])
+const fallbackVideos = [
+  { title: 'Собеседование на Backend Developer', source: 'YouTube', time: '12:34' },
+  { title: 'Mock interview. Java Developer', source: 'Rutube', time: '08:52' },
+  { title: 'Интервью на Frontend Developer', source: 'YouTube', time: '16:41' }
+]
 const flashcardProgress = computed(() => {
   if (!flashcards.value.length) return 0
   return Math.round(((currentCardIndex.value + (sessionComplete.value ? 1 : 0)) / flashcards.value.length) * 100)
 })
 
-const diffBadge = (d) => ({ junior: 'badge-ok', middle: 'badge-warn', senior: 'badge-err' }[d] || 'badge-muted')
+const diffTag = (d) => ({ junior: 'ok', middle: 'middle', senior: 'senior' }[d] || '')
 const formatAnswer = (t) => t ? t.replace(/\n/g, '<br>') : ''
+const normalizeVideos = (question) => {
+  const raw = question?.videos || question?.sources || question?.video_sources || question?.related_videos || []
+  const list = Array.isArray(raw) && raw.length ? raw : fallbackVideos
+  return list.slice(0, 5).map((video, index) => ({
+    title: video.title || video.video_title || video.name || `Видео ${index + 1}`,
+    source: video.source || video.platform || 'YouTube',
+    time: video.time || video.timecode || video.timestamp || '—',
+    url: video.url || video.video_url || ''
+  }))
+}
+const currentCardVideos = computed(() => normalizeVideos(currentCard.value))
+const currentInterviewVideos = computed(() => normalizeVideos(currentInterviewQuestion.value))
 const videoQuestionCount = (v) => {
   const raw = v?.question_count ?? v?.questions_count ?? v?.linked_questions ?? 0
   const n = Number(raw)
   return Number.isFinite(n) ? n : 0
 }
 
-const flipCard = () => { cardFlipped.value = !cardFlipped.value }
+const showAnswer = () => { cardFlipped.value = true }
 
 const markKnown = async () => {
   if (currentCard.value) { knownCount.value++; try { await api.submitSM2Review(currentCard.value.id, 5) } catch {} }
@@ -255,7 +310,7 @@ const retryDifficult = () => {
 // Keyboard
 const handleKey = (e) => {
   if (mode.value !== 'flashcard' || sessionComplete.value) return
-  if (e.code === 'Space') { e.preventDefault(); flipCard() }
+  if (e.code === 'Space') { e.preventDefault(); showAnswer() }
   else if (e.code === 'ArrowLeft' && cardFlipped.value) markRepeat()
   else if (e.code === 'ArrowRight' && cardFlipped.value) markKnown()
 }
@@ -275,15 +330,27 @@ const loadError = ref('')
 
 const loadStats = async () => {
   loadError.value = ''
-  try { const r = await api.getQuestions(); const qs = r.data.questions || []; totalQuestions.value = r.data.total || qs.length; topics.value = [...new Set(qs.map(q => q.topic).filter(Boolean))].sort() } catch { loadError.value = 'Не удалось загрузить список вопросов' }
+  try {
+    const r = await api.getQuestions()
+    const qs = r.data.questions || []
+    const source = qs.length ? qs : fallbackQuestions
+    totalQuestions.value = r.data.total || source.length
+    topics.value = [...new Set(source.map(q => q.topic).filter(Boolean))].sort()
+  } catch {
+    totalQuestions.value = fallbackQuestions.length
+    topics.value = [...new Set(fallbackQuestions.map(q => q.topic).filter(Boolean))].sort()
+    loadError.value = 'Показаны демо-данные: API вопросов временно недоступен'
+  }
   try { const r = await api.getSM2Cards({}); sm2Stats.value = r.data.stats || { total: 0, new: 0, review: 0, learned: 0 }; repeatCount.value = sm2Stats.value.review } catch { loadError.value = loadError.value || 'Не удалось загрузить статистику SM-2' }
   try {
     const r = await api.getProcessedVideos()
-    interviewVideos.value = r.data?.videos || []
+    const videos = r.data?.videos || []
+    interviewVideos.value = videos.length ? videos : fallbackRecordings.map((item) => ({ ...item, platform: 'demo', question_count: extractedQuestions.length }))
     availableInterviews.value = interviewVideos.value.length
   } catch {
-    availableInterviews.value = 0
-    loadError.value = loadError.value || 'Не удалось загрузить записи'
+    interviewVideos.value = fallbackRecordings.map((item) => ({ ...item, platform: 'demo', question_count: extractedQuestions.length }))
+    availableInterviews.value = interviewVideos.value.length
+    loadError.value = loadError.value || 'Показаны демо-записи: API записей временно недоступен'
   }
 }
 
@@ -295,6 +362,15 @@ const loadFlashcards = async () => {
     if (selectedDifficulty.value) params.difficulty = selectedDifficulty.value
     const r = await api.getSM2Cards(params)
     let cards = r.data.cards || []
+    if (!cards.length) {
+      cards = fallbackQuestions.map((q) => ({
+        id: q.id,
+        question: q.title,
+        answer: 'Сформулируйте ответ через конкретный пример из опыта: контекст, решение, результат и вывод.',
+        topic: q.topic,
+        difficulty: q.level
+      }))
+    }
     if (!prioritizeRepeat.value) { for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]] } }
     flashcards.value = cards.slice(0, cardCount.value)
     currentCardIndex.value = 0; knownCount.value = 0; repeatQueue.value = []; cardFlipped.value = false; sessionComplete.value = false
@@ -307,255 +383,183 @@ const loadFlashcards = async () => {
         difficulty: selectedDifficulty.value || 'any'
       })
     }
-  } catch (e) { console.error(e); loadError.value = 'Не удалось подготовить карточки. Попробуйте снова.' }
+  } catch (e) {
+    const fallbackCards = fallbackQuestions.map((q) => ({
+      id: q.id,
+      question: q.title,
+      answer: 'Сформулируйте ответ через конкретный пример из опыта: контекст, решение, результат и вывод.',
+      topic: q.topic,
+      difficulty: q.level
+    }))
+    flashcards.value = fallbackCards.slice(0, cardCount.value)
+    currentCardIndex.value = 0; knownCount.value = 0; repeatQueue.value = []; cardFlipped.value = false; sessionComplete.value = false
+    mode.value = 'flashcard'
+    loadError.value = 'API карточек недоступен, открыта демо-сессия'
+  }
   loadingCards.value = false
 }
 
 const startFlashcards = () => { mode.value = 'flashcard-setup' }
 const startInterview = async () => {
   mode.value = 'interview-setup'; loadingInterviews.value = true
-  try { const r = await api.getProcessedVideos(); interviewVideos.value = r.data?.videos || [] } catch { loadError.value = 'Не удалось получить список записей.' }
+  try {
+    const r = await api.getProcessedVideos()
+    const videos = r.data?.videos || []
+    interviewVideos.value = videos.length ? videos : fallbackRecordings.map((item) => ({ ...item, platform: 'demo', question_count: extractedQuestions.length }))
+  } catch {
+    interviewVideos.value = fallbackRecordings.map((item) => ({ ...item, platform: 'demo', question_count: extractedQuestions.length }))
+    loadError.value = 'API записей недоступен, показаны демо-записи.'
+  }
   loadingInterviews.value = false
 }
 const startInterviewSession = async (v) => {
   currentInterviewTitle.value = v.title || 'Собеседование'
-  try { const r = await api.getVideoQuestions(v.id); interviewQuestions.value = r.data?.questions || [] } catch { loadError.value = 'Не удалось загрузить вопросы выбранной записи.' }
+  try {
+    const r = await api.getVideoQuestions(v.id)
+    const questions = r.data?.questions || []
+    interviewQuestions.value = questions.length ? questions : extractedQuestions.map((q) => ({
+      id: q.id,
+      question: q.title,
+      answer: 'Отвечайте структурно: короткое определение, пример, возможные trade-off и связь с вакансией.',
+      difficulty: q.level
+    }))
+  } catch {
+    interviewQuestions.value = extractedQuestions.map((q) => ({
+      id: q.id,
+      question: q.title,
+      answer: 'Отвечайте структурно: короткое определение, пример, возможные trade-off и связь с вакансией.',
+      difficulty: q.level
+    }))
+    loadError.value = 'API вопросов записи недоступен, открыта демо-сессия.'
+  }
   interviewIndex.value = 0; showInterviewAnswer.value = false; mode.value = 'interview'
 }
 </script>
 
 <style scoped>
-.tr-page {
-  padding-top: 2.15rem;
-  padding-bottom: 3rem;
+.trainer { padding-top: 30px; padding-bottom: 58px; }
+.mode-select { display: grid; gap: 18px; }
+.trainer-hero {
+  min-height: 235px;
+  padding: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  gap: 28px;
+  align-items: end;
+  overflow: hidden;
 }
+.eyebrow { margin: 0 0 10px; color: var(--cyan); text-transform: uppercase; font-size: 13px; font-weight: 800; letter-spacing: .08em; }
+.trainer-hero h1 { margin: 0 0 12px; font-size: 44px; line-height: 1.06; letter-spacing: -.035em; }
+.trainer-hero p { max-width: 680px; margin: 0; color: var(--muted); font-size: 18px; line-height: 1.5; }
+.hero-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.hero-metrics article { min-height: 92px; padding: 15px; display: grid; align-content: end; border-radius: var(--radius); border: 1px solid rgba(83, 121, 148, .14); background: rgba(4, 20, 37, .42); }
+.hero-metrics b { display: block; font-size: 30px; line-height: 1; }
+.hero-metrics span { color: var(--muted); font-weight: 700; font-size: 14px; }
+.state-panel { max-width: 780px; padding: 18px 20px; }
+.state-panel h3 { margin: 0 0 6px; font-size: 19px; }
+.state-panel p { margin: 0 0 12px; color: var(--muted); }
+.sm2-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.sm2-pill { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid rgba(83, 121, 148, .14); border-radius: var(--radius); background: rgba(4, 20, 37, .52); color: var(--muted); font-weight: 800; }
+.sm2-pill span { color: var(--text); font-size: 18px; }
+.sm2-pill.review span { color: var(--yellow); }
+.sm2-pill.learned span { color: var(--cyan); }
+.mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.mode-card { min-height: 218px; padding: 22px; display: grid; align-content: space-between; cursor: pointer; border-left: 3px solid var(--cyan); transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+.mode-card:nth-child(2) { border-left-color: var(--blue); }
+.mode-card:hover { transform: translateY(-2px); border-color: rgba(18, 230, 209, .3); background: linear-gradient(180deg, rgba(10, 39, 64, .9), rgba(5, 27, 48, .86)); }
+.mc-icon { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid rgba(18, 230, 209, .2); border-radius: var(--radius); color: var(--cyan); background: rgba(18, 230, 209, .055); font-size: 24px; }
+.mode-card h3 { margin: 20px 0 8px; font-size: 24px; letter-spacing: -.025em; }
+.mode-card p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
+.mc-footer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.setup { width: min(700px, 100%); margin: 0 auto; padding: 24px; }
+.setup h2 { margin: 16px 0 20px; font-size: 28px; letter-spacing: -.025em; }
+.back-btn, .icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; padding: 0 14px; border: 1px solid rgba(83, 121, 148, .16); border-radius: var(--radius); background: rgba(4, 20, 37, .62); color: var(--text); font-weight: 800; }
+.icon-button { width: 44px; padding: 0; flex: 0 0 44px; }
+.form-stack { display: grid; gap: 16px; }
+.field { display: grid; gap: 8px; }
+.field label, .check-label { color: #d8e2ef; font-weight: 800; }
+.field-control { height: 54px; width: 100%; border: 1px solid rgba(86, 132, 167, .22); background: rgba(4, 20, 37, .72); border-radius: var(--radius); color: var(--text); padding: 0 16px; outline: none; }
+.range { width: 100%; accent-color: var(--cyan); }
+.check-label { display: flex; align-items: center; gap: 10px; }
+.check-label input { accent-color: var(--cyan); }
+.fc-mode { display: grid; justify-items: center; }
+.fc-top { width: 100%; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 16px; margin-bottom: 22px; }
+.fc-progress-area { display: grid; gap: 8px; }
+.fc-counter { color: var(--muted); font-weight: 800; text-align: center; }
+.progress { height: 8px; overflow: hidden; border-radius: 999px; background: rgba(115, 131, 154, .2); }
+.progress-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--blue)); }
+.fc-stats { display: flex; gap: 8px; }
+.practice-card { width: min(980px, 100%); min-height: 340px; display: grid; align-content: center; justify-items: center; padding: 34px; margin-bottom: 18px; border-color: rgba(18, 230, 209, .22); background: linear-gradient(180deg, rgba(8, 33, 56, .92), rgba(5, 27, 48, .9)), url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat; box-shadow: 0 18px 60px rgba(0,0,0,.24); }
+.fc-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 20px; }
+.fc-question { max-width: 760px; margin: 0; text-align: center; font-size: 28px; line-height: 1.32; letter-spacing: -.02em; }
+.answer-toggle { margin-top: 24px; }
+.trainer-videos { width: min(820px, 100%); margin-top: 24px; border: 1px solid rgba(83, 121, 148, .14); border-radius: var(--radius); background: rgba(4, 20, 37, .42); overflow: hidden; text-align: left; }
+.trainer-videos.compact { margin: 20px auto 0; }
+.trainer-videos h3 { height: 46px; margin: 0; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(83, 121, 148, .12); color: #dbe6f3; font-size: 16px; }
+.trainer-videos h3 i { color: var(--cyan); }
+.trainer-video-row { min-height: 46px; display: grid; grid-template-columns: minmax(0, 1fr) 28px 110px 70px; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid rgba(83, 121, 148, .09); color: #d7dee8; }
+.trainer-video-row:last-child { border-bottom: 0; }
+.trainer-video-row span:first-child { min-width: 0; display: flex; align-items: center; gap: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trainer-video-row span:first-child i { color: var(--muted); }
+.trainer-video-row span:nth-child(3), .trainer-video-row time { color: var(--muted); font-size: 14px; }
+.youtube { color: #ff4d4d; }
+.rutube { color: #d1b377; }
+kbd { min-width: 28px; min-height: 24px; display: inline-grid; place-items: center; border: 1px solid rgba(83, 121, 148, .2); border-radius: 6px; background: rgba(4, 20, 37, .72); color: var(--text); font: inherit; font-size: 12px; }
+.fc-answer { width: 100%; color: #d8e2ef; font-size: 17px; line-height: 1.7; }
+.answer-panel { width: min(820px, 100%); margin-top: 24px; padding: 20px; border: 1px solid rgba(83, 121, 148, .14); border-radius: var(--radius); background: rgba(4, 20, 37, .58); }
+.answer-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; color: var(--cyan); font-weight: 800; }
+.answer-head button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-weight: 800; }
+.answer-head button:hover { color: var(--cyan); }
+.fc-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+.fc-btn { min-height: 56px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: var(--radius); border: 1px solid rgba(83, 121, 148, .18); background: rgba(4, 20, 37, .72); color: var(--text); font-weight: 800; }
+.fc-btn.repeat:hover { border-color: rgba(240, 203, 33, .65); color: var(--yellow); }
+.fc-btn.known:hover { border-color: rgba(18, 230, 209, .65); color: var(--cyan); }
+.fc-results { width: min(520px, 100%); padding: 34px; text-align: center; }
+.fr-icon { width: 72px; height: 72px; display: inline-grid; place-items: center; margin-bottom: 12px; border-radius: 50%; border: 1px solid rgba(18, 230, 209, .35); color: var(--cyan); font-size: 34px; background: rgba(18, 230, 209, .08); }
+.fc-results h2 { margin: 0 0 20px; font-size: 30px; }
+.fr-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+.fr-s { padding: 14px; border: 1px solid rgba(83, 121, 148, .14); border-radius: var(--radius); background: rgba(4, 20, 37, .5); }
+.fr-val { display: block; font-size: 30px; font-weight: 800; }
+.fr-val.ok { color: var(--cyan); }
+.fr-val.warn { color: var(--yellow); }
+.fr-lbl { color: var(--muted); font-weight: 700; }
+.fr-actions { display: grid; gap: 10px; }
+.iv-list { display: grid; gap: 10px; }
+.iv-item { min-height: 86px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; cursor: pointer; transition: transform .18s ease, border-color .18s ease; }
+.iv-item:hover { transform: translateX(4px); border-color: var(--line-strong); }
+.iv-info h3 { margin: 0 0 8px; font-size: 19px; }
+.iv-meta { display: flex; gap: 8px; align-items: center; }
+.iv-count { color: var(--muted); font-weight: 700; }
+.empty-state { text-align: center; padding: 28px; color: var(--muted); }
+.interview { width: min(980px, 100%); margin: 0 auto; }
+.iv-header { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-bottom: 18px; }
+.iv-header h3 { margin: 0; font-size: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iv-counter { color: var(--muted); font-weight: 800; }
+.iv-card { padding: 30px; text-align: center; }
+.iv-card > .tag { margin-bottom: 18px; }
+.iv-card h2 { margin: 0 0 22px; font-size: 28px; line-height: 1.32; letter-spacing: -.02em; }
+.iv-answer { margin: 0 0 22px; padding: 20px; text-align: left; border: 1px solid rgba(83, 121, 148, .14); border-radius: var(--radius); background: rgba(4, 20, 37, .58); color: #d8e2ef; font-size: 17px; line-height: 1.7; }
+.iv-actions { display: flex; justify-content: center; gap: 12px; }
+.iv-done { margin-top: 16px; text-align: center; color: var(--muted); }
+.question-shift-enter-active, .question-shift-leave-active { transition: opacity .28s ease, transform .28s ease; }
+.question-shift-enter-from { opacity: 0; transform: translateY(10px); }
+.question-shift-leave-to { opacity: 0; transform: translateY(-8px); }
+.answer-reveal-enter-active, .answer-reveal-leave-active { transition: opacity .26s ease, transform .26s ease, max-height .32s ease; overflow: hidden; }
+.answer-reveal-enter-from, .answer-reveal-leave-to { opacity: 0; transform: translateY(-6px); max-height: 0; }
+.answer-reveal-enter-to, .answer-reveal-leave-from { opacity: 1; transform: translateY(0); max-height: 560px; }
 
-.eyebrow {
-  margin: 0 0 .28rem;
-  text-align: center;
-  font-family: var(--app-font-mono);
-  color: var(--text-secondary);
-  font-size: .76rem;
-  letter-spacing: .03em;
+@media (max-width: 1100px) {
+  .trainer-hero { grid-template-columns: 1fr; }
+  .hero-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-
-.page-heading {
-  font-size: clamp(1.75rem, 2.7vw, 2.18rem);
-  font-weight: 700;
-  text-align: center;
-  margin-bottom: .3rem;
-  letter-spacing: -.02em;
-}
-
-.page-desc {
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: .97rem;
-  margin-bottom: 1.75rem;
-}
-
-/* SM-2 stats */
-.sm2-row { display: flex; justify-content: center; gap: .75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.sm2-pill { display: flex; align-items: center; gap: .35rem; padding: .45rem .95rem; border-radius: var(--r-full); font-size: .92rem; font-weight: 600; }
-.sm2-pill span { font-weight: 800; font-size: 1.05rem; }
-.sm2-pill.new     { background: var(--c-brand-bg); color: var(--c-brand-h); }
-.sm2-pill.review  { background: var(--c-warn-bg);  color: var(--c-warn); }
-.sm2-pill.learned { background: var(--c-ok-bg);    color: var(--c-ok); }
-
-/* Mode cards */
-.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-.mode-card {
-  padding: 1.35rem;
-  text-align: center;
-  cursor: pointer;
-  border-radius: 10px;
-  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease, border-color var(--dur-250) ease;
-}
-.mode-card { position: relative; overflow: hidden; }
-.mode-card::after {
-  content: '';
-  position: absolute;
-  right: -34px;
-  top: -34px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: linear-gradient(130deg, color-mix(in srgb, var(--c-brand) 40%, transparent), transparent);
-  opacity: .34;
-}
-.mc-icon { margin-bottom: .85rem; display:flex; justify-content:center; }
-.mode-card h3 { font-size: 1.22rem; font-weight: 600; margin-bottom: .4rem; }
-.mode-card p { font-size: .97rem; color: var(--c-text-3); line-height: 1.55; margin-bottom: .85rem; }
-.mc-footer { display: flex; gap: .4rem; justify-content: center; flex-wrap: wrap; }
-
-.mode-card:hover {
-  transform: translateY(-2px);
-}
-
-/* Setup */
-.form-stack { display: flex; flex-direction: column; gap: 1.1rem; margin-top: 1.25rem; }
-.field { display: flex; flex-direction: column; gap: .35rem; }
-.field label { font-size: .85rem; color: var(--c-text-2); font-weight: 500; }
-.range { width: 100%; accent-color: var(--c-brand); }
-.check-label { display: flex; align-items: center; gap: .5rem; font-size: .88rem; color: var(--c-text-2); cursor: pointer; }
-.check-label input { accent-color: var(--c-brand); }
-
-/* Flashcard */
-.fc-mode { display: flex; flex-direction: column; align-items: center; }
-.fc-top { display: flex; align-items: center; gap: 1rem; width: 100%; margin-bottom: 1.5rem; }
-.fc-progress-area { flex: 1; text-align: center; }
-.fc-counter { font-size: .82rem; color: var(--c-text-3); margin-bottom: .3rem; display: block; }
-.fc-stats { display: flex; gap: .35rem; }
-
-/* 3D Flip */
-.fc-scene {
-  width: 100%;
-  max-width: 1080px;
-  min-height: 540px;
-  perspective: 1400px;
-  transform-style: preserve-3d;
-  cursor: pointer;
-  margin-bottom: 1.5rem;
-}
-.fc-card {
-  width: 100%;
-  min-height: 540px;
-  position: relative;
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-  transition: transform .55s var(--ease-curve-a);
-  will-change: transform;
-}
-.fc-card.flipped { transform: rotateY(180deg); }
-.fc-face {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--c-surface) 84%, transparent), color-mix(in srgb, var(--c-surface-a) 80%, transparent)),
-    url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat;
-  border: 1px solid var(--c-border);
-  border-radius: 12px;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-md);
-}
-.fc-front {
-  transform: rotateY(0deg);
-  z-index: 2;
-}
-.fc-back {
-  transform: rotateY(180deg);
-  z-index: 1;
-  overflow-y: auto;
-  justify-content: flex-start;
-  align-items: flex-start;
-  background:
-    linear-gradient(160deg, color-mix(in srgb, var(--c-bg-2) 72%, transparent), color-mix(in srgb, var(--c-surface) 86%, transparent)),
-    url('../assets/media/hybrid/trainer-grid.svg') center / cover no-repeat;
-}
-.fc-tags { 
-  display: flex; 
-  gap: .4rem; 
-  margin-bottom: 1.25rem;
-}
-.fc-question { font-size: 1.5rem; font-weight: 600; text-align: center; line-height: 1.5; color: var(--c-text); }
-.fc-hint { margin-top: 1.5rem; font-size: .78rem; color: var(--c-text-4); display: flex; align-items: center; gap: .35rem; }
-.fc-hint kbd, .fc-btn kbd {
-  background: var(--c-bg-2);
-  border: 1px solid var(--c-border);
-  border-radius: 4px;
-  padding: .05rem .3rem;
-  font-size: .68rem;
-  color: var(--c-text-4);
-  font-family: inherit;
-}
-.fc-answer { font-size: 1rem; color: var(--c-text-2); line-height: 1.75; width: 100%; }
-
-/* Action buttons */
-.fc-actions { display: flex; gap: .75rem; width: 100%; max-width: 420px; }
-.fc-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .5rem;
-  padding: .8rem 1rem;
-  border: 1px solid var(--c-border);
-  border-radius: 999px;
-  background: var(--c-surface);
-  color: var(--c-text);
-  font-size: .9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--dur-250) var(--ease-curve-a);
-}
-.fc-btn.repeat:hover { background: var(--c-warn-bg); border-color: var(--c-warn); color: var(--c-warn); }
-.fc-btn.known:hover  { background: var(--c-ok-bg);   border-color: var(--c-ok);   color: var(--c-ok); }
-
-/* Results */
-.fc-results { padding: 2.5rem; text-align: center; max-width: 440px; width: 100%; }
-.fr-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 74px;
-  height: 74px;
-  margin-bottom: .72rem;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--c-border-h) 76%, transparent);
-  background: color-mix(in srgb, var(--c-brand-bg) 56%, transparent);
-}
-.fc-results h2 { font-size: 1.3rem; margin-bottom: 1.25rem; }
-.fr-stats { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem; }
-.fr-s { display: flex; flex-direction: column; align-items: center; }
-.fr-val { font-size: 1.75rem; font-weight: 800; }
-.fr-val.ok { color: var(--c-ok); }
-.fr-val.warn { color: var(--c-warn); }
-.fr-lbl { font-size: .75rem; color: var(--c-text-3); }
-.fr-actions { display: flex; flex-direction: column; gap: .5rem; }
-
-/* Interview */
-.iv-list { display: flex; flex-direction: column; gap: .5rem; }
-.iv-item { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.15rem; cursor: pointer; }
-.iv-item {
-  border-radius: 10px;
-  transition: transform var(--dur-250) var(--ease-curve-a), background var(--dur-250) ease;
-}
-
-.iv-item:hover {
-  transform: translateY(-1px);
-}
-.iv-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: .3rem; }
-.iv-meta { display: flex; align-items: center; gap: .5rem; }
-.iv-count { font-size: .78rem; color: var(--c-text-3); }
-.iv-item svg { color: var(--c-text-4); }
-
-.iv-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.25rem; }
-.iv-header h3 { flex: 1; font-size: 1rem; }
-.iv-counter { font-size: .82rem; color: var(--c-text-3); white-space: nowrap; }
-
-.iv-card { padding: 2rem; text-align: center; }
-.iv-card {
-  border-radius: 12px;
-}
-.iv-card h2 { font-size: 1.3rem; font-weight: 600; line-height: 1.45; margin-bottom: 1.25rem; }
-.iv-answer { text-align: left; color: var(--c-text-2); line-height: 1.7; background: var(--c-bg-2); border-radius: var(--r-md); padding: 1.25rem; margin-bottom: 1.25rem; font-size: .96rem; }
-.iv-actions { display: flex; justify-content: center; gap: .75rem; }
-.iv-done { text-align: center; padding: 1.5rem; color: var(--c-text-2); margin-top: 1rem; }
-
-.center-block { display: flex; justify-content: center; padding: 3rem; }
-.empty-state { text-align: center; padding: 3rem; color: var(--c-text-3); }
-
-@media (max-width: 640px) {
-  .mode-grid { grid-template-columns: 1fr; }
-  .fc-actions { flex-direction: column; }
-  .fc-scene { min-height: 300px; }
-  .fc-card { min-height: 300px; }
-  .fc-question { font-size: 1.2rem; }
+@media (max-width: 720px) {
+  .trainer-hero { padding: 24px; }
+  .trainer-hero h1 { font-size: 38px; }
+  .hero-metrics, .mode-grid, .fr-stats, .fc-actions { grid-template-columns: 1fr; }
+  .fc-top, .iv-header { grid-template-columns: 44px 1fr; }
+  .fc-stats, .iv-counter { grid-column: 1 / -1; justify-content: center; }
+  .practice-card { min-height: 380px; padding: 24px; }
+  .fc-question, .iv-card h2 { font-size: 24px; }
+  .trainer-video-row { grid-template-columns: 1fr; gap: 4px; padding: 10px 14px; }
 }
 </style>

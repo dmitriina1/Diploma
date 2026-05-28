@@ -37,8 +37,31 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
+const getStoredUser = () => {
+  try { return JSON.parse(localStorage.getItem('auth_user') || 'null') }
+  catch { return null }
+}
+
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title || 'InterviewHub'
+  const token = localStorage.getItem('auth_token')
+  const user = getStoredUser()
+
+  if (to.meta.requiresAuth && (!token || !user)) {
+    next({ path: '/login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  if (to.meta.requiresAdmin && user?.role !== 'admin') {
+    next(to.meta.requiresAuth ? '/' : '/login')
+    return
+  }
+
+  if (to.meta.guest && token && user) {
+    next('/')
+    return
+  }
+
   next()
 })
 
