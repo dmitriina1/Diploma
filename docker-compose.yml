@@ -71,6 +71,21 @@ services:
           memory: 8G
         reservations:
           memory: 4G
+  # frontend-shadcn:
+  #   build:
+  #     context: ./frontend-shadcn
+  #     dockerfile: Dockerfile
+  #     args:
+  #       VITE_API_BASE_URL: /api
+  #   container_name: diploma-frontend-shadcn
+  #   ports:
+  #     - "3030:80"
+  #   restart: unless-stopped
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+  #   networks:
+  #     - diploma-network
 
   # ============== Backend (FastAPI) ==============
   backend:
